@@ -128,6 +128,46 @@ function createIndexHtml(entries) {
         gap: 16px;
         margin-top: 32px;
       }
+      .sync-notice {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        margin-top: 24px;
+        border: 1px solid #ddd6fe;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.92);
+        color: #4338ca;
+        padding: 14px 16px;
+        font-weight: 800;
+        box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+      }
+      .sync-notice.visible {
+        display: flex;
+      }
+      .sync-notice.warning {
+        border-color: #fed7aa;
+        color: #9a3412;
+      }
+      .sync-loader {
+        width: 22px;
+        height: 22px;
+        border: 3px solid rgba(124, 58, 237, 0.22);
+        border-top-color: #7c3aed;
+        border-radius: 50%;
+        animation: portal-spin 0.9s linear infinite;
+        flex: 0 0 auto;
+      }
+      .sync-notice.warning .sync-loader {
+        display: none;
+      }
+      .sync-notice a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      @keyframes portal-spin {
+        to { transform: rotate(360deg); }
+      }
       .app-card {
         grid-column: span 2;
         display: grid;
@@ -254,10 +294,69 @@ function createIndexHtml(entries) {
       <p>
         ワークアウトの履歴、種目ごとの記録、蓄積したデータの分析へ。
       </p>
+      <section id="sync-notice" class="sync-notice" aria-live="polite">
+        <span class="sync-loader" aria-hidden="true"></span>
+        <span id="sync-notice-text">同期データを取得しています。</span>
+      </section>
       <section class="app-grid" aria-label="Applications">
         ${links}
       </section>
     </main>
+    <script>
+      const notice = document.getElementById('sync-notice')
+      const noticeText = document.getElementById('sync-notice-text')
+      let statusTimer = null
+
+      async function refreshStatusNotice() {
+        try {
+          const response = await fetch('/api/v1/common/status', {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          })
+
+          if (!response.ok) {
+            hideStatusNotice()
+            return
+          }
+
+          const payload = await response.json()
+          const status = payload.data
+          const startupRunning = status?.operations?.startup === 'running'
+          const manualSyncRunning = status?.operations?.manualSync === 'running'
+          const runtimeRequired = Array.isArray(status?.requiredActions)
+            && status.requiredActions.includes('RUNTIME_DATA_REQUIRED')
+
+          notice.classList.remove('warning')
+          if (startupRunning) {
+            showStatusNotice('同期データを取得しています。', false)
+          } else if (manualSyncRunning) {
+            showStatusNotice('リモートデータを同期しています。', false)
+          } else if (runtimeRequired) {
+            showStatusNotice('同期済みデータがありません。<a href="/settings/">Application Settings</a>で設定と同期を確認してください。', true)
+          } else {
+            hideStatusNotice()
+          }
+        } catch {
+          hideStatusNotice()
+        }
+      }
+
+      function showStatusNotice(message, warning) {
+        noticeText.innerHTML = message
+        notice.classList.toggle('warning', warning)
+        notice.classList.add('visible')
+      }
+
+      function hideStatusNotice() {
+        notice.classList.remove('visible', 'warning')
+      }
+
+      refreshStatusNotice()
+      statusTimer = window.setInterval(refreshStatusNotice, 1500)
+      window.addEventListener('pagehide', () => {
+        if (statusTimer !== null) window.clearInterval(statusTimer)
+      })
+    </script>
   </body>
 </html>
 `

@@ -289,6 +289,7 @@ Required Actionsは以下の形式で表示する。
 ```text
 CONFIGURATION_REQUIRED / 設定が必要
 CREDENTIAL_REQUIRED / 資格情報が必要
+RUNTIME_DATA_REQUIRED / 同期済みデータが必要
 ```
 
 ---
@@ -512,6 +513,17 @@ GitHubから最新データを取得します。
 Sync中はButtonをDisabledにし、重複操作をUI上でも抑止する。
 
 ただし最終的な二重実行防止はAF Operation Stateが保証する。
+
+Settings画面でAPI処理を実行している間は、画面全体にOverlayを表示する。
+
+- z-index は 2000
+- 背景は半透明のShadow / Mask
+- 中央にCircular Loaderを表示
+- API処理中は二重操作を防止
+- 成功 / 失敗 / exception のいずれでもOverlayを解除する
+- API処理完了後は、結果通知を確認できるよう画面最上部へスクロールする
+
+この制御はRepository / Resources / Timeout / Credential / Operationsなど、Settings内のAPI操作に横断適用する。
 
 成功例:
 

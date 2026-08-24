@@ -21,7 +21,7 @@ public sealed class WindowsBootstrap : IAsyncDisposable
 
     public static async Task<WindowsBootstrap?> StartAsync(SynchronizationContext uiContext, CancellationToken cancellationToken)
     {
-        var mutex = new Mutex(true, "Atlament.Windows.AF.SingleInstance", out var created);
+        var mutex = new Mutex(false, "Atlament.Windows.AF.SingleInstance", out var created);
         if (!created)
         {
             mutex.Dispose();
@@ -49,7 +49,6 @@ public sealed class WindowsBootstrap : IAsyncDisposable
     {
         Application.BeginShutdown();
         await HttpHost.DisposeAsync().ConfigureAwait(false);
-        _singleInstanceMutex.ReleaseMutex();
         _singleInstanceMutex.Dispose();
     }
 }

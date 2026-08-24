@@ -37,7 +37,22 @@ type RuntimeWorkoutFileResponse = {
   masterData?: WorkoutMasterData
 }
 
+type AfError = {
+  code: string
+  message: string
+  recoverable: boolean
+}
+
+type RuntimeWorkoutApiResponse = {
+  success?: boolean
+  errors?: AfError[]
+  data?: {
+    sessions?: WorkoutSession[]
+  } | null
+}
+
 const defaultRuntimeWorkoutFileEndpoints = [
+  '/api/v1/common/runtime/workouts',
   '/api/workout-data',
   'http://127.0.0.1:4317/api/workout-data',
 ]
@@ -152,14 +167,13 @@ export function loadSampleWorkoutSessions(): WorkoutSession[] {
 export async function loadRuntimeWorkoutSessions(
   options: RuntimeWorkoutLoadOptions = {},
 ): Promise<WorkoutLoadResult> {
-  const { files, masterData } = await fetchRuntimeWorkoutData(options)
-  return loadWorkoutSessionsFromFiles(files, masterData)
+  return fetchRuntimeWorkoutData(options)
 }
 
 async function fetchRuntimeWorkoutData({
   endpoints = defaultRuntimeWorkoutFileEndpoints,
   fetcher = fetch,
-}: RuntimeWorkoutLoadOptions): Promise<{ files: WorkoutFile[]; masterData: WorkoutMasterData }> {
+}: RuntimeWorkoutLoadOptions): Promise<WorkoutLoadResult> {
   const errors: string[] = []
 
   for (const endpoint of endpoints) {
@@ -179,6 +193,16 @@ async function fetchRuntimeWorkoutData({
 
       const payload = (await response.json()) as RuntimeWorkoutFileResponse
 
+      if (isRuntimeWorkoutApiResponse(payload)) {
+        return {
+          sessions: payload.data.sessions,
+          issues: (payload.errors ?? []).map((error) => ({
+            filePath: '<af-runtime>',
+            message: `${error.code}: ${error.message}`,
+          })),
+        }
+      }
+
       if (!Array.isArray(payload.files)) {
         errors.push(`${endpoint}: files must be an array`)
         continue
@@ -189,10 +213,7 @@ async function fetchRuntimeWorkoutData({
         continue
       }
 
-      return {
-        files: payload.files.filter(isWorkoutFile),
-        masterData: payload.masterData,
-      }
+      return loadWorkoutSessionsFromFiles(payload.files.filter(isWorkoutFile), payload.masterData)
     } catch (error) {
       errors.push(`${endpoint}: ${getErrorMessage(error)}`)
     }
@@ -815,6 +836,22 @@ function isRuntimeMasterData(value: unknown): value is WorkoutMasterData {
     isRecord(value) &&
     isRecord(value['exercises']) &&
     isRecord(value['gyms'])
+  )
+}
+
+function isRuntimeWorkoutApiResponse(value: unknown): value is RuntimeWorkoutApiResponse & {
+  data: { sessions: WorkoutSession[] }
+} {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const data = value['data']
+  return (
+    typeof value['success'] === 'boolean' &&
+    Array.isArray(value['errors']) &&
+    isRecord(data) &&
+    Array.isArray(data['sessions'])
   )
 }
 

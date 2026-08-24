@@ -277,6 +277,53 @@ public sealed class AfCoreTests
         Assert.Contains("data/workouts", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void OperationGatePreventsManualSyncDuringStartupSync()
+    {
+        var gate = new OperationGate();
+
+        Assert.True(gate.TryStart("startup"));
+        Assert.False(gate.TryStart("manualSync"));
+
+        gate.Complete("startup", true);
+
+        Assert.True(gate.TryStart("manualSync"));
+    }
+
+    [Fact]
+    public async Task InitialMissingConfigurationCredentialAndRuntimeAreRequiredActions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            var status = application.GetStatus();
+
+            Assert.True(status.Success);
+            Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
+            Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);
+            Assert.Contains("RUNTIME_DATA_REQUIRED", status.Data.RequiredActions);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
     private static RuntimeSourceFile Workout(string path, string gymId, string exerciseId)
     {
         var sessionId = Path.GetFileNameWithoutExtension(path).Replace("missing-exercise", "missingExercise").Replace("missing-gym", "missingGym");

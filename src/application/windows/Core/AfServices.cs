@@ -994,6 +994,8 @@ public sealed class OperationGate
         lock (_syncRoot)
         {
             if (_operations["shutdown"] == OperationStatus.running && name != "shutdown") return false;
+            if (name == "manualSync" && _operations["startup"] == OperationStatus.running) return false;
+            if (name == "startup" && _operations["manualSync"] == OperationStatus.running) return false;
             if (_operations[name] == OperationStatus.running) return false;
             _operations[name] = OperationStatus.running;
             return true;
@@ -1071,8 +1073,7 @@ public sealed class AtlamentApplication
             LoadCredential();
             ValidateLocalRuntime();
             _applicationStatus = DetermineApplicationStatus();
-            _operations.Complete("startup", true);
-            _ = Task.Run(() => StartupSyncAsync(cancellationToken), cancellationToken);
+            _ = Task.Run(() => StartupSyncAsync(), CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -1199,16 +1200,31 @@ public sealed class AtlamentApplication
         return AfResponses.Ok(new ShutdownResult(true, already));
     }
 
-    private async Task StartupSyncAsync(CancellationToken cancellationToken)
+    private async Task StartupSyncAsync()
     {
-        if (_configurationStatus != ComponentStatus.available || _credentialStatus.State is "missing" or "invalid" or "unknown")
+        try
         {
-            _applicationStatus = DetermineApplicationStatus();
-            return;
-        }
+            if (_configurationStatus != ComponentStatus.available || _credentialStatus.State is "missing" or "invalid" or "unknown")
+            {
+                _applicationStatus = DetermineApplicationStatus();
+                _operations.Complete("startup", true);
+                return;
+            }
 
-        await SyncCoreAsync(cancellationToken);
-        _applicationStatus = DetermineApplicationStatus();
+            var response = await SyncCoreAsync(CancellationToken.None);
+            _applicationStatus = DetermineApplicationStatus();
+            _operations.Complete("startup", response.Response.Success);
+            if (!response.Response.Success)
+            {
+                _log.Write(LogType.WARN, "Startup sync completed without updating remote runtime data.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogType.ERROR, "Startup sync failed: " + ex.Message);
+            _applicationStatus = DetermineApplicationStatus();
+            _operations.Complete("startup", false);
+        }
     }
 
     private async Task<(int StatusCode, AfResponse<SyncResult> Response)> SyncCoreAsync(CancellationToken cancellationToken)
@@ -1251,6 +1267,7 @@ public sealed class AtlamentApplication
         }
 
         _runtimeStatus = ComponentStatus.available;
+        _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
         return (200, AfResponses.Ok(new SyncResult("remote", true, build.Errors.Count > 0), build.Errors));
     }
@@ -1278,6 +1295,8 @@ public sealed class AtlamentApplication
     {
         var (data, _) = _runtimeDataStore.LoadCurrent();
         _runtimeStatus = data is null ? ComponentStatus.unavailable : ComponentStatus.available;
+        _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
+        if (data is null) _requiredActions.Add(AfErrorCodes.RuntimeDataRequired);
     }
 
     private ApplicationStatus DetermineApplicationStatus()

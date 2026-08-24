@@ -29,6 +29,7 @@ public static class AfErrorCodes
     public const string ConfigInvalid = "CONFIG_INVALID";
     public const string ConfigSaveFailed = "CONFIG_SAVE_FAILED";
     public const string CredentialRequired = "CREDENTIAL_REQUIRED";
+    public const string RuntimeDataRequired = "RUNTIME_DATA_REQUIRED";
     public const string CredentialInvalid = "CREDENTIAL_INVALID";
     public const string CredentialSaveFailed = "CREDENTIAL_SAVE_FAILED";
     public const string GithubUnauthorized = "GITHUB_UNAUTHORIZED";

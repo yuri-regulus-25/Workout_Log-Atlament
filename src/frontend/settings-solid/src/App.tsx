@@ -37,11 +37,12 @@ const statusLabels: Record<string, string> = {
 const requiredActionLabels: Record<string, string> = {
   CONFIGURATION_REQUIRED: '設定が必要',
   CREDENTIAL_REQUIRED: '資格情報が必要',
+  RUNTIME_DATA_REQUIRED: '同期済みデータが必要',
 }
 const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   WORKOUT: 'WORKOUT / ワークアウト情報',
-  EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスタデータ',
-  GYM_MASTER: 'GYM_MASTER / ジムマスタデータ',
+  EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
+  GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
 
 type Message = {
@@ -185,6 +186,7 @@ function App() {
       })
     } finally {
       setBusy(null)
+      scrollToTop()
     }
   }
 
@@ -232,7 +234,13 @@ function App() {
   }
 
   return (
-    <main class="app-shell settings-shell">
+    <main class="app-shell settings-shell" aria-busy={loading() || busy() !== null}>
+      <Show when={loading() || busy() !== null}>
+        <div class="operation-overlay" role="status" aria-live="polite" aria-label="処理中">
+          <div class="circular-loader" aria-hidden="true" />
+        </div>
+      </Show>
+
       <header class="page-hero">
         <div class="hero-top">
           <p class="eyebrow">Atlament / Application Settings</p>
@@ -315,7 +323,7 @@ function App() {
                   </label>
                   <label class="check-field">
                     <input type="checkbox" checked={resource.emptyAllowed} onChange={(event) => updateResource(index(), { emptyAllowed: event.currentTarget.checked })} />
-                    Allow Empty
+                    Nullable
                   </label>
                   <button class="icon-action" type="button" aria-label="Remove resource" title="Remove resource" disabled={!canOperate()} onClick={() => removeResource(index())}>
                     <span class="mdi mdi-delete" aria-hidden="true" />
@@ -363,17 +371,17 @@ function App() {
               <input type="date" value={limitDate()} onInput={(event) => setLimitDate(event.currentTarget.value)} />
             </Field>
           </div>
-          <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveCredential}>更新</button>
+          <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveCredential}>Update</button>
         </section>
 
         <section class="panel operations-panel">
           <div class="panel-header">
             <div>
               <p class="eyebrow">OPERATIONS - REMOTE DATA SYNC</p>
-              <h2>運用 - リモートデータ同期</h2>
+              <h2>リモートデータ同期</h2>
             </div>
             <button class="primary-action" type="button" disabled={!canOperate() || busy() === 'sync'} onClick={syncNow}>
-              Sync immediately
+              今すぐ同期
             </button>
           </div>
           <p class="muted">GitHubから最新データを取得します。</p>
@@ -483,6 +491,12 @@ function displayStatus(value?: string) {
 
 function displayRequiredAction(value: string) {
   return `${value} / ${requiredActionLabels[value] ?? '対応が必要'}`
+}
+
+function scrollToTop() {
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  })
 }
 
 export default App

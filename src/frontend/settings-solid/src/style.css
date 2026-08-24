@@ -4,6 +4,31 @@
   min-height: 100vh;
 }
 
+.operation-overlay {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 2000;
+}
+
+.circular-loader {
+  animation: settings-spin 0.9s linear infinite;
+  border: 5px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  border-top-color: #fff;
+  height: 58px;
+  width: 58px;
+}
+
+@keyframes settings-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .settings-shell h1 {
   color: var(--wl-text-strong);
   font-size: clamp(3rem, 8vw, 5.25rem);
