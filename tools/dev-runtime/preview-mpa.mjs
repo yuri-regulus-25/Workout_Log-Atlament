@@ -24,6 +24,7 @@ const fallbacks = [
   { prefix: '/workouts', file: 'workouts/index.html' },
   { prefix: '/exercises', file: 'exercises/index.html' },
   { prefix: '/analytics', file: 'analytics/index.html' },
+  { prefix: '/settings', file: 'settings/index.html' },
 ]
 
 createServer(async (request, response) => {

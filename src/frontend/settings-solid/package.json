@@ -1,0 +1,23 @@
+{
+  "name": "@workout-lab/settings-solid",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "prod": "vite preview --host 127.0.0.1",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@workout-lab/frontend-common": "file:../../shared/frontend-common",
+    "@workout-lab/shared-styles": "file:../../shared/shared-styles",
+    "solid-js": "^1.9.10"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2",
+    "vite-plugin-solid": "^2.11.14",
+    "vite": "^8.2.0"
+  }
+}

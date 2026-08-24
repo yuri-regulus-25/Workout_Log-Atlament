@@ -1,20 +1,7 @@
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  siReact,
-  siVuedotjs,
-  siAngular,
-  siSvelte,
-} from 'simple-icons'
 import { mdiChevronDoubleLeft, mdiChevronDoubleRight } from '@mdi/js'
-
-const frameworkIcons = {
-  React: siReact,
-  'Vue.js': siVuedotjs,
-  Angular: siAngular,
-  Svelte: siSvelte,
-}
 
 const root = dirname(fileURLToPath(new URL('../../package.json', import.meta.url)))
 const distRoot = join(root, 'dist')
@@ -52,6 +39,14 @@ const apps = [
     framework: 'Svelte',
     source: join(root, 'src/frontend/analytics-svelte/dist'),
   },
+  {
+    path: 'settings',
+    label: 'Application Settings',
+    category: 'Configuration',
+    pointer: '外の世界との繋がりを定める',
+    framework: 'SolidJS',
+    source: join(root, 'src/frontend/settings-solid/dist'),
+  },
 ]
 
 await rm(distRoot, { recursive: true, force: true })
@@ -69,10 +64,20 @@ function createIndexHtml(entries) {
     .map(
       (entry) => `
         <a class="app-card" href="/${entry.path}/">
-          <span>${entry.category}</span>
-          <strong>${entry.label}</strong>
+          <span class="app-category">${entry.category}</span>
+          <strong class="app-title">${entry.label}</strong>
           <span class="app-pointer">${entry.pointer}</span>
-          <small>${frameworkBadge(entry.framework)}</small>
+          <small class="framework-badge">
+            <span class="framework-label">Built with</span>
+            <span class="framework-stack">
+              <img
+                src="/${entry.path}/favicon.svg"
+                alt=""
+                class="framework-icon"
+              />
+              <span>${entry.framework}</span>
+            </span>
+          </small>
         </a>`,
     )
     .join('')
@@ -92,7 +97,7 @@ function createIndexHtml(entries) {
       * { box-sizing: border-box; }
       body { margin: 0; }
       main {
-        width: min(1040px, calc(100% - 32px));
+        width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
         padding: 48px 0;
       }
@@ -119,11 +124,12 @@ function createIndexHtml(entries) {
       }
       .app-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 16px;
         margin-top: 32px;
       }
       .app-card {
+        grid-column: span 2;
         display: grid;
         gap: 8px;
         min-height: 180px;
@@ -140,6 +146,18 @@ function createIndexHtml(entries) {
           transform 180ms ease,
           box-shadow 180ms ease,
           border-color 180ms ease;
+      }
+
+      .app-card:nth-child(1) {
+        grid-column: 2 / span 2;
+      }
+
+      .app-card:nth-child(2) {
+        grid-column: 4 / span 2;
+      }
+
+      .app-card:nth-child(n + 3) {
+        grid-column: span 2;
       }
 
       .app-card:hover {
@@ -164,39 +182,74 @@ function createIndexHtml(entries) {
         transform: translateY(0);
         transition-delay: 0s;
       }
-      .app-card span,
-      .app-card small {
+      .app-category,
+      .app-pointer,
+      .framework-badge {
         color: #64748b;
       }
-      .app-card strong {
+      .app-title {
+        color: #111827;
         font-size: 1.35rem;
+        line-height: 1.18;
       }
-      @media (max-width: 900px) {
-        .app-grid { grid-template-columns: 1fr; }
+
+      @media (max-width: 980px) {
+        .app-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .app-card,
+        .app-card:nth-child(1),
+        .app-card:nth-child(2),
+        .app-card:nth-child(n + 3) {
+          grid-column: auto;
+        }
+
+        .app-card:last-child {
+          grid-column: 1 / -1;
+        }
       }
+
+      @media (max-width: 640px) {
+        .app-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .app-card:last-child {
+          grid-column: auto;
+        }
+      }
+
       .framework-badge {
         display: flex;
         align-items: center;
-        gap: 6px;
-        color: #64748b;
+        gap: 8px;
+        flex-wrap: wrap;
         font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .framework-label {
+        color: #94a3b8;
+      }
+      .framework-stack {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1;
       }
       .framework-icon {
-        width: 24px;
-        height: 24px;
+        display: block;
+        width: 22px;
+        height: 22px;
         flex: 0 0 auto;
-      }
-      .framework-badge strong {
-        color: #64748b;
-        font-size: inherit;
-        font-weight: 700;
       }
     </style>
   </head>
   <body>
     <main>
       <p class="eyebrow">Atlament / Portal</p>
-      <h2>Browse / Explore / Analyze</h2>
+      <h2>Browse, Explore, Analyze.</h2>
       <h1>What do you want to explore?</h1>
       <p>
         ワークアウトの履歴、種目ごとの記録、蓄積したデータの分析へ。
@@ -341,27 +394,4 @@ function createNotFoundHtml(entries) {
   </body>
 </html>
 `
-}
-
-function frameworkBadge(framework) {
-  const icon = frameworkIcons[framework]
-
-  if (!icon) {
-    return `Built with ${framework}`
-  }
-
-  return `
-    <span class="framework-badge">
-      Built with
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        class="framework-icon"
-        style="color:#${icon.hex}"
-      >
-        <path fill="currentColor" d="${icon.path}" />
-      </svg>
-      <strong>${framework}</strong>
-    </span>
-  `
 }

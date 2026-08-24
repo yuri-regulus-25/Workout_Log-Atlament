@@ -124,6 +124,7 @@ dist/
 ├─ workouts/
 ├─ exercises/
 ├─ analytics/
+├─ settings/
 ├─ index.html
 └─ 404.html
 ```
@@ -555,6 +556,7 @@ atlament/
       ├─ workouts/
       ├─ exercises/
       ├─ analytics/
+      ├─ settings/
       ├─ index.html
       └─ 404.html
 ```

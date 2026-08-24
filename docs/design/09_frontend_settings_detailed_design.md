@@ -243,10 +243,53 @@ Route:
 Artifact:
 
 ```text
-artifacts/settings/
+./dist/settings/
 ```
 
+Source / Framework固有の中間Build Artifactは各Frontend配下に生成してよい。ただし最終的なProduction Artifact / Packaging SourceはRepository直下 `./dist/settings/` に統合する。
+
 Settings Artifact欠落は個別画面欠落としてAF degraded。AF全体Fatalにはしない。
+
+---
+
+## 11.1. Settings UI表示文言
+
+Settings画面の表示文言は以下を基本とする。
+
+- 紫色の小見出しは英語表記。
+- 黒色の主見出しは短い日本語表記。
+- API値 / Enum値 / 保存値は英語の内部値を維持し、ユーザー向け表示のみ変換してよい。
+- AF等の内部実装略称や、技術的な内部処理説明を一般ユーザー向けUIに不用意に露出しない。
+- Sensitive Dataは平文表示、Console / Log出力、Frontend Storage保存をしない。
+
+Status値のユーザー向け表示例:
+
+| API値 | UI表示 |
+|---|---|
+| available / ready | 利用可能 |
+| degraded | 一部利用不可 |
+| unavailable | 利用不可 |
+| unknown | 不明 |
+| completed | 完了 |
+| idle | 待機中 |
+| running | 実行中 |
+| failed | 失敗 |
+| missing | 未設定 |
+| invalid | 無効 |
+| expired | 期限切れ |
+
+Required Actionsは以下の形式で表示する。
+
+```text
+内部コード / 日本語メッセージ
+```
+
+例:
+
+```text
+CONFIGURATION_REQUIRED / 設定が必要
+CREDENTIAL_REQUIRED / 資格情報が必要
+```
 
 ---
 
@@ -290,12 +333,18 @@ getAfStatus()
 例:
 
 ```text
-AF Status
+Application Framework Status
 -------------------------
-Application    Ready
-Runtime Data   Available
-GitHub         Available
-Credential     Available
+Application    利用可能
+Runtime Data   利用可能
+GitHub         利用可能
+Credential     利用可能
+```
+
+黒色主見出し:
+
+```text
+アプリケーション状況
 ```
 
 Status Sectionは参照専用。
@@ -309,8 +358,20 @@ Status Sectionは参照専用。
 ```text
 Owner
 Repository
-Ref
+Branch
 Root Path
+```
+
+紫色小見出し:
+
+```text
+GitHub Repository Source
+```
+
+黒色主見出し:
+
+```text
+リポジトリ接続情報
 ```
 
 保存はSection単位。
@@ -339,22 +400,24 @@ UIは保存結果と導通確認結果を分離して表示可能とする。
 編集対象:
 
 ```text
-Type
+Resource Type
 Path
-Resource Kind
-Required
-Empty Allowed
+Data Type
+必須
+Nullable
 ```
 
 正式Resource Type:
 
 ```text
-WORKOUT
-EXERCISE_MASTER
-GYM_MASTER
+WORKOUT / ワークアウト情報
+EXERCISE_MASTER / 種目マスター
+GYM_MASTER / ジムマスター
 ```
 
 `type` は自由入力させずSelect等から選択する。
+
+Resource Typeの内部値は `WORKOUT` / `EXERCISE_MASTER` / `GYM_MASTER` のままとし、UI表示のみ日本語を併記する。
 
 Unknown Resource Typeをユーザーが作成できるUIにしない。
 
@@ -369,10 +432,10 @@ Resource追加 / 編集 / 削除を可能とする。
 すべて秒単位。
 
 ```text
-GitHub Request Timeout
-Sync Operation Timeout
-General API Timeout
-Shutdown Timeout
+GitHub Request (1-120 sec) / GitHub通信
+Sync Operation (5-600 sec) / 同期処理
+General API (1-120 sec) / API通信
+Shutdown (1-60 sec) / 終了処理
 ```
 
 値:
@@ -406,14 +469,14 @@ UI上は鍵Icon等を利用し、Confidential Dataであることを明示する
 例:
 
 ```text
-GitHub Token 🔒
-Configured
-[ Enter new token to replace ]
+資格情報 - GitHub Token
+設定済み / 未設定
+[ GitHub Token ]
 
-Token Limit Date
+Token Limit Date / 有効期限
 [ 2026-12-31 ]
 
-Confidential / Stored securely
+登録された情報は、システム内に保存されます。
 ```
 
 Token値はAFから取得・再表示しない。
@@ -441,8 +504,9 @@ syncWorkoutData()
 例:
 
 ```text
-Remote Data
-[ Sync Now ]
+リモートデータ同期
+[ 今すぐ同期 ]
+GitHubから最新データを取得します。
 ```
 
 Sync中はButtonをDisabledにし、重複操作をUI上でも抑止する。

@@ -1,4 +1,5 @@
 using Atlament.Core;
+using System.Net;
 
 namespace Atlament.Tests;
 
@@ -140,6 +141,142 @@ public sealed class AfCoreTests
         }
     }
 
+    [Fact]
+    public void CredentialLimitDateCanBeUpdatedWithoutReenteringToken()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-credential-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var store = new CredentialStore(paths);
+
+            var initial = store.Save(new CredentialUpdate("github-token", "2026-12-31"));
+            var updated = store.Save(new CredentialUpdate(null, "2027-01-31"));
+            var loaded = store.Load();
+
+            Assert.True(initial.Configured);
+            Assert.True(updated.Configured);
+            Assert.Equal("available", updated.State);
+            Assert.Equal("2027-01-31", updated.LimitDate);
+            Assert.Equal("github-token", loaded.Token);
+            Assert.Equal("2027-01-31", loaded.Status.LimitDate);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task GithubAccessCombinesRootPathWithAllResources()
+    {
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri?.AbsoluteUri ?? "";
+            if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    [
+                      { "path": "data/workouts/2026", "type": "dir" }
+                    ]
+                    """);
+            }
+
+            if (url.Contains("/contents/data/workouts/2026?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    [
+                      { "path": "data/workouts/2026/08", "type": "dir" }
+                    ]
+                    """);
+            }
+
+            if (url.Contains("/contents/data/workouts/2026/08?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    [
+                      { "path": "data/workouts/2026/08/2026-08-24.json", "type": "file" },
+                      { "path": "data/workouts/2026/08/readme.md", "type": "file" }
+                    ]
+                    """);
+            }
+
+            if (url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
+                url.Contains("/data/master/exercises.json", StringComparison.Ordinal) ||
+                url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+            {
+                return JsonResponse("{}");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var service = new GithubAccessService(new HttpClient(http));
+
+        var (files, errors) = await service.FetchAsync(Configuration("data"), "token", CancellationToken.None);
+
+        Assert.Empty(errors);
+        Assert.Equal(new[]
+        {
+            "data/workouts/2026/08/2026-08-24.json",
+            "data/master/exercises.json",
+            "data/master/gyms.json"
+        }, files.Select(file => file.Path));
+        Assert.Contains(http.RequestedUrls, url => url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal));
+        Assert.DoesNotContain(http.RequestedUrls, url => url.Contains("/readme.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GithubAccessUsesResourcePathWhenRootPathIsEmpty()
+    {
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri?.AbsoluteUri ?? "";
+            if (url.Contains("/contents/workouts?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse("""
+                    [
+                      { "path": "workouts/2026/08/2026-08-24.json", "type": "file" }
+                    ]
+                    """);
+            }
+
+            if (url.Contains("/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
+                url.Contains("/master/exercises.json", StringComparison.Ordinal) ||
+                url.Contains("/master/gyms.json", StringComparison.Ordinal))
+            {
+                return JsonResponse("{}");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var service = new GithubAccessService(new HttpClient(http));
+
+        var (files, errors) = await service.FetchAsync(Configuration(""), "token", CancellationToken.None);
+
+        Assert.Empty(errors);
+        Assert.Equal(new[]
+        {
+            "workouts/2026/08/2026-08-24.json",
+            "master/exercises.json",
+            "master/gyms.json"
+        }, files.Select(file => file.Path));
+    }
+
+    [Fact]
+    public async Task GithubAccessReportsCombinedDirectoryPathWhenDirectoryRequestFails()
+    {
+        var service = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))));
+
+        var (_, errors) = await service.FetchAsync(Configuration("data"), "token", CancellationToken.None);
+
+        var error = Assert.Single(errors);
+        Assert.Equal(AfErrorCodes.GithubResourceNotFound, error.Code);
+        Assert.Contains("data/workouts", error.Message, StringComparison.Ordinal);
+    }
+
     private static RuntimeSourceFile Workout(string path, string gymId, string exerciseId)
     {
         var sessionId = Path.GetFileNameWithoutExtension(path).Replace("missing-exercise", "missingExercise").Replace("missing-gym", "missingGym");
@@ -160,5 +297,32 @@ public sealed class AfCoreTests
               ]
             }
             """);
+    }
+
+    private static AfConfiguration Configuration(string rootPath) => new(
+        1,
+        new RepositoryConfiguration("owner", "repo", "master", rootPath),
+        new[]
+        {
+            new ResourceConfiguration("WORKOUT", "workouts/", "directory", true, false),
+            new ResourceConfiguration("EXERCISE_MASTER", "master/exercises.json", "file", true, false),
+            new ResourceConfiguration("GYM_MASTER", "master/gyms.json", "file", true, false)
+        },
+        new TimeoutConfiguration(10, 60, 30, 10));
+
+    private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(json)
+    };
+
+    private sealed class RecordingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        public List<string> RequestedUrls { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestedUrls.Add(request.RequestUri?.AbsoluteUri ?? "");
+            return Task.FromResult(respond(request));
+        }
     }
 }

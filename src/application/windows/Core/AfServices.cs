@@ -246,22 +246,29 @@ public sealed class CredentialStore
 
     public CredentialUpdateResult Save(CredentialUpdate update)
     {
-        if (string.IsNullOrWhiteSpace(update.Token))
-        {
-            var current = Load().Status;
-            return new CredentialUpdateResult(current.Configured, current.State, current.LimitDate);
-        }
-
         if (!string.IsNullOrWhiteSpace(update.LimitDate) && !DateOnly.TryParse(update.LimitDate, out _))
         {
             return new CredentialUpdateResult(false, CredentialState.invalid.ToString(), update.LimitDate);
         }
 
+        var current = Load();
+        var token = string.IsNullOrWhiteSpace(update.Token) ? current.Token : update.Token;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return new CredentialUpdateResult(current.Status.Configured, current.Status.State, current.Status.LimitDate);
+        }
+
         Directory.CreateDirectory(_paths.ConfigurationRoot);
-        var json = JsonSerializer.Serialize(new StoredCredential(update.Token, update.LimitDate), AfJson.Options);
+        var json = JsonSerializer.Serialize(new StoredCredential(token, update.LimitDate), AfJson.Options);
         var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), null, DataProtectionScope.CurrentUser);
         File.WriteAllBytes(_paths.CredentialPath, protectedBytes);
-        return new CredentialUpdateResult(true, CredentialState.available.ToString(), update.LimitDate);
+        var state = CredentialState.available;
+        if (DateOnly.TryParse(update.LimitDate, out var limitDate) && limitDate < DateOnly.FromDateTime(DateTime.Today))
+        {
+            state = CredentialState.expired;
+        }
+
+        return new CredentialUpdateResult(true, state.ToString(), update.LimitDate);
     }
 
     private sealed record StoredCredential(string Token, string? LimitDate);
@@ -675,7 +682,17 @@ public sealed class RuntimeDataBuilder
 
 public sealed class GithubAccessService
 {
-    private readonly HttpClient _httpClient = new();
+    private readonly HttpClient _httpClient;
+
+    public GithubAccessService()
+        : this(new HttpClient())
+    {
+    }
+
+    public GithubAccessService(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+    }
 
     public async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchAsync(
         AfConfiguration configuration,
@@ -745,37 +762,70 @@ public sealed class GithubAccessService
         string? token,
         CancellationToken cancellationToken)
     {
-        var treeUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/git/trees/{Uri.EscapeDataString(configuration.Repository.Ref)}?recursive=1";
-        using var request = CreateRequest(treeUrl, token);
+        var prefix = CombineRemote(configuration.Repository.RootPath, resource.Path);
+        return await FetchDirectoryContentsAsync(configuration, prefix, token, cancellationToken);
+    }
+
+    private async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchDirectoryContentsAsync(
+        AfConfiguration configuration,
+        string directoryPath,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(directoryPath)}?ref={Uri.EscapeDataString(configuration.Repository.Ref)}";
+        using var request = CreateRequest(contentsUrl, token);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return (Array.Empty<RuntimeSourceFile>(), new[] { MapGithubError(response.StatusCode, resource.Path) });
+            return (Array.Empty<RuntimeSourceFile>(), new[] { MapGithubError(response.StatusCode, directoryPath) });
         }
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        var tree = JsonNode.Parse(json)?["tree"]?.AsArray();
-        if (tree is null)
+        var entries = JsonNode.Parse(json)?.AsArray();
+        if (entries is null)
         {
-            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub tree response is invalid.", true) });
+            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
         }
-
-        var prefix = CombineRemote(configuration.Repository.RootPath, resource.Path).Trim('/');
-        var paths = tree
-            .Select(node => node?["path"]?.GetValue<string>())
-            .Where(path => path is not null && path.StartsWith(prefix, StringComparison.Ordinal) && (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase)))
-            .Cast<string>()
-            .ToArray();
 
         var files = new List<RuntimeSourceFile>();
-        foreach (var path in paths)
+        var errors = new List<AfError>();
+        foreach (var entry in entries)
         {
-            var fetched = await FetchRawPathAsync(configuration, path, token, cancellationToken);
-            if (fetched.Error is not null) return (Array.Empty<RuntimeSourceFile>(), new[] { fetched.Error });
-            files.Add(fetched.File!);
+            var type = entry?["type"]?.GetValue<string>();
+            var path = entry?["path"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(path))
+            {
+                errors.Add(new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true));
+                break;
+            }
+
+            if (type == "dir")
+            {
+                var nested = await FetchDirectoryContentsAsync(configuration, path, token, cancellationToken);
+                if (nested.Errors.Count > 0)
+                {
+                    errors.AddRange(nested.Errors);
+                    break;
+                }
+
+                files.AddRange(nested.Files);
+                continue;
+            }
+
+            if (type == "file" && IsJsonRuntimePath(path))
+            {
+                var fetched = await FetchRawPathAsync(configuration, path, token, cancellationToken);
+                if (fetched.Error is not null)
+                {
+                    errors.Add(fetched.Error);
+                    break;
+                }
+
+                files.Add(fetched.File!);
+            }
         }
 
-        return (files, Array.Empty<AfError>());
+        return errors.Count == 0 ? (files, errors) : (Array.Empty<RuntimeSourceFile>(), errors);
     }
 
     private async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchFileAsync(
@@ -797,7 +847,7 @@ public sealed class GithubAccessService
         string? token,
         CancellationToken cancellationToken)
     {
-        var rawUrl = $"https://raw.githubusercontent.com/{configuration.Repository.Owner}/{configuration.Repository.Repository}/{Uri.EscapeDataString(configuration.Repository.Ref)}/{path}";
+        var rawUrl = $"https://raw.githubusercontent.com/{configuration.Repository.Owner}/{configuration.Repository.Repository}/{Uri.EscapeDataString(configuration.Repository.Ref)}/{EscapeRemotePath(path)}";
         using var request = CreateRequest(rawUrl, token);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -830,7 +880,20 @@ public sealed class GithubAccessService
     };
 
     private static string CombineRemote(string root, string path) =>
-        string.Join("/", new[] { root.Trim('/'), path.Trim('/') }.Where(value => value.Length > 0));
+        string.Join("/", new[] { NormalizeRemotePath(root), NormalizeRemotePath(path) }.Where(value => value.Length > 0));
+
+    private static string NormalizeRemotePath(string value) =>
+        string.Join("/", value
+            .Replace('\\', '/')
+            .Trim()
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    private static string EscapeRemotePath(string path) =>
+        string.Join("/", NormalizeRemotePath(path).Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+
+    private static bool IsJsonRuntimePath(string path) =>
+        path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class HostingStatusService
