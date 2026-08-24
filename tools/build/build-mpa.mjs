@@ -1,20 +1,7 @@
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  siReact,
-  siVuedotjs,
-  siAngular,
-  siSvelte,
-} from 'simple-icons'
 import { mdiChevronDoubleLeft, mdiChevronDoubleRight } from '@mdi/js'
-
-const frameworkIcons = {
-  React: siReact,
-  'Vue.js': siVuedotjs,
-  Angular: siAngular,
-  Svelte: siSvelte,
-}
 
 const root = dirname(fileURLToPath(new URL('../../package.json', import.meta.url)))
 const distRoot = join(root, 'dist')
@@ -52,6 +39,14 @@ const apps = [
     framework: 'Svelte',
     source: join(root, 'src/frontend/analytics-svelte/dist'),
   },
+  {
+    path: 'settings',
+    label: 'Application Settings',
+    category: 'Configuration',
+    pointer: '外の世界との繋がりを定める',
+    framework: 'SolidJS',
+    source: join(root, 'src/frontend/settings-solid/dist'),
+  },
 ]
 
 await rm(distRoot, { recursive: true, force: true })
@@ -69,10 +64,20 @@ function createIndexHtml(entries) {
     .map(
       (entry) => `
         <a class="app-card" href="/${entry.path}/">
-          <span>${entry.category}</span>
-          <strong>${entry.label}</strong>
+          <span class="app-category">${entry.category}</span>
+          <strong class="app-title">${entry.label}</strong>
           <span class="app-pointer">${entry.pointer}</span>
-          <small>${frameworkBadge(entry.framework)}</small>
+          <small class="framework-badge">
+            <span class="framework-label">Built with</span>
+            <span class="framework-stack">
+              <img
+                src="/${entry.path}/favicon.svg"
+                alt=""
+                class="framework-icon"
+              />
+              <span>${entry.framework}</span>
+            </span>
+          </small>
         </a>`,
     )
     .join('')
@@ -92,7 +97,7 @@ function createIndexHtml(entries) {
       * { box-sizing: border-box; }
       body { margin: 0; }
       main {
-        width: min(1040px, calc(100% - 32px));
+        width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
         padding: 48px 0;
       }
@@ -119,11 +124,52 @@ function createIndexHtml(entries) {
       }
       .app-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 16px;
         margin-top: 32px;
       }
+      .sync-notice {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        margin-top: 24px;
+        border: 1px solid #ddd6fe;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.92);
+        color: #4338ca;
+        padding: 14px 16px;
+        font-weight: 800;
+        box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+      }
+      .sync-notice.visible {
+        display: flex;
+      }
+      .sync-notice.warning {
+        border-color: #fed7aa;
+        color: #9a3412;
+      }
+      .sync-loader {
+        width: 22px;
+        height: 22px;
+        border: 3px solid rgba(124, 58, 237, 0.22);
+        border-top-color: #7c3aed;
+        border-radius: 50%;
+        animation: portal-spin 0.9s linear infinite;
+        flex: 0 0 auto;
+      }
+      .sync-notice.warning .sync-loader {
+        display: none;
+      }
+      .sync-notice a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      @keyframes portal-spin {
+        to { transform: rotate(360deg); }
+      }
       .app-card {
+        grid-column: span 2;
         display: grid;
         gap: 8px;
         min-height: 180px;
@@ -140,6 +186,18 @@ function createIndexHtml(entries) {
           transform 180ms ease,
           box-shadow 180ms ease,
           border-color 180ms ease;
+      }
+
+      .app-card:nth-child(1) {
+        grid-column: 2 / span 2;
+      }
+
+      .app-card:nth-child(2) {
+        grid-column: 4 / span 2;
+      }
+
+      .app-card:nth-child(n + 3) {
+        grid-column: span 2;
       }
 
       .app-card:hover {
@@ -164,47 +222,141 @@ function createIndexHtml(entries) {
         transform: translateY(0);
         transition-delay: 0s;
       }
-      .app-card span,
-      .app-card small {
+      .app-category,
+      .app-pointer,
+      .framework-badge {
         color: #64748b;
       }
-      .app-card strong {
+      .app-title {
+        color: #111827;
         font-size: 1.35rem;
+        line-height: 1.18;
       }
-      @media (max-width: 900px) {
-        .app-grid { grid-template-columns: 1fr; }
+
+      @media (max-width: 980px) {
+        .app-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .app-card,
+        .app-card:nth-child(1),
+        .app-card:nth-child(2),
+        .app-card:nth-child(n + 3) {
+          grid-column: auto;
+        }
+
+        .app-card:last-child {
+          grid-column: 1 / -1;
+        }
       }
+
+      @media (max-width: 640px) {
+        .app-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .app-card:last-child {
+          grid-column: auto;
+        }
+      }
+
       .framework-badge {
         display: flex;
         align-items: center;
-        gap: 6px;
-        color: #64748b;
+        gap: 8px;
+        flex-wrap: wrap;
         font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .framework-label {
+        color: #94a3b8;
+      }
+      .framework-stack {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1;
       }
       .framework-icon {
-        width: 24px;
-        height: 24px;
+        display: block;
+        width: 22px;
+        height: 22px;
         flex: 0 0 auto;
-      }
-      .framework-badge strong {
-        color: #64748b;
-        font-size: inherit;
-        font-weight: 700;
       }
     </style>
   </head>
   <body>
     <main>
       <p class="eyebrow">Atlament / Portal</p>
-      <h2>Browse / Explore / Analyze</h2>
+      <h2>Browse, Explore, Analyze.</h2>
       <h1>What do you want to explore?</h1>
       <p>
         ワークアウトの履歴、種目ごとの記録、蓄積したデータの分析へ。
       </p>
+      <section id="sync-notice" class="sync-notice" aria-live="polite">
+        <span class="sync-loader" aria-hidden="true"></span>
+        <span id="sync-notice-text">同期データを取得しています。</span>
+      </section>
       <section class="app-grid" aria-label="Applications">
         ${links}
       </section>
     </main>
+    <script>
+      const notice = document.getElementById('sync-notice')
+      const noticeText = document.getElementById('sync-notice-text')
+      let statusTimer = null
+
+      async function refreshStatusNotice() {
+        try {
+          const response = await fetch('/api/v1/common/status', {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          })
+
+          if (!response.ok) {
+            hideStatusNotice()
+            return
+          }
+
+          const payload = await response.json()
+          const status = payload.data
+          const startupRunning = status?.operations?.startup === 'running'
+          const manualSyncRunning = status?.operations?.manualSync === 'running'
+          const runtimeRequired = Array.isArray(status?.requiredActions)
+            && status.requiredActions.includes('RUNTIME_DATA_REQUIRED')
+
+          notice.classList.remove('warning')
+          if (startupRunning) {
+            showStatusNotice('同期データを取得しています。', false)
+          } else if (manualSyncRunning) {
+            showStatusNotice('リモートデータを同期しています。', false)
+          } else if (runtimeRequired) {
+            showStatusNotice('同期済みデータがありません。<a href="/settings/">Application Settings</a>で設定と同期を確認してください。', true)
+          } else {
+            hideStatusNotice()
+          }
+        } catch {
+          hideStatusNotice()
+        }
+      }
+
+      function showStatusNotice(message, warning) {
+        noticeText.innerHTML = message
+        notice.classList.toggle('warning', warning)
+        notice.classList.add('visible')
+      }
+
+      function hideStatusNotice() {
+        notice.classList.remove('visible', 'warning')
+      }
+
+      refreshStatusNotice()
+      statusTimer = window.setInterval(refreshStatusNotice, 1500)
+      window.addEventListener('pagehide', () => {
+        if (statusTimer !== null) window.clearInterval(statusTimer)
+      })
+    </script>
   </body>
 </html>
 `
@@ -341,27 +493,4 @@ function createNotFoundHtml(entries) {
   </body>
 </html>
 `
-}
-
-function frameworkBadge(framework) {
-  const icon = frameworkIcons[framework]
-
-  if (!icon) {
-    return `Built with ${framework}`
-  }
-
-  return `
-    <span class="framework-badge">
-      Built with
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        class="framework-icon"
-        style="color:#${icon.hex}"
-      >
-        <path fill="currentColor" d="${icon.path}" />
-      </svg>
-      <strong>${framework}</strong>
-    </span>
-  `
 }

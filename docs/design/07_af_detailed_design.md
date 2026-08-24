@@ -120,6 +120,10 @@ Platform / OS Adapter
 
 Startup Sync と Manual Sync は同一 Remote Sync UseCase を利用する。
 
+Startup Syncは起動時に1回実行する。Windows Shell / HTTP Host の初期化TimeoutはStartup SyncのRemote取得処理を中断するために使用しない。Remote取得処理のTimeoutはAF ConfigurationのTimeout設定を正とする。
+
+Startup SyncまたはManual SyncでRemote Runtime Dataを取得中の場合、UIはStatus APIのOperation Stateを参照し、ユーザーに取得中であることを通知する。
+
 Orchestration は JSON Parse、File I/O、GitHub HTTP 通信、Credential 保存、Configuration 保存、OS 固有処理を直接実装しない。
 
 ---
@@ -750,6 +754,16 @@ Operation: idle / running / completed / failed
 
 設定不足等は `requiredActions` で表現する。
 
+初回起動または起動時Validationで、Repository Configuration / GitHub Credential / Runtime Data 等の利用前提が不足している場合は、Fatal Errorではなくユーザー操作で解消可能な初期設定不足として扱う。
+
+代表的なRequired Actions:
+
+```text
+CONFIGURATION_REQUIRED
+CREDENTIAL_REQUIRED
+RUNTIME_DATA_REQUIRED
+```
+
 ---
 
 ## 27. Runtime Workout API
@@ -1093,6 +1107,7 @@ CONFIG_REQUIRED
 CONFIG_INVALID
 CONFIG_SAVE_FAILED
 CREDENTIAL_REQUIRED
+RUNTIME_DATA_REQUIRED
 CREDENTIAL_INVALID
 CREDENTIAL_SAVE_FAILED
 GITHUB_UNAUTHORIZED

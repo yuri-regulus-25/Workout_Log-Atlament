@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build:apps && npm run build:mpa",
-    "build:apps": "npm run build -w @workout-lab/workouts-vue && npm run build -w @workout-lab/dashboard-react && npm run build -w @workout-lab/exercises-angular && npm run build -w @workout-lab/analytics-svelte",
+    "build:apps": "npm run build -w @workout-lab/workouts-vue && npm run build -w @workout-lab/dashboard-react && npm run build -w @workout-lab/exercises-angular && npm run build -w @workout-lab/analytics-svelte && npm run build -w @workout-lab/settings-solid",
     "build:mpa": "node tools/build/build-mpa.mjs",
     "check:analytics": "npm run check -w @workout-lab/analytics-svelte",
     "check:all": "npm run check:analytics && npm run check:data && npm run check:mpa",
@@ -18,10 +18,12 @@
     "dev:analytics": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/analytics-svelte",
     "dev:dashboard": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/dashboard-react",
     "dev:exercises": "node tools/dev-runtime/dev-with-workout-data.mjs npm run start -w @workout-lab/exercises-angular",
+    "dev:settings": "npm run dev -w @workout-lab/settings-solid",
     "dev:workouts": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/workouts-vue",
     "prod:analytics": "npm run prod -w @workout-lab/analytics-svelte",
     "prod:dashboard": "npm run prod -w @workout-lab/dashboard-react",
     "prod:exercises": "npm run prod -w @workout-lab/exercises-angular",
+    "prod:settings": "npm run prod -w @workout-lab/settings-solid",
     "prod:workouts": "npm run prod -w @workout-lab/workouts-vue",
     "preview:mpa": "node tools/dev-runtime/preview-mpa.mjs",
     "test": "vitest run"
@@ -31,7 +33,6 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
-    "@mdi/js": "^7.4.47",
-    "simple-icons": "^16.28.0"
+    "@mdi/js": "^7.4.47"
   }
 }

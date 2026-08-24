@@ -81,6 +81,41 @@ describe('real workout data', () => {
     expect(result.sessions[0].gym.name.length).toBeGreaterThan(0)
     expect(result.sessions.some((session) => session.exercises.some((exercise) => exercise.name === 'リアデルト'))).toBe(true)
   })
+
+  it('loads normalized runtime sessions from the Windows AF runtime API contract', async () => {
+    const masterResult = await loadMasterDataFromDirectory(masterDirectory)
+    const files = await collectWorkoutFiles(workoutsDirectory)
+    const responseFiles = await Promise.all(
+      files.map(async (filePath) => ({
+        path: filePath,
+        content: await readFile(filePath, 'utf8'),
+      })),
+    )
+    const normalized = loadRuntimeWorkoutSessions({
+      endpoints: ['/api/workout-data'],
+      fetcher: async () =>
+        new Response(JSON.stringify({ masterData: masterResult.masterData, files: responseFiles }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+    const expected = await normalized
+
+    const result = await loadRuntimeWorkoutSessions({
+      endpoints: ['/api/v1/common/runtime/workouts'],
+      fetcher: async () =>
+        new Response(JSON.stringify({
+          success: true,
+          errors: [],
+          data: { sessions: expected.sessions },
+        }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(expected.sessions.length)
+    expect(result.sessions[0].gym.name.length).toBeGreaterThan(0)
+  })
 })
 
 async function countRawWorkoutSessions(directory: string): Promise<number> {

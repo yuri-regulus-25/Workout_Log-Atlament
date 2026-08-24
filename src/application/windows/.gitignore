@@ -1,0 +1,5 @@
+# ignore Directory, Files
+bin/
+obj/
+.vs/
+*.user

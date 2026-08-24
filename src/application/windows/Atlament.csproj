@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Atlament.Tests\**\*.cs" />
+    <EmbeddedResource Remove="Atlament.Tests\**\*" />
+    <None Remove="Atlament.Tests\**\*" />
+  </ItemGroup>
+
+  <Target Name="CopyFrontendArtifacts" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\..\dist')">
+    <ItemGroup>
+      <FrontendArtifact Include="$(MSBuildProjectDirectory)\..\..\..\dist\**\*.*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(FrontendArtifact)"
+      DestinationFiles="@(FrontendArtifact->'$(OutDir)data\frontend\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

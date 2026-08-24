@@ -10,6 +10,7 @@ const pages = [
   '/workouts/2026-08-14',
   '/exercises/pec-deck',
   '/analytics/',
+  '/settings/',
 ]
 
 const notFoundPage = '/unknown'

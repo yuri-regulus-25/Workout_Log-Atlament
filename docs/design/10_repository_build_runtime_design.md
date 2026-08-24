@@ -18,7 +18,7 @@ Repository直下で Source / SoT Data / Design Documents / Tooling / Production 
 ├─ data/
 ├─ docs/
 ├─ tools/
-├─ atlament/      # generated / gitignore
+├─ dist/          # generated / gitignore
 ├─ .tmp/          # generated / gitignore
 ├─ package.json
 ├─ package-lock.json
@@ -115,21 +115,23 @@ Build ScriptがPortal / Error Page等のUIそのものを文字列生成する�
 Production Frontend Artifact RootはRepository直下の以下とする。
 
 ```text
-./atlament/
+./dist/
 ```
 
 ```text
-atlament/
-├─ portal/
-├─ errors/
+dist/
 ├─ dashboard/
 ├─ workouts/
 ├─ exercises/
 ├─ analytics/
-└─ settings/
+├─ settings/
+├─ index.html
+└─ 404.html
 ```
 
-`atlament/` は生成物専用・Git管理対象外とする。
+`dist/` は生成物専用・Git管理対象外とする。
+
+`./atlament/` はRepository上の常設Build Artifact Rootとして新規導入しない。Packaging上、一時Staging Directoryが実際に必要にならない限り生成しない。
 
 AFはFrontend Source、npm、各Frameworkの存在を認識せず、完成済みArtifactのみをHosting対象として扱う。
 
@@ -140,54 +142,42 @@ AFはFrontend Source、npm、各Frameworkの存在を認識せず、完成済み
 統合Entry Point:
 
 ```text
-npm run prod
+npm run build
 ```
 
 ```text
-lint
-↓
-typecheck
-↓
-test
-↓
 Production Build
 ↓
 Artifact Assemble
 ↓
-Artifact Validation
-↓
-./atlament 完成
+./dist 完成
 ```
 
 途中の不完全Artifactを完成品として残さない。
 
 ```text
-.tmp/prod/
+.tmp/build/
 ↓ Validation OK
-./atlament/
+./dist/
 ```
 
 個別Command:
 
 ```text
-npm run lint
-npm run typecheck
 npm run test
-npm run check
+npm run check:all
 npm run build
-npm run validate:artifact
-npm run prod
 ```
 
 ```text
-check = lint + typecheck + test
-build = Production Build + Artifact Assemble
-prod  = check + build + validate:artifact
+test      = 既存Unit Test
+check:all = 既存Data / MPA Validation
+build     = Production Build + Artifact Assemble
 ```
 
-`npm run prod` がexit 0の場合、Frontend側はAFへ渡せる状態とする。
+`npm run build` がexit 0の場合、`./dist/` はWindows Packaging SourceとしてAFへ渡せる状態とする。
 
-Frontend CIも `npm ci` → `npm run prod` を基本とし、CI専用の別Validation経路を作らない。
+Frontend CIも既存Build Pipelineを維持し、`npm ci` → `npm test` → `npm run check:all` → `npm run build` を基本とする。
 
 Windows / Android ApplicationのBuild / Testは各Platform Build Systemで実施する。
 
@@ -199,7 +189,7 @@ Windows / Android ApplicationのBuild / Testは各Platform Build Systemで実施
 npm run preview:mpa
 ```
 
-Build済み `./atlament/` のStatic Serveのみを行う。
+Build済み `./dist/` のStatic Serveのみを行う。
 
 以下は行わない。
 
@@ -231,7 +221,7 @@ Development Gateway :5173
 └─ /api/         → Node Development Runtime
 ```
 
-`watch` は `atlament/` を使用しない。
+`watch` は `dist/` を使用しない。
 
 個別Command:
 
@@ -562,16 +552,18 @@ atlament/
    ├─ runtime/
    ├─ logs/
    └─ frontend/
-      ├─ portal/
-      ├─ errors/
       ├─ dashboard/
       ├─ workouts/
       ├─ exercises/
       ├─ analytics/
-      └─ settings/
+      ├─ settings/
+      ├─ index.html
+      └─ 404.html
 ```
 
-Repository Production Frontend Artifact `./atlament/` はWindows Packaging工程で `<exe directory>/data/frontend/` へ配置する。
+Repository Production Frontend Artifact `./dist/` はWindows Packaging工程で `<exe directory>/data/frontend/` へ配置する。
+
+Windows AFはRepository上の`./dist/`を直接Production Runtimeとして参照しない。Windows Production Runtimeでは `<exe directory>/data/frontend/` をHosting Rootとする。
 
 Common AFは物理Pathを直接固定せず、論理RootをPlatform Adapterから受け取る。
 
@@ -617,7 +609,8 @@ Common AFは物理Storage方式を認識せず、Platform Adapterから論理Roo
 
 - Source / Data / Docs / Tooling / Production Artifactを再混在させない。
 - Windows / Android Applicationを単一OSディレクトリへ混在させない。
-- `atlament/` をSource管理領域として使用しない。
+- `dist/` をSource管理領域として使用しない。
+- `./atlament/` を常設のBuild Artifact Rootとして新規導入しない。
 - `preview:mpa` でBuildを実行しない。
 - `watch` でProduction Artifactを利用しない。
 - AF起動をFrontend Development Runtimeの前提にしない。
@@ -640,8 +633,8 @@ Common AFは物理Storage方式を認識せず、Platform Adapterから論理Roo
 - `npm run watch` で1 Portから全Development Frontendを利用できる。
 - `watch:<domain>` で画面単位Developmentが可能。
 - Node Development RuntimeがRepository `data/` を利用する薄いAF互換Adapterとして成立している。
-- `npm run prod` で `./atlament/` が生成される。
-- `npm run preview:mpa` は `./atlament/` のみを配信する。
+- `npm run build` で `./dist/` が生成される。
+- `npm run preview:mpa` は `./dist/` のみを配信する。
 - Production / Preview / Development Runtimeが相互に責務混在していない。
 - Portal / Error PagesがBuild Script生成から独立Source化されている。
 - Error Pages初期セットが `common / 404 / 500 / 503` で成立している。
