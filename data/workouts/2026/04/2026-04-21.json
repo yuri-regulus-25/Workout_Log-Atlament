@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-04-21-01",
+  "date": "2026-04-21",
+  "status": "complete",
+  "gym_id": "af-shioiri",
+  "exercises": [
+    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":20,"reps":20},{"set":2,"weight_kg":20,"reps":10},{"set":3,"weight_kg":22.5,"reps":10}]},
+    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":40,"reps":20},{"set":2,"weight_kg":50,"reps":20},{"set":3,"weight_kg":55,"reps":20},{"set":4,"weight_kg":62.5,"reps":20},{"set":5,"weight_kg":70,"reps":30}]}
+  ]
+}

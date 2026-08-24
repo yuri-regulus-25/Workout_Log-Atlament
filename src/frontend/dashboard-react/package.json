@@ -1,0 +1,33 @@
+{
+  "name": "@workout-lab/dashboard-react",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "prod": "vite preview --host 127.0.0.1",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@workout-lab/design-tokens": "file:../../shared/design-tokens",
+    "@workout-lab/shared-styles": "file:../../shared/shared-styles",
+    "@workout-lab/workout-core": "file:../../shared/workout-core",
+    "@workout-lab/workout-data": "file:../../shared/workout-data",
+    "@workout-lab/workout-types": "file:../../shared/workout-types",
+    "apexcharts": "^6.9.0",
+    "react": "^19.2.8",
+    "react-apexcharts": "^1.9.0",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

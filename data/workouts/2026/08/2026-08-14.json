@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-08-14-01",
+  "date": "2026-08-14",
+  "status": "complete",
+  "gym_id": "af-minatomirai",
+  "exercises": [
+    {
+      "exercise_id": "shoulder-press",
+      "sets": [
+        { "set": 1, "weight_kg": 15, "reps": 10 },
+        { "set": 2, "weight_kg": 17.5, "reps": 10 }
+      ]
+    },
+    {
+      "exercise_id": "leg-press",
+      "sets": [
+        { "set": 1, "weight_kg": 50, "reps": 1 },
+        { "set": 2, "weight_kg": 110, "reps": 10 },
+        { "set": 3, "weight_kg": 132.5, "reps": 10 },
+        { "set": 4, "weight_kg": 155, "reps": 10 },
+        { "set": 5, "weight_kg": 185, "reps": 10 }
+      ]
+    },
+    {
+      "exercise_id": "pectoral-fly",
+      "sets": [
+        { "set": 1, "weight_kg": 20, "reps": 10 },
+        { "set": 2, "weight_kg": 22.5, "reps": 10 },
+        { "set": 3, "weight_kg": 22.5, "reps": 10 }
+      ]
+    },
+    {
+      "exercise_id": "hip-abduction",
+      "sets": [
+        { "set": 1, "weight_kg": 65, "reps": 10 },
+        { "set": 2, "weight_kg": 65, "reps": 10 },
+        { "set": 3, "weight_kg": 50, "reps": 10 }
+      ]
+    }
+  ],
+  "notes": []
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@workout-lab/shared-styles",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./css": "./src/index.css"
+  },
+  "dependencies": {
+    "@workout-lab/design-tokens": "file:../design-tokens"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@workout-lab/exercises-angular",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build --base-href /exercises/",
+    "prod": "ng serve --configuration production --host 127.0.0.1",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "private": true,
+  "packageManager": "npm@10.8.1",
+  "dependencies": {
+    "@workout-lab/design-tokens": "file:../../shared/design-tokens",
+    "@workout-lab/shared-styles": "file:../../shared/shared-styles",
+    "@workout-lab/workout-core": "file:../../shared/workout-core",
+    "@workout-lab/workout-data": "file:../../shared/workout-data",
+    "@workout-lab/workout-types": "file:../../shared/workout-types",
+    "@angular/common": "^22.1.0",
+    "@angular/compiler": "^22.1.0",
+    "@angular/core": "^22.1.0",
+    "@angular/forms": "^22.1.0",
+    "@angular/platform-browser": "^22.1.0",
+    "@angular/router": "^22.1.0",
+    "apexcharts": "^6.9.0",
+    "ng-apexcharts": "^2.0.3",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.1.4",
+    "@angular/cli": "^22.1.4",
+    "@angular/compiler-cli": "^22.1.0",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.8"
+  }
+}

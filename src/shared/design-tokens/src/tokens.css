@@ -1,0 +1,15 @@
+:root {
+  --wl-bg: #f4f6fb;
+  --wl-surface: #ffffff;
+  --wl-surface-muted: #f8fafc;
+  --wl-text: #172033;
+  --wl-text-strong: #111827;
+  --wl-text-muted: #64748b;
+  --wl-border: #e2e8f0;
+  --wl-primary: #7c3aed;
+  --wl-primary-strong: #6d28d9;
+  --wl-secondary: #2563eb;
+  --wl-radius-card: 24px;
+  --wl-radius-control: 999px;
+  --wl-radius-inner: 18px;
+}

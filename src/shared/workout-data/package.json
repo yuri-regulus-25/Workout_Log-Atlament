@@ -1,0 +1,13 @@
+{
+  "name": "@workout-lab/workout-data",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "dependencies": {
+    "@workout-lab/workout-types": "file:../workout-types"
+  }
+}

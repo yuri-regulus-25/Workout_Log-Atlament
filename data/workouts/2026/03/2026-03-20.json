@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-03-20-01",
+  "date": "2026-03-20",
+  "status": "complete",
+  "gym_id": "af-shioiri",
+  "exercises": [
+    {"exercise_id":"lat-pulldown","sets":[{"set":1,"weight_kg":33,"reps":10},{"set":2,"weight_kg":33,"reps":10},{"set":3,"weight_kg":33,"reps":10}]},
+    {"exercise_id":"leg-curl","sets":[{"set":1,"weight_kg":40,"reps":10},{"set":2,"weight_kg":40,"reps":10},{"set":3,"weight_kg":40,"reps":10}]},
+    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":25,"reps":20},{"set":2,"weight_kg":35,"reps":20},{"set":3,"weight_kg":42.5,"reps":20},{"set":4,"weight_kg":42.5,"reps":20},{"set":5,"weight_kg":50,"reps":25}]},
+    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":25,"reps":10},{"set":2,"weight_kg":25,"reps":10},{"set":3,"weight_kg":25,"reps":10}]}
+  ]
+}

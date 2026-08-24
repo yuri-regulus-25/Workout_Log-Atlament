@@ -1,0 +1,67 @@
+.app-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0 56px;
+}
+
+.page-hero,
+.hero {
+  margin-bottom: 24px;
+}
+
+.hero-top,
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.view-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.view-header {
+  margin-bottom: 8px;
+}
+
+.view-header p:not(.eyebrow) {
+  max-width: 760px;
+  margin-top: 12px;
+  color: var(--wl-text-muted);
+  line-height: 1.7;
+}
+
+.metric-grid,
+.summary-grid,
+.dashboard-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.metric-grid,
+.summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .hero-top,
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-grid,
+  .summary-grid,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
