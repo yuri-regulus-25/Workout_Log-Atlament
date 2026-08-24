@@ -1,17 +1,30 @@
-namespace Atlament
+namespace Atlament;
+
+internal static class Program
 {
-    internal static class Program
+    [STAThread]
+    private static void Main()
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
+        ApplicationConfiguration.Initialize();
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+        var uiContext = SynchronizationContext.Current
+            ?? throw new InvalidOperationException("Windows Forms synchronization context is unavailable.");
+
+        using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var bootstrap = WindowsBootstrap.StartAsync(uiContext, startupCts.Token).GetAwaiter().GetResult();
+        if (bootstrap is null)
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-            Application.Run(new Form1());
+            MessageBox.Show("Atlament is already running.", "Atlament", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            Application.Run(new Form1(bootstrap));
+        }
+        finally
+        {
+            bootstrap.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 }

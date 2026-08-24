@@ -29,11 +29,28 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
+            webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+            ((System.ComponentModel.ISupportInitialize)webView).BeginInit();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
-            this.Text = "Form1";
+            webView.AllowExternalDrop = false;
+            webView.CreationProperties = null;
+            webView.DefaultBackgroundColor = System.Drawing.Color.White;
+            webView.Dock = System.Windows.Forms.DockStyle.Fill;
+            webView.Location = new System.Drawing.Point(0, 0);
+            webView.Name = "webView";
+            webView.Size = new System.Drawing.Size(1180, 760);
+            webView.TabIndex = 0;
+            webView.ZoomFactor = 1D;
+            this.ClientSize = new System.Drawing.Size(1180, 760);
+            this.Controls.Add(webView);
+            this.MinimumSize = new System.Drawing.Size(960, 640);
+            this.Name = "Form1";
+            this.Text = "Atlament";
+            ((System.ComponentModel.ISupportInitialize)webView).EndInit();
         }
 
         #endregion
+
+        private Microsoft.Web.WebView2.WinForms.WebView2 webView;
     }
 }
