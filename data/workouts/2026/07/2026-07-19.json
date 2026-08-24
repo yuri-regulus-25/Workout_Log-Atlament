@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-07-19-01",
+  "date": "2026-07-19",
+  "status": "complete",
+  "gym_id": "af-shioiri",
+  "exercises": [
+    {"exercise_id":"pectoral-fly","sets":[{"set":1,"weight_kg":20,"reps":10},{"set":2,"weight_kg":22.5,"reps":10},{"set":3,"weight_kg":25,"reps":10}]},
+    {"exercise_id":"rear-delt","sets":[{"set":1,"weight_kg":5,"reps":10},{"set":2,"weight_kg":7.5,"reps":10}]},
+    {"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":15,"reps":10},{"set":2,"weight_kg":17.5,"reps":5},{"set":3,"weight_kg":20,"reps":11}]},
+    {"exercise_id":"hack-squat","sets":[{"set":1,"weight_kg":10,"reps":10},{"set":2,"weight_kg":15,"reps":10},{"set":3,"weight_kg":20,"reps":10}]},
+    {"exercise_id":"pulldown","sets":[{"set":1,"weight_kg":25,"reps":10},{"set":2,"weight_kg":27.5,"reps":10}]}
+  ]
+}

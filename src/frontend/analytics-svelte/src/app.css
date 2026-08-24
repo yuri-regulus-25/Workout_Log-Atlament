@@ -1,0 +1,30 @@
+@import "@workout-lab/shared-styles/css";
+
+.analytics-chart-grid,
+.analytics-single-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.analytics-chart-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+}
+
+.analytics-single-grid {
+  grid-template-columns: 1fr;
+}
+
+.analytics-table-grid {
+  align-items: start;
+}
+
+.machine-variety-table .summary-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+  .analytics-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

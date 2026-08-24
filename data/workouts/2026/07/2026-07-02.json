@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-07-02-01",
+  "date": "2026-07-02",
+  "status": "complete",
+  "gym_id": "af-yakoekimae",
+  "exercises": [
+    {"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":15,"reps":10},{"set":2,"weight_kg":15,"reps":10},{"set":3,"weight_kg":10,"reps":10}]},
+    {"exercise_id":"pectoral-fly","sets":[{"set":1,"weight_kg":14.5,"reps":10},{"set":2,"weight_kg":14.5,"reps":10},{"set":3,"weight_kg":19,"reps":10}]}
+  ]
+}

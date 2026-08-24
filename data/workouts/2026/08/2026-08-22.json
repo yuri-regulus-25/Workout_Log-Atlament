@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-08-22-01",
+  "date": "2026-08-22",
+  "status": "complete",
+  "gym_id": "af-shioiri",
+  "exercises": [
+    {
+      "exercise_id": "pectoral-fly",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 22.5,
+          "reps": 10,
+          "note": "4rep付近から胸への感覚あり。前肩に疲労感。"
+        },
+        {
+          "set": 2,
+          "weight_kg": 22.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 25,
+          "reps": 10,
+          "note": "スタートポジション4。4repで胸への予兆、5repから胸への刺激。前肩に軽い痛みあり。"
+        }
+      ]
+    },
+    {
+      "exercise_id": "shoulder-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 15,
+          "reps": 10,
+          "note": "痛みなし。肩周辺に疲労感。左側はセット中の疲労感が弱い。"
+        },
+        {
+          "set": 2,
+          "weight_kg": 15,
+          "reps": 10,
+          "note": "左肩から腕の刺激感はセット中かなり薄いが、セット後にじんわり疲労感あり。"
+        },
+        {
+          "set": 3,
+          "weight_kg": 17.5,
+          "reps": 10,
+          "note": "左肘が外へ流れがちな傾向に気付く。セット後に左肩から腕へじんわり疲労感あり。"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "ハックスクワットは実施せず、上半身のみで終了。",
+    "帰宅後に腕のだるさあり。"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "session_id": "2026-06-18-01",
+  "date": "2026-06-18",
+  "status": "complete",
+  "gym_id": "af-yakoekimae",
+  "exercises": [
+    {"exercise_id":"hack-squat","sets":[{"set":1,"weight_kg":20,"reps":10},{"set":2,"weight_kg":20,"reps":10},{"set":3,"weight_kg":30,"reps":10}]},
+    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":19,"reps":10},{"set":2,"weight_kg":19,"reps":10}]},
+    {"exercise_id":"pectoral-fly","sets":[{"set":1,"weight_kg":19,"reps":10},{"set":2,"weight_kg":19,"reps":10},{"set":3,"weight_kg":21.5,"reps":10}]},
+    {"exercise_id":"rear-delt","sets":[{"set":1,"weight_kg":12,"reps":10},{"set":2,"weight_kg":12,"reps":10},{"set":3,"weight_kg":7.5,"reps":10}]},
+    {"exercise_id":"abdominal","sets":[{"set":1,"weight_kg":42.5,"reps":10},{"set":2,"weight_kg":50,"reps":10}]},
+    {"exercise_id":"torso-rotation","sets":[{"set":1,"weight_kg":32.5,"reps":10},{"set":2,"weight_kg":37.5,"reps":10},{"set":3,"weight_kg":32.5,"reps":10},{"set":4,"weight_kg":37.5,"reps":10}]},
+    {"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":15,"reps":10},{"set":2,"weight_kg":15,"reps":10},{"set":3,"weight_kg":17.5,"reps":10}]}
+  ],
+  "cardio": [
+    {"type":"walking-running","distance_km":0.817,"duration_min":10,"calories_kcal":94,"notes":["ちょっとだけ走るのはNGでした"]}
+  ]
+}

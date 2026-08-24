@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "exercises": [
+    {
+      "exercise_id": "abdominal",
+      "name": "アブドミナル",
+      "body_part": "core",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "walking-running",
+      "name": "ウォーキング＋ランニング",
+      "body_part": "cardio",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "exercise-bike",
+      "name": "エアロバイク",
+      "body_part": "cardio",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "glute-bridge",
+      "name": "グルート・ブリッジ",
+      "body_part": "glutes",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "seated-row",
+      "name": "シーテッドロー",
+      "body_part": "back",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "shoulder-press",
+      "name": "ショルダープレス",
+      "body_part": "shoulders",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "chest-press",
+      "name": "チェストプレス",
+      "body_part": "chest",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "torso-rotation",
+      "name": "トーソ・ローテーション",
+      "body_part": "core",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "hack-squat",
+      "name": "ハックスクワット",
+      "body_part": "legs",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "biceps-curl",
+      "name": "バイセップスカール",
+      "body_part": "arms",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "hip-adduction",
+      "name": "ヒップアダクション",
+      "body_part": "legs",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "hip-abduction",
+      "name": "ヒップアブダクション",
+      "body_part": "glutes",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "pulldown",
+      "name": "プルダウン",
+      "body_part": "back",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "pectoral-fly",
+      "name": "ペクトラルフライ",
+      "body_part": "chest",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "lat-pulldown",
+      "name": "ラットプルダウン",
+      "body_part": "back",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "rear-delt",
+      "name": "リアデルト",
+      "body_part": "shoulders",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "leg-extension",
+      "name": "レッグエクステンション",
+      "body_part": "legs",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "leg-curl",
+      "name": "レッグカール",
+      "body_part": "legs",
+      "aliases": [],
+      "active": true
+    },
+    {
+      "exercise_id": "leg-press",
+      "name": "レッグプレス",
+      "body_part": "legs",
+      "aliases": [],
+      "active": true
+    }
+  ]
+}

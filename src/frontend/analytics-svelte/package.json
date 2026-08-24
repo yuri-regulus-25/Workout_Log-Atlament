@@ -1,0 +1,30 @@
+{
+  "name": "@workout-lab/analytics-svelte",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "prod": "vite preview --host 127.0.0.1",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "@workout-lab/design-tokens": "file:../../shared/design-tokens",
+    "@workout-lab/shared-styles": "file:../../shared/shared-styles",
+    "@workout-lab/workout-core": "file:../../shared/workout-core",
+    "@workout-lab/workout-data": "file:../../shared/workout-data",
+    "@workout-lab/workout-types": "file:../../shared/workout-types",
+    "apexcharts": "^6.9.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^24.13.3",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}
