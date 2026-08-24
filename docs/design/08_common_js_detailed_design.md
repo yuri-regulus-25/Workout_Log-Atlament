@@ -292,7 +292,7 @@ type WorkoutRuntimeData = {
 }
 ```
 
-Master未登録等の通知対象異常はトップレベル `errors` に格納される。
+`sessions` は、Master Resolve済みかつSession Reject適用済みのWorkoutSessionのみを含む。Master未登録等の通知対象異常はトップレベル `errors` に格納される。
 
 共通JSはWorkout SessionのMaster ResolveやParseを再実行しない。
 

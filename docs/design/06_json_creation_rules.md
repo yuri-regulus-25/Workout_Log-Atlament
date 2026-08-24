@@ -89,7 +89,7 @@ ExerciseSet:
 
 元資料に新しいGym / Machineが存在しMaster未登録の場合は、勝手にIDを作らずMaster追加候補として報告する。
 
-なお、既にSoTへ存在するMaster未登録参照をAFが読み込む場合のRuntime挙動は`05_data_validation_policy.md` / `07_af_detailed_design.md`を正とし、AFはMaster由来属性をnullとして通知付きで継続可能とする。
+なお、既にSoTへ存在するMaster未登録参照をAFが読み込む場合のRuntime挙動は`05_data_validation_policy.md` / `07_af_detailed_design.md`を正とする。AFはMaster未登録の`gym_id` / `exercise_id`を含むWorkoutSessionをSession Rejectし、Master由来属性をnullとして持つWorkoutSessionは生成しない。他の正常なWorkoutSessionは通知付きで継続可能とする。
 
 ## 8. session_id / date
 

@@ -73,7 +73,9 @@ gym_id        → gym.id / gym.name / gym.short_name
 exercise_id   → exercise_id / name / body_part
 ```
 
-Raw側で参照された`gym_id` / `exercise_id`に対応するMaster Entryが存在しない場合はMaster Resolve失敗としてInvalidとする。
+Raw側で参照された`gym_id` / `exercise_id`に対応するMaster Entryが存在しない場合は、Technical Invalid ではなく Master Resolve Failure とする。
+
+Master Resolve Failure となった WorkoutSession は Session Reject とし、Normalized Runtime Model を生成しない。他の正常な WorkoutSession は処理を継続し、Runtime Dataへ載せる。
 
 Master由来属性を推測・捏造してRuntimeを生成してはならない。
 
@@ -99,7 +101,9 @@ Temporary
 currentを安全に置換
 ```
 
-Invalidが1件でも存在する、required Resource取得に失敗した、またはMaster Resolveできない参照が存在する場合はSync Set全体をRejectし、currentを更新しない。
+Technical Invalidが1件でも存在する、required Resource取得に失敗した、またはMaster自体が破損している場合はSync Set全体をRejectし、currentを更新しない。
+
+Master Resolve Failureのみの場合はSync Set全体をRejectしない。Master未登録の`gym_id` / `exercise_id`を含むWorkoutSessionのみSession Rejectし、除外後の正常なRuntime Dataでcurrentを更新可能とする。
 
 ## 6. Local Runtime Data
 
@@ -116,7 +120,7 @@ runtime/
 - Partial Update禁止
 - 起動時にtemporaryを無条件Clear
 
-Local Fallback時もRemoteと同じValidation Pipelineを通す。
+Local Fallback時のValidationは、既に生成・保存済みの`runtime/current`に対するValidationとする。`current`はMaster Resolve済みかつSession Reject適用済みのRuntime Dataであり、Local ValidationでMaster Resolveを再実行してSession Rejectを再判定しない。
 
 ## 7. Required / Nullable / Optional
 

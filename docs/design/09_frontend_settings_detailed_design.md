@@ -141,9 +141,9 @@ AFからは正規化済み `WorkoutSession[]` を取得し、現行集計ロジ�
 - Exercise Notes
 - Session Notes
 
-Master未登録により `name` / `body_part` / Gym Name等が `null` の場合、Frontendは捏造補完しない。
+Master未登録を含むWorkoutSessionはAFでSession Rejectされるため、Frontendは未解決Master属性を持つWorkoutSessionを前提にしない。
 
-AFの `errors` をユーザーへ通知し、表示可能なID等は表示継続してよい。
+AFの `errors` をユーザーへ通知し、Runtime Dataへ載った正常なWorkoutSessionのみ表示継続してよい。
 
 ---
 
@@ -612,6 +612,7 @@ Settingsへの誘導
 - FrontendでTokenを永続保存しない。
 - Token値をAFから取得して再表示しない。
 - Master未登録値をFrontendで捏造補完しない。
+- `name:null` / `body_part:null`等の未解決Master属性を持つWorkoutSessionを前提にしない。
 - `errors.length > 0` を無視しない。
 - Error message文字列を制御分岐キーにしない。
 - Runtime Data unavailableでApplication全体をクラッシュさせない。

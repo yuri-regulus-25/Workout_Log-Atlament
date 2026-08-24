@@ -402,7 +402,11 @@ Exercise Master
 +
 Gym Master
 ↓
+Technical Validation
+↓
 Master Resolve
+↓
+Session Reject適用
 ↓
 Normalized WorkoutSession[]
 ```
@@ -413,9 +417,9 @@ Normalized WorkoutSession[]
 
 ## 12. Master Resolve
 
-AF は Master 参照を解決する。
+AF は Remote RawからRuntime Dataを生成する段階でMaster参照を解決する。
 
-Master 未登録は処理継続可能な異常とする。
+Master 未登録はTechnical Invalidではなく、Master Resolve Failureとする。
 
 例:
 
@@ -426,15 +430,11 @@ Master 未登録は処理継続可能な異常とする。
 
 Master 未登録時に値を捏造しない。
 
-```json
-{
-  "exercise_id": "new-machine",
-  "name": null,
-  "body_part": null
-}
-```
+Master Resolve FailureとなったWorkoutSessionはSession Rejectとし、Normalized WorkoutSessionを生成しない。
 
-Gym も同様に `id` は保持し、`name` / `short_name` は null とする。
+`name:null` / `body_part:null`、またはGymの`name:null` / `short_name:null`等の未解決Master属性を持つWorkoutSessionを生成してはならない。
+
+Master Resolve Failureのみを理由としてSync Set全体をRejectしない。他の正常なWorkoutSessionは処理を継続し、Runtime Dataへ載せる。
 
 ---
 
@@ -448,12 +448,11 @@ Runtime として利用可能、異常情報なし。
 
 例:
 
-- Master未登録
-- Optional情報不足
+- Master Resolve Failure / Session Reject
 
-Runtime は利用可能で Local 更新も可能。API では `success:true` かつ `errors` 非空で返却可能。
+Runtime は利用可能で Local 更新も可能。Master Resolve FailureとなったWorkoutSessionはRuntime Dataから除外し、API では `success:true` かつ `errors` 非空で返却可能。
 
-### Invalid
+### Technical Invalid
 
 例:
 
@@ -490,9 +489,9 @@ Temporary へ保存
 current を安全に置換
 ```
 
-1件でも Invalid または必須 Resource 取得失敗があれば Sync Set 全体を Rejectし、current を更新せず既存 current を維持する。
+1件でもTechnical Invalidまたは必須 Resource 取得失敗があれば Sync Set 全体を Rejectし、current を更新せず既存 current を維持する。
 
-Master 未登録等、利用可能な Error のみの場合は更新可能。
+Master Resolve Failure / Session Reject等、利用可能な Error のみの場合は更新可能。currentへ保存するRuntime Dataは、Master未登録Sessionを除外した正常なWorkoutSession集合とする。
 
 ---
 
@@ -515,9 +514,11 @@ GitHub の論理 Directory 構造を基準とする。Platform ごとの物理 R
 - Empty禁止 Resource が空でない
 - Syntax 正常
 - Runtime Contract 正常
-- Invalid がない
+- Technical Invalid がない
 
-Master 未登録は利用可能。Local も Remote と同一 Validation Pipeline を通す。
+`current`はMaster Resolve済みかつSession Reject適用済みのRuntime Dataである。
+
+Local Validationは、既に生成・保存済みの`runtime/current`に対するValidationとする。Local ValidationでMaster Resolveを再実行し、Session Rejectを再判定する責務は持たせない。
 
 ---
 
@@ -767,7 +768,7 @@ Operation: idle / running / completed / failed
 }
 ```
 
-Master 未登録等が存在する場合も `success:true` とし、`errors` に通知対象異常を格納する。画面向け集計済み Data は返さない。
+Master Resolve Failure / Session Reject等が存在する場合も `success:true` とし、利用可能なSessionのみを`data.sessions`へ返し、Master未登録情報を`errors`に格納する。画面向け集計済み Data は返さない。
 
 ---
 
@@ -950,9 +951,9 @@ Remote取得不能
 ↓
 Local current確認
 ↓
-同一Validation Pipeline
+Local Runtime Data Validation
 ├─ Valid → Local利用
-└─ Invalid → Runtime Data unavailable
+└─ Technical Invalid → Runtime Data unavailable
 ```
 
 Local なし + Remote 失敗でも AF 自体は Fatal にしない。Runtime Data unavailable / AF degraded とし、Settings / Portal / HTTP Server は継続する。
@@ -1129,7 +1130,7 @@ SHUTDOWN_FAILED
 - Runtime Data 変更を理由に Frontend Rebuild する。
 - Runtime で npm / Node / Frontend Framework CLI を実行する。
 - Runtime Data をソースコードへ固定化する。
-- INVALID Data で current を上書きする。
+- Technical Invalid Data で current を上書きする。
 - Remote Sync を Partial Update する。
 - 恒久 Backup / 手動 Rollback を追加する。
 - Temporary を Fallback / Recovery に使用する。

@@ -13,7 +13,7 @@ GitHub SoTのRaw Workout / Masterと、AFが生成するNormalized Runtime Data�
 
 ## 3. Required
 
-required欠落・型不正はRuntimeとして復元不能なInvalidとする。
+required欠落・型不正はRuntimeとして復元不能なTechnical Invalidとする。
 
 RawWorkoutSession:
 - schema_version
@@ -68,22 +68,24 @@ Optional fieldが存在しないこと自体はValidとし、Error通知対象�
 
 ## 5. Empty Data
 
-- `complete` + `exercises: []` → Invalid
+- `complete` + `exercises: []` → Technical Invalid
 - `partial` + `exercises: []` → Valid
-- `sets: []` → 常にInvalid
-- Resource Configurationで`emptyAllowed:false`のResourceが空 → Sync Set Invalid
+- `sets: []` → 常にTechnical Invalid
+- Resource Configurationで`emptyAllowed:false`のResourceが空 → Sync Set Technical Invalid
 
 ## 6. Master参照
 
 ### Master未登録
 
-Raw側の`gym_id` / `exercise_id`自体が有効でも、対応Master Entryが存在しない場合はMaster Resolve失敗としてInvalidとする。
+Raw側の`gym_id` / `exercise_id`自体が有効でも、対応Master Entryが存在しない場合はTechnical Invalidではなく Master Resolve Failure とする。
 
-AFは値を捏造・補完せず、Sync Set全体をRejectする。
+Master Resolve FailureとなったWorkoutSessionはSession Rejectとし、AFはそのWorkoutSessionのNormalized Modelを生成しない。`name:null` / `body_part:null`等の未解決属性を持つWorkoutSessionを生成してはならない。
+
+Master Resolve Failureのみを理由としてSync Set全体をRejectしない。他の正常なWorkoutSessionは処理を継続し、Runtime Dataへ載せる。
 
 ### Master自体の破損
 
-以下はInvalid:
+以下はTechnical Invalid:
 - duplicate gym_id
 - duplicate exercise_id
 - Master schema不正
@@ -98,7 +100,7 @@ AFは値を捏造・補完せず、Sync Set全体をRejectする。
 
 Normalized ModelはMaster Resolve成立後にのみ生成する。
 
-Master参照が解決できないRaw Workoutから、`name:null` / `body_part:null`等を持つ擬似Normalized Modelを生成してはならない。
+Master参照が解決できないRaw Workoutから、`name:null` / `body_part:null`等を持つ擬似Normalized Modelを生成してはならない。該当WorkoutSessionはSession RejectとしてRuntime Dataから除外する。
 
 `short_name`等、仕様上Nullable / Optionalと定義された属性はその定義に従う。
 
@@ -108,18 +110,24 @@ Master参照が解決できないRaw Workoutから、`name:null` / `body_part:nu
 VALID
 → Local更新可能
 
-INVALID
+TECHNICAL INVALID
 → Sync Set全体Reject
 → current更新禁止
 ```
 
 Partial Updateは禁止。
 
-`success:true + errors`は、明示的に非Fatalかつ通知対象として定義された異常にのみ使用する。Optional field欠落やMaster未登録をこの区分へ自動分類しない。
+Technical InvalidはSync Set全体Rejectとし、current更新を禁止する。
+
+Master Resolve Failure / Session Rejectは、明示的に非Fatalかつ通知対象として定義された異常とする。Runtime APIでは、利用可能なSessionを`data.sessions`へ返し、Master未登録情報を`errors`へ格納する。
+
+Optional field欠落はValidであり、Error通知対象にしない。
 
 ## 9. Local Fallback
 
-Local Runtime DataにもRemoteと同一Validation Pipelineを適用する。Localだから判定を緩和しない。
+Local Runtime DataのValidationは、既に生成・保存済みの`runtime/current`に対するValidationとする。`current`はMaster Resolve済みかつSession Reject適用済みのRuntime Dataであり、Local ValidationでMaster Resolveを再実行してSession Rejectを再判定しない。
+
+LocalだからTechnical Invalid判定を緩和しない。
 
 ## 10. workout-core
 
