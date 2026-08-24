@@ -1,45 +1,41 @@
-# Workout Lab — Svelte Analytics
+# Analytics Frontend
 
-Svelte + TypeScript + Vite で、設計ドラフト上の Analytics domain を担当するアプリです。
+Svelte + TypeScript + ViteでAnalytics画面を実装しています。
 
-## 起動方法
+## 担当Route
 
-アプリ単体で起動する場合：
-
-```sh
-npm run dev
+```text
+/analytics/
 ```
 
-リポジトリ root から起動する場合：
+## 主な表示内容
+
+- Monthly Sessions
+- Sets / Volume Trend
+- Body Part Summary
+- Machine Frequency
+- PR Trend Placeholder
+- Chart表示
+
+## 開発起動
 
 ```sh
 npm run dev:analytics
 ```
 
-build：
+Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run dev` も使用できます。
+
+## Build
 
 ```sh
 npm run build
 ```
 
-root から全アプリを build：
+統合Buildにより、最終的なProduction Artifactは `dist/analytics/` に配置されます。
 
-```sh
-npm run build
-```
+## Runtime Data
 
-## 担当画面
-
-- `/analytics/`
-
-## 実装内容
-
-- Monthly sessions
-- Sets / volume trends
-- Body Part summary
-- Machine frequency
-- PR trend placeholder
-- ApexCharts vanilla API integration
+Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRuntime Dataを取得します。
 
 ## 共通層
 

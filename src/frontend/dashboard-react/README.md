@@ -1,39 +1,41 @@
-# Workout Lab — React Dashboard
+# Dashboard Frontend
 
-React + TypeScript + Vite で、設計ドラフト上の Dashboard domain を担当するアプリです。
+React + TypeScript + ViteでDashboard画面を実装しています。
 
-## 起動方法
+## 担当Route
 
-```sh
-npm run dev
+```text
+/dashboard/
 ```
 
-build 済み画面を確認する場合：
+## 主な表示内容
 
-```sh
-npm run build
-npm run prod
-```
+- 月次Summary
+- 最新Workout
+- 最近のWorkout
+- 種目Shortcut
+- Training Frequency
+- Chart表示
 
-リポジトリ root から実行する場合：
+## 開発起動
 
 ```sh
 npm run dev:dashboard
+```
+
+Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run dev` も使用できます。
+
+## Build
+
+```sh
 npm run build
 ```
 
-## 担当画面
+統合Buildにより、最終的なProduction Artifactは `dist/dashboard/` に配置されます。
 
-- `/dashboard/`
+## Runtime Data
 
-## 実装内容
-
-- Monthly Summary
-- Latest Workout
-- Recent Workouts
-- Machine shortcuts
-- Training Frequency
-- ApexCharts による簡易可視化
+Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRuntime Dataを取得します。
 
 ## 共通層
 

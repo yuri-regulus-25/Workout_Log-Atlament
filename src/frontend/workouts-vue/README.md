@@ -1,43 +1,43 @@
-# Workout Lab — Vue Screen Spike
+# Workouts Frontend
 
-Vue 3 + TypeScript + Vite で、設計ドラフトの画面構成を一度通すための Spike です。
+Vue 3 + TypeScript + ViteでWorkout History画面を実装しています。
 
-## 起動方法
+## 担当Route
 
-開発中はプロジェクト直下の `index.html` を `file://` で直接開かず、Vite の dev server 経由で確認します。
-
-```sh
-npm run dev
+```text
+/workouts/
+/workouts/:date
 ```
 
-build 済みの画面を確認する場合は、先に build してから preview server を起動します。
+## 主な表示内容
 
-```sh
-npm run build
-npm run prod
-```
+- Workout History
+- Workout Detail
+- Table sort / pagination
+- Chart表示
 
-リポジトリ root から実行する場合：
+## 開発起動
 
 ```sh
 npm run dev:workouts
+```
+
+Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run dev` も使用できます。
+
+## Build
+
+```sh
 npm run build
 ```
+
+統合Buildにより、最終的なProduction Artifactは `dist/workouts/` に配置されます。
+
+## Routing
 
 `vite.config.ts` で `base: './'` を指定しているため、`dist/index.html` は `file://` でも assets を相対パスで参照できます。ただし、通常の確認は `npm run dev` または `npm run prod` を推奨します。
 
 通常の server 経由では設計書通り `/workouts/` と `/workouts/:date` を使います。`file://` 直開き時のみ、ブラウザ制約を避けるため hash routing に自動で切り替えます。
 
-## 実装画面
+## Runtime Data
 
-- Workout History
-- Workout Detail
-
-## 検証対象
-
-- 固定データ表示
-- Component 分割
-- Vue の reactivity / state update
-- ApexCharts integration
-- Vue table integration
-- table sort / pagination
+Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRuntime Dataを取得します。

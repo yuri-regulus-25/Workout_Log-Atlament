@@ -1,46 +1,47 @@
-# Workout Lab — Angular Machine Detail
+# Exercises Frontend
 
-Angular + TypeScript で、設計ドラフト上の Machine Detail domain を担当するアプリです。
+Angular + TypeScriptでPerformance Detail画面を実装しています。
 
-## 起動方法
+## 担当Route
 
-アプリ単体で起動する場合：
-
-```sh
-npm run start
+```text
+/exercises/
+/exercises/:id
 ```
 
-リポジトリ root から起動する場合：
+## 主な表示内容
+
+- 種目別Latest
+- Best Weight
+- Estimated 1RM
+- Session Count / Total Sets
+- Progress Chart
+- Machine History
+- Workout Historyへの戻りLink
+
+## 開発起動
 
 ```sh
 npm run dev:exercises
 ```
 
-build：
+Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run start` も使用できます。
+
+## Build
 
 ```sh
 npm run build
 ```
 
-root から全アプリを build：
+統合Buildにより、AngularのBuild Artifactは `dist/exercises/` に配置されます。
 
-```sh
-npm run build
-```
+## Favicon
 
-## 担当画面
+Angularのfaviconは `public/favicon.svg` を使用します。PortalのBuilt with表示も `dist/exercises/favicon.svg` を参照します。
 
-- `/exercises/:id`
+## Runtime Data
 
-## 実装内容
-
-- Latest
-- Best Weight
-- Estimated 1RM
-- Session Count / Total Sets
-- Progress chart
-- Machine history
-- Workout History への戻りリンク
+Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRuntime Dataを取得します。
 
 ## 共通層
 
