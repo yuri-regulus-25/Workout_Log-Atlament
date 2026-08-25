@@ -13,6 +13,9 @@ Windows AF MVPを `master` へ取り込んだ時点で、設計書と実装を�
 - Dashboard / Workouts / Exercises / AnalyticsはWindows AF Runtime APIを優先参照する。
 - Closeボタン、Shutdown API、再起動周辺のST1指摘は修正済み。
 - `master ← feature-application-windows` PRはマージ済み。
+- Portal / Error PageはSource Applicationとして分離済み。
+- `npm run watch` / `watch:<domain>` / Development Gatewayは実装済み。
+- Node Development RuntimeはAF互換EnvelopeのMVP APIを実装済み。
 
 ## 優先度A: 次に必ず確認する項目
 
@@ -44,7 +47,7 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 - `data/logs/`
 - CredentialがFrontendやLogへ露出しないこと
 
-## 優先度B: 設計と実装の差異
+## 優先度B: Development Build / Runtime 整備結果
 
 ### B-1. Portal / Error PageのSource分離
 
@@ -52,82 +55,98 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 
 現実装:
 
-- `tools/build/build-mpa.mjs` がPortalと404 HTMLを生成している。
+- Portal Sourceは `src/frontend/portal/` へ分離済み。
+- Error Page Sourceは `src/frontend/errors/` へ分離済み。
+- 対象Error Pageは `common / 404 / 500 / 503`。
+- `tools/build/build-mpa.mjs` はPortal / Error PageのUI文字列生成を行わず、各FrontendのBuild Artifactを `dist/` へ集約する責務に整理済み。
+- Production Frontend Artifact Rootは引き続き `./dist/`。
 
-不足:
+残課題:
 
-- `src/frontend/portal/`
-- `src/frontend/errors/`
-- Portal / Error PageのSource化
-- Build ScriptからUI文字列生成を外す作業
+- `src/frontend/portal/` / `src/frontend/errors/` のREADMEとroot READMEの記述が実装結果と完全一致しているか継続確認する。
+- Error PageのVisual / routeは現状維持しているため、今後Branding導入時に正式Asset方針と合わせて再確認する。
 
 次にやること:
 
-1. 設計どおりSource分離するか、MVP実装としてBuild Script生成を許容するか判断する。
-2. Source分離する場合、まずPortalを `src/frontend/portal/` へ移す。
-3. 次に404 / 500 / 503 / common Error Pageを `src/frontend/errors/` へ分離する。
+1. C系作業へ進む前に、Portal / Error PageがBuild Script生成へ戻っていないことを回帰確認する。
+2. Branding導入時に、Portal / Error Page / favicon / Windows iconのAsset配置規則をまとめて確認する。
 
 推奨:
 
-- 次工程でPortal Source分離から着手する。
+- B-1は完了扱い。追加変更はC系またはBranding工程で扱う。
 
-### B-2. watch系Commandの未整備
+### B-2. watch系Command / Development Gateway
 
 `docs/design/10_repository_build_runtime_design.md` では `npm run watch`、`watch:<domain>`、Development Gateway構成が定義されている。
 
 現実装:
 
-- root `package.json` は `dev:<domain>` を提供している。
-- `watch` / `watch:<domain>` は未整備。
-- 単一Development Gateway `:5173` は未実装。
+- root `package.json` に `npm run watch` を実装済み。
+- `watch:<domain>` を実装済み。
+- Development Gatewayは `127.0.0.1:5173` 固定。
+- Gateway routeは以下の通り。
+  - `/` → Portal `5174`
+  - `/dashboard/` → Dashboard `5175`
+  - `/workouts/` → Workouts `5176`
+  - `/exercises/` → Exercises `5177`
+  - `/analytics/` → Analytics `5178`
+  - `/settings/` → Settings `5179`
+  - `/api/` → Node Development Runtime `5180`
+- HTTP proxy / WebSocket proxyを実装済み。
+- Port競合時は自動変更せずError終了する。
+- 既存 `dev:<domain>` は互換維持している。
 
-不足:
+残課題:
 
-- `npm run watch`
-- `npm run watch:portal`
-- `npm run watch:dashboard`
-- `npm run watch:workouts`
-- `npm run watch:exercises`
-- `npm run watch:analytics`
-- `npm run watch:settings`
-- 単一Gatewayからのroute proxy
+- `dev:<domain>` は旧 `4317 /api/workout-data` 系Wrapperを利用しており、`watch:<domain>` とRuntime経路が二重化している。
+- C系で共通Frontend化を進める前に、日常開発の主経路を `watch` / Gatewayへ寄せるか、旧 `dev:<domain>` を残すか整理が必要。
+- Angularは `--serve-path /exercises/` 指定でGateway配下表示を成立させているため、Angular更新時はbase / asset pathを重点回帰する。
 
 次にやること:
 
-1. 現行 `dev:<domain>` を残すか、設計どおり `watch:<domain>` へ寄せるか決める。
-2. Development Gatewayの必要範囲を確定する。
-3. `tools/dev-runtime/` にGateway Scriptを追加する。
+1. C系作業前に、`watch` をFrontend開発の標準手順としてREADMEへ明記する。
+2. 旧 `dev:<domain>` の位置づけを「互換維持」か「削除予定」か決める。
+3. HMR / route / asset 200確認をC系変更ごとの回帰項目に入れる。
 
 推奨:
 
-- Portal Source分離後に、Development Gatewayを実装する。
+- B-2は完了扱い。次は旧dev経路の整理方針を決める。
 
-### B-3. Node Development RuntimeのAF互換API不足
+### B-3. Node Development RuntimeのAF互換API
 
 設計上、Node Development RuntimeはAF互換Response Envelopeを返す薄いAdapterとする。
 
 現実装:
 
-- Preview / dev用の旧 `/api/workout-data` が残っている。
-- Windows AF Runtime API優先参照は実装済み。
-- Settings系APIのdev runtimeは未実装。
+- `tools/dev-runtime/development-runtime.mjs` を実装済み。
+- 固定Portは `127.0.0.1:5180`。
+- Repository内 `data/` を直接利用し、GitHub / Credential / Configuration管理は行わない。
+- `@workout-lab/workout-data` の既存loader/parserを利用し、AF互換Envelopeへ包む。
+- 実装済みAPI:
+  - `GET /api/v1/common/status`
+  - `GET /api/v1/common/runtime/workouts`
+  - `GET /api/common/status`
+  - `GET /api/common/runtime/workouts`
+- 旧 `/api/workout-data` は互換維持している。
 
-不足:
+残課題:
 
-- `GET /api/v1/common/status`
-- `GET /api/v1/common/runtime/workouts`
-- version省略Aliasの整理
-- Settings開発時の必要最小API
+- 旧 `/api/workout-data` がDevelopment Runtime / preview / Vite plugin / `dev:<domain>` に残っている。
+- `preview:mpa` は設計上 `dist/` のStatic Serveのみだが、現実装では旧 `/api/workout-data` も提供している。
+- Master / Workoutディレクトリ欠落時のError Contractが本番AFと完全一致しているか追加確認が必要。
+- `src/shared/workout-data/src/node.ts` は `./index.ts` を直接importしており、Node version依存があるため、READMEまたはpackage設定でNode要件を明確にする必要がある。
+- Settings系APIはMVPでは未実装。Settings開発でAFなし運用が必要になった段階で追加判断する。
 
 次にやること:
 
-1. Frontend開発でAFなしに必要なAPI範囲を確定する。
-2. 旧endpointを互換用途として残すか、AF互換APIへ集約するか判断する。
-3. Node Development RuntimeのResponse Envelopeを本番AFへ寄せる。
+1. 旧 `/api/workout-data` の退役時期を決める。
+2. `preview:mpa` を静的配信専用へ戻すか、Preview用互換APIを正式に許容するか判断する。
+3. data欠落 / Master破損 / Raw invalid / Master Resolve FailureのDevelopment Runtime挙動を本番AF Contractと照合する。
+4. Development Runtimeのsmoke testを追加するか判断する。
 
 推奨:
 
-- Dashboard / Workouts / Exercises / AnalyticsのAF API移行確認後に実施する。
+- B-3はMVP完了扱い。ただし旧API互換の整理はC系へ進む前に方針決定する。
 
 ## 優先度C: 機能仕様として未実装またはMVP外
 
@@ -209,15 +228,16 @@ Dashboard / Analyticsでchunk size warningが発生する。
 
 1. `master` 最新状態でREADME手順の再現確認。
 2. Production相当FolderでWindows AF起動確認。
-3. `docs/design/10_repository_build_runtime_design.md` と現実装の差異として、Portal / Error Page Source分離方針を判断。
-4. Portal Source分離に着手。
-5. Development Gateway / watch commandの整備方針を判断。
-6. Node Development RuntimeのAF互換API整理へ進む。
+3. B-1〜B-3の残課題として、旧 `/api/workout-data` の退役方針を決める。
+4. `preview:mpa` を静的配信専用へ戻すか、Preview用互換APIを正式に許容するか判断する。
+5. Development RuntimeのError ContractとNode version要件を整理する。
+6. C-1 Page Transition共通化に着手する。
+7. Navigation共通化、Branding導入準備へ進む。
 
 ## 現時点で人間判断が必要な事項
 
-1. Portal / Error Pageを設計どおりSource Application化するか。
-2. 現行 `dev:<domain>` commandを残したまま `watch:<domain>` を追加するか、command体系を整理するか。
-3. 旧 `/api/workout-data` をいつまで互換維持するか。
+1. 旧 `/api/workout-data` をいつまで互換維持するか。
+2. `preview:mpa` を完全なStatic Serve専用へ戻すか、Preview用互換APIを正式に許容するか。
+3. 現行 `dev:<domain>` commandを互換維持するか、`watch:<domain>` / Gatewayへ集約するか。
 4. Easter Eggを次工程で実装対象に含めるか。
 5. Android AFをWindows安定化後すぐ開始するか、別Phaseへ送るか。
