@@ -4,12 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal — Atlament</title>
+    <link rel="icon" type="image/svg+xml" href="./frontend-common/branding/assets/logo_svg_primary.svg" />
     <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./frontend-common/easter-egg/styles.css" />
     <script type="module" src="./main.js"></script>
   </head>
   <body>
     <main>
-      <p class="eyebrow">Atlament / Portal</p>
+      <div class="portal-brand-row" aria-label="Atlament Portal">
+        <button id="portal-logo-trigger" class="portal-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+          <img id="portal-logo" class="portal-logo" src="./frontend-common/branding/assets/logo_svg_primary.svg" alt="" />
+        </button>
+        <p id="portal-character-trigger" class="eyebrow portal-title-trigger">Atlament / Portal</p>
+      </div>
       <h2>Browse, Explore, Analyze.</h2>
       <h1>What do you want to explore?</h1>
       <p>

@@ -4,6 +4,7 @@ import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../../src/frontend/portal/src/', import.meta.url))
+const frontendCommonRoot = fileURLToPath(new URL('../../src/shared/frontend-common/src/', import.meta.url))
 const port = 5174
 
 const contentTypes = {
@@ -12,6 +13,7 @@ const contentTypes = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.png': 'image/png',
 }
 
 const server = createServer((request, response) => {
@@ -41,7 +43,15 @@ server.listen(port, '127.0.0.1', () => {
 })
 
 function resolveFile(pathname) {
-  const direct = safeJoin(root, pathname === '/' ? 'index.html' : decodeURIComponent(pathname))
+  const decodedPathname = decodeURIComponent(pathname)
+  if (decodedPathname.startsWith('/frontend-common/')) {
+    const common = safeJoin(frontendCommonRoot, decodedPathname.replace('/frontend-common/', ''))
+    if (common && existsSync(common) && isFileSync(common)) {
+      return common
+    }
+  }
+
+  const direct = safeJoin(root, pathname === '/' ? 'index.html' : decodedPathname)
   if (direct && existsSync(direct) && isFileSync(direct)) {
     return direct
   }

@@ -7,6 +7,16 @@
     ".": "./src/index.ts",
     "./navigation": "./src/navigation/index.ts",
     "./page-transition": "./src/page-transition/index.ts",
-    "./page-transition.css": "./src/page-transition/page-transition.css"
+    "./page-transition.css": "./src/page-transition/page-transition.css",
+    "./branding": {
+      "types": "./src/branding/index.d.ts",
+      "import": "./src/branding/index.js"
+    },
+    "./branding.css": "./src/branding/styles.css",
+    "./easter-egg": {
+      "types": "./src/easter-egg/index.d.ts",
+      "import": "./src/easter-egg/index.js"
+    },
+    "./easter-egg.css": "./src/easter-egg/styles.css"
   }
 }

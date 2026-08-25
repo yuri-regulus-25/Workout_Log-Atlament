@@ -4,6 +4,8 @@
   import { onDestroy, onMount } from 'svelte'
   import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
+  import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
+  import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
   import {
@@ -32,10 +34,27 @@
 
   let trendChartElement: HTMLDivElement
   let bodyPartChartElement: HTMLDivElement
+  let logoImageElement: HTMLImageElement
+  let logoTriggerElement: HTMLButtonElement
+  let characterTriggerElement: HTMLParagraphElement
   let trendChart: ApexCharts | null = null
   let bodyPartChart: ApexCharts | null = null
+  let brandingLogo: { dispose: () => void } | null = null
+  let characterEasterEgg: { dispose: () => void } | null = null
+  const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 
   onMount(async () => {
+    brandingLogo = initializeBrandingLogo({
+      image: logoImageElement,
+      trigger: logoTriggerElement,
+      basePath: '/frontend-common/branding/assets/',
+    })
+    characterEasterEgg = initializeCharacterEasterEgg({
+      trigger: characterTriggerElement,
+      host: document.body,
+      assetBasePath: '/frontend-common/easter-egg/assets/',
+    })
+
     try {
       const result = await loadRuntimeWorkoutSessions()
       sessions = result.sessions
@@ -55,6 +74,8 @@
   })
 
   onDestroy(() => {
+    brandingLogo?.dispose()
+    characterEasterEgg?.dispose()
     trendChart?.destroy()
     bodyPartChart?.destroy()
   })
@@ -131,11 +152,18 @@
 <main class={`app-shell ${pageTransitionClassName}`}>
   <header class="page-hero">
     <div class="hero-top">
-      <p class="eyebrow">Atlament / Analytics</p>
+      <div class="atl-brand-row" aria-label="Atlament Analytics">
+        <button bind:this={logoTriggerElement} class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+          <img bind:this={logoImageElement} class="atl-logo" src={logoSourcePath} alt="" />
+        </button>
+        <p bind:this={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Analytics</p>
+      </div>
       <nav class="global-nav" aria-label="Global navigation">
         <a href={applicationRoutes.dashboard}>Dashboard</a>
         <a href={applicationRoutes.workouts}>Workouts</a>
+        <a href={applicationRoutes.exercises}>Performance</a>
         <a class="active" href={applicationRoutes.analytics}>Analytics</a>
+        <a href={applicationRoutes.settings}>Settings</a>
       </nav>
     </div>
     <h1>Analytics</h1>

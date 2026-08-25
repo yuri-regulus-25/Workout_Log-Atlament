@@ -1,0 +1,80 @@
+.atl-easter-egg-card {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 1200;
+  display: grid;
+  width: min(360px, calc(100vw - 36px));
+  justify-items: start;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(-100% - 24px));
+  transition:
+    opacity 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.atl-easter-egg-card.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.atl-easter-egg-dialog {
+  position: relative;
+  max-width: min(320px, calc(100vw - 52px));
+  margin: 0 0 10px 76px;
+  border: 1px solid var(--wl-border, #e2e8f0);
+  border-radius: var(--wl-radius-inner, 18px);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--wl-text-strong, #111827);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.16);
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.atl-easter-egg-dialog::after {
+  position: absolute;
+  bottom: -8px;
+  left: 22px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid var(--wl-border, #e2e8f0);
+  border-bottom: 1px solid var(--wl-border, #e2e8f0);
+  background: rgba(255, 255, 255, 0.96);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.atl-easter-egg-character {
+  display: block;
+  max-width: min(240px, 58vw);
+  max-height: 240px;
+  object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .atl-easter-egg-card {
+    bottom: 12px;
+    left: 12px;
+    width: min(300px, calc(100vw - 24px));
+  }
+
+  .atl-easter-egg-dialog {
+    max-width: min(260px, calc(100vw - 32px));
+    margin-left: 46px;
+    font-size: 0.86rem;
+  }
+
+  .atl-easter-egg-character {
+    max-width: min(160px, 52vw);
+    max-height: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atl-easter-egg-card {
+    transition: none;
+  }
+}

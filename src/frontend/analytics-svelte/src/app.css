@@ -1,5 +1,7 @@
 @import "@workout-lab/shared-styles/css";
 @import "@workout-lab/frontend-common/page-transition.css";
+@import "@workout-lab/frontend-common/branding.css";
+@import "@workout-lab/frontend-common/easter-egg.css";
 
 .analytics-chart-grid,
 .analytics-single-grid {

@@ -148,50 +148,111 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 
 - B-3はMVP完了扱い。ただし旧API互換の整理はC系へ進む前に方針決定する。
 
-## 優先度C: 機能仕様として未実装またはMVP外
+## 優先度C: Frontend Common / Branding / Easter Egg 整備結果
 
-### C-1. Page Transition共通化
-
-設計では全Frontendに共通Page Transitionを適用する。
+### C-0. Navigation共通基盤
 
 現実装:
 
-- 全画面共通仕様としての整理は未完了。
+- `src/shared/frontend-common/src/navigation/` に共通Route定義とApplication metadataを実装済み。
+- 最低限のmetadataとして `id / route / displayName` を保持する。
+- 将来のDrawer Navigationや共通導線の情報源として利用可能な状態。
 
-次にやること:
+結果:
 
-1. `src/shared/frontend-common/` に共通CSSまたはHelperを置く。
-2. 各Frontendへ最小適用する。
-3. `prefers-reduced-motion` を確認する。
+- Navigation共通基盤は完了。
 
-### C-2. Easter Egg共通機能
-
-設計ではEaster EggのAsset / Voice / Trigger / 表示仕様が定義されている。
+### C-1. Navigation参照移行
 
 現実装:
 
-- MVP実装対象外として未実装。
+- Dashboard / Workouts / Exercises / Analytics / Settings の固定Route参照を、可能な範囲で `frontend-common` のNavigation定義へ移行済み。
+- UI構造、既存Route、Portal導線は維持。
 
-次にやること:
+結果:
 
-1. AssetとVoiceデータの確定状態を確認する。
-2. 実装する場合は `src/shared/frontend-common/` に共通機能として追加する。
-3. 各FrontendへTriggerを統合する。
+- 全FrontendのNavigation参照移行は完了。
 
-### C-3. Android Packaging
-
-設計ではAndroid Production Packaging方針が定義されている。
+### C-2. Page Transition共通基盤
 
 現実装:
 
-- Windows AFのみ実装済み。
-- Android Application実装は未着手。
+- `src/shared/frontend-common/src/page-transition/` に共通CSS / 定数 / exportを実装済み。
+- 仕様はEntry only、Right to Left、32px、240ms、`cubic-bezier(0.22, 1, 0.36, 1)`。
+- `prefers-reduced-motion: reduce` 対応済み。
+- React / Vue / Angular / Svelte / Solidへ展開済み。
+
+結果:
+
+- Page Transition共通基盤と対象Frontendへの適用は完了。
+
+### C-3. Branding共通基盤
+
+現実装:
+
+- `src/shared/frontend-common/src/branding/` に正式Logo Asset、Logo variant controller、CSS、exportを実装済み。
+- Branding Easter Egg TriggerはLogo SVG click。
+- Primary / SecondaryのFull Toggleを行い、状態は `localStorage` に保存する。
+- 保存keyは `atlament.system.branding.logoVariant`。
+- Portal / Dashboard / Workouts / Exercises / Analytics / Settingsへ展開済み。
+- Portal faviconはPrimary Logo固定参照。Secondary Logoへ切り替える仕様は持たせない。
+
+結果:
+
+- Branding共通基盤、Portal実装、React / Vue / Angular / Svelte / Solid展開は完了。
+
+### C-4. Character Easter Egg共通基盤
+
+現実装:
+
+- `src/shared/frontend-common/src/easter-egg/` にCharacter Asset、Voice data、Selection、Trigger controller、Display controller、CSS、exportを実装済み。
+- Character Easter Egg TriggerはApplication name textの5クリック。
+- Queue、表示、animation、cleanupはFramework非依存controller側で管理する。
+- Portal / Dashboard / Workouts / Exercises / Analytics / Settingsへ展開済み。
+- Portalおよび対象Frontendは、人間による実ブラウザ画面操作確認済み。
+
+結果:
+
+- Character Easter Egg共通基盤、Portal実装、React / Vue / Angular / Svelte / Solid展開は完了。
+
+### C-5. Error PagesへのBranding / Easter Egg適用
+
+現状:
+
+- 今回対象外。
+- Error PagesはSource分離済みだが、Branding / Easter Eggは適用していない。
 
 次にやること:
 
-1. Windows版の安定化完了後にAndroid着手可否を判断する。
-2. Android AFの対象範囲を改めて定義する。
+1. Error Pagesへ正式Logoを表示するか判断する。
+2. Error PagesでCharacter Easter Eggを許容するか判断する。
+3. 適用する場合はError Pageの責務と非操作画面としての性質を踏まえて別工程で扱う。
 
+### C-6. Windows配布整備 / README / exe配布確認
+
+現状:
+
+- Windows AFはDevelop Done扱い。
+- Frontend Common関連作業は完了。
+- 次工程として、Android着手前にWindows配布手順と資材配置を固める必要がある。
+
+次にやること:
+
+1. Windows Production相当Folderへ `dist/` を `<exe directory>/data/frontend/` として配置する手順を再確認する。
+2. root READMEおよび関連Directory READMEに、Windows版の製造・配置・起動・確認手順を追記または補強する。
+3. exe配布単位でPortal / Dashboard / Workouts / Exercises / Analytics / Settings / frontend-common assetsが表示できることを確認する。
+4. Credential / Runtime / Logs / Configurationの配置と初回起動手順をREADMEへ反映する。
+
+推奨:
+
+- 次工程はWindows配布整備を優先する。Android Applicationはその後に着手する。
+
+### C-7. Android Application
+
+現状:
+
+- Android Applicationは未着手。
+- Windows配布整備完了後に、Android AFの対象範囲を改めて定義する。
 ## 優先度D: 品質改善
 
 ### D-1. WindowsBase警告
@@ -224,20 +285,19 @@ Dashboard / Analyticsでchunk size warningが発生する。
 2. 必要ならdynamic importを検討する。
 3. 表示速度の実測後に対応優先度を決める。
 
-## 明日の推奨作業順
+## 次工程の推奨作業順
 
-1. `master` 最新状態でREADME手順の再現確認。
-2. Production相当FolderでWindows AF起動確認。
-3. B-1〜B-3の残課題として、旧 `/api/workout-data` の退役方針を決める。
-4. `preview:mpa` を静的配信専用へ戻すか、Preview用互換APIを正式に許容するか判断する。
-5. Development RuntimeのError ContractとNode version要件を整理する。
-6. C-1 Page Transition共通化に着手する。
-7. Navigation共通化、Branding導入準備へ進む。
+1. Windows配布整備に着手する。
+2. root READMEと関連Directory READMEへ、Windows版の製造・資材配置・起動・確認手順を網羅的に追記する。
+3. Production相当Folderで、`dist/` から `<exe directory>/data/frontend/` への配置と起動確認を行う。
+4. exe配布単位でPortal / Dashboard / Workouts / Exercises / Analytics / Settings / frontend-common assetsの表示を確認する。
+5. 旧 `/api/workout-data`、`preview:mpa` の互換API、Development RuntimeのError Contractを整理する。
+6. Windows配布整備完了後、Android Applicationの着手可否と対象範囲を判断する。
 
 ## 現時点で人間判断が必要な事項
 
 1. 旧 `/api/workout-data` をいつまで互換維持するか。
 2. `preview:mpa` を完全なStatic Serve専用へ戻すか、Preview用互換APIを正式に許容するか。
 3. 現行 `dev:<domain>` commandを互換維持するか、`watch:<domain>` / Gatewayへ集約するか。
-4. Easter Eggを次工程で実装対象に含めるか。
-5. Android AFをWindows安定化後すぐ開始するか、別Phaseへ送るか。
+4. Error PagesへBranding / Easter Eggを適用するか。
+5. Android AFをWindows配布整備後すぐ開始するか、別Phaseへ送るか。

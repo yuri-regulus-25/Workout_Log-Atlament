@@ -18,6 +18,36 @@ main {
   padding: 48px 0;
 }
 
+.portal-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-logo-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.portal-logo {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.portal-title-trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
 .eyebrow {
   color: #7c3aed;
   font-size: 0.75rem;

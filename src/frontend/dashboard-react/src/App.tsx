@@ -1,8 +1,10 @@
 import ReactApexChart from 'react-apexcharts'
 import type { ApexOptions } from 'apexcharts'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
+import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
+import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
@@ -20,10 +22,32 @@ import './App.css'
 
 const currentYear = 2026
 const currentMonth = 8
+const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const logoImageRef = useRef<HTMLImageElement | null>(null)
+  const logoTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const characterTriggerRef = useRef<HTMLParagraphElement | null>(null)
+
+  useEffect(() => {
+    const brandingLogo = initializeBrandingLogo({
+      image: logoImageRef.current,
+      trigger: logoTriggerRef.current,
+      basePath: '/frontend-common/branding/assets/',
+    })
+    const characterEasterEgg = initializeCharacterEasterEgg({
+      trigger: characterTriggerRef.current,
+      host: document.body,
+      assetBasePath: '/frontend-common/easter-egg/assets/',
+    })
+
+    return () => {
+      brandingLogo.dispose()
+      characterEasterEgg.dispose()
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -167,12 +191,19 @@ function App() {
     <main className={`app-shell ${pageTransitionClassName}`}>
       <header className="page-hero">
         <div className="hero-top">
-          <p className="eyebrow">Atlament / Dashboard</p>
+          <div className="atl-brand-row" aria-label="Atlament Dashboard">
+            <button ref={logoTriggerRef} className="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+              <img ref={logoImageRef} className="atl-logo" src={logoSourcePath} alt="" />
+            </button>
+            <p ref={characterTriggerRef} className="eyebrow atl-character-trigger">Atlament / Dashboard</p>
+          </div>
           <nav className="global-nav" aria-label="Global navigation">
             <a href={applicationRoutes.portal}>Portal</a>
             <a className="active" href={applicationRoutes.dashboard}>Dashboard</a>
             <a href={applicationRoutes.workouts}>Workouts</a>
+            <a href={applicationRoutes.exercises}>Performance</a>
             <a href={applicationRoutes.analytics}>Analytics</a>
+            <a href={applicationRoutes.settings}>Settings</a>
           </nav>
         </div>
         <h1>Dashboard</h1>
