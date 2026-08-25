@@ -1,3 +1,6 @@
+import { initializeBrandingLogo } from './frontend-common/branding/index.js'
+import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index.js'
+
 const notice = document.getElementById('sync-notice')
 const noticeText = document.getElementById('sync-notice-text')
 let statusTimer = null
@@ -50,4 +53,21 @@ refreshStatusNotice()
 statusTimer = window.setInterval(refreshStatusNotice, 1500)
 window.addEventListener('pagehide', () => {
   if (statusTimer !== null) window.clearInterval(statusTimer)
+})
+
+const brandingLogo = initializeBrandingLogo({
+  image: document.getElementById('portal-logo'),
+  trigger: document.getElementById('portal-logo-trigger'),
+  basePath: './frontend-common/branding/assets/',
+})
+
+const characterEasterEgg = initializeCharacterEasterEgg({
+  trigger: document.getElementById('portal-character-trigger'),
+  host: document.body,
+  assetBasePath: './frontend-common/easter-egg/assets/',
+})
+
+window.addEventListener('pagehide', () => {
+  brandingLogo.dispose()
+  characterEasterEgg.dispose()
 })

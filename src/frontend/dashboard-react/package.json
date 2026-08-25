@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@workout-lab/frontend-common": "file:../../shared/frontend-common",
     "@workout-lab/design-tokens": "file:../../shared/design-tokens",
     "@workout-lab/shared-styles": "file:../../shared/shared-styles",
     "@workout-lab/workout-core": "file:../../shared/workout-core",

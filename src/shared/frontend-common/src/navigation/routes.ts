@@ -1,0 +1,11 @@
+export const applicationRoutes = {
+  portal: '/',
+  dashboard: '/dashboard/',
+  workouts: '/workouts/',
+  exercises: '/exercises/',
+  analytics: '/analytics/',
+  settings: '/settings/',
+} as const
+
+export type ApplicationRouteId = keyof typeof applicationRoutes
+export type ApplicationRoute = (typeof applicationRoutes)[ApplicationRouteId]

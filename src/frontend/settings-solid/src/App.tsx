@@ -1,5 +1,7 @@
-import { For, Show, createMemo, createSignal, onMount } from 'solid-js'
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import {
+  applicationRoutes,
+  pageTransitionClassName,
   getAfStatus,
   getConfiguration,
   getCredentialStatus,
@@ -13,6 +15,8 @@ import {
   type ResourceConfiguration,
   type TimeoutConfiguration,
 } from '@workout-lab/frontend-common'
+import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
+import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
 
 const resourceTypes = ['WORKOUT', 'EXERCISE_MASTER', 'GYM_MASTER'] as const
@@ -44,6 +48,7 @@ const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
   GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
+const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 
 type Message = {
   tone: 'success' | 'warning' | 'error'
@@ -71,10 +76,28 @@ function App() {
   const [loading, setLoading] = createSignal(true)
   const [busy, setBusy] = createSignal<string | null>(null)
   const [message, setMessage] = createSignal<Message | null>(null)
+  let logoImageElement: HTMLImageElement | undefined
+  let logoTriggerElement: HTMLButtonElement | undefined
+  let characterTriggerElement: HTMLParagraphElement | undefined
 
   const canOperate = createMemo(() => !loading() && busy() === null)
 
   onMount(() => {
+    const brandingLogo = initializeBrandingLogo({
+      image: logoImageElement,
+      trigger: logoTriggerElement,
+      basePath: '/frontend-common/branding/assets/',
+    })
+    const characterEasterEgg = initializeCharacterEasterEgg({
+      trigger: characterTriggerElement,
+      host: document.body,
+      assetBasePath: '/frontend-common/easter-egg/assets/',
+    })
+    onCleanup(() => {
+      brandingLogo.dispose()
+      characterEasterEgg.dispose()
+    })
+
     void refresh()
   })
 
@@ -234,7 +257,7 @@ function App() {
   }
 
   return (
-    <main class="app-shell settings-shell" aria-busy={loading() || busy() !== null}>
+    <main class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
         <div class="operation-overlay" role="status" aria-live="polite" aria-label="処理中">
           <div class="circular-loader" aria-hidden="true" />
@@ -243,13 +266,18 @@ function App() {
 
       <header class="page-hero">
         <div class="hero-top">
-          <p class="eyebrow">Atlament / Application Settings</p>
+          <div class="atl-brand-row" aria-label="Atlament Settings">
+            <button ref={logoTriggerElement} class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+              <img ref={logoImageElement} class="atl-logo" src={logoSourcePath} alt="" />
+            </button>
+            <p ref={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Application Settings</p>
+          </div>
           <nav class="global-nav" aria-label="Global navigation">
-            <a href="/">Portal</a>
-            <a href="/dashboard/">Dashboard</a>
-            <a href="/workouts/">Workouts</a>
-            <a href="/analytics/">Analytics</a>
-            <a class="active" href="/settings/">Settings</a>
+            <a href={applicationRoutes.dashboard}>Dashboard</a>
+            <a href={applicationRoutes.workouts}>Workouts</a>
+            <a href={applicationRoutes.exercises}>Performance</a>
+            <a href={applicationRoutes.analytics}>Analytics</a>
+            <a class="active" href={applicationRoutes.settings}>Settings</a>
           </nav>
         </div>
         <h1>Application Settings</h1>

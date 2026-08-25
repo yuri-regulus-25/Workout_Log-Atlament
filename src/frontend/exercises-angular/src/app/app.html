@@ -1,11 +1,18 @@
-<main class="app-shell">
+<main class="app-shell {{ pageTransitionClassName }}">
   <header class="page-hero">
     <div class="hero-top">
-      <p class="eyebrow">Atlament / Performance Detail</p>
+      <div class="atl-brand-row" aria-label="Atlament Exercises">
+        <button #logoTrigger class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+          <img #logoImage class="atl-logo" [src]="logoSourcePath" alt="" />
+        </button>
+        <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
+      </div>
       <nav class="global-nav" aria-label="Global navigation">
-        <a href="/dashboard/">Dashboard</a>
-        <a href="/workouts/">Workouts</a>
-        <a href="/analytics/">Analytics</a>
+        <a [href]="applicationRoutes.dashboard">Dashboard</a>
+        <a [href]="applicationRoutes.workouts">Workouts</a>
+        <a [href]="applicationRoutes.exercises" class="active">Performance</a>
+        <a [href]="applicationRoutes.analytics">Analytics</a>
+        <a [href]="applicationRoutes.settings">Settings</a>
       </nav>
     </div>
     <div class="hero-grid">
@@ -114,7 +121,7 @@
       <p class="large-number-right">{{ bestWeight() }} kg </p>
       <p class="muted">Max reps</p>
       <p class="large-number-right">{{ bestReps() }} Reps</p>
-      <a class="text-action" href="/workouts/"><i class="mdi mdi-chevron-double-left"></i>Back to Workout Domain</a>
+      <a class="text-action" [href]="applicationRoutes.workouts"><i class="mdi mdi-chevron-double-left"></i>Back to Workout Domain</a>
     </article>
   </section>
 

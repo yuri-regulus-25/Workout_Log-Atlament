@@ -125,6 +125,9 @@ dist/
 ├─ exercises/
 ├─ analytics/
 ├─ settings/
+├─ frontend-common/
+│  ├─ branding/
+│  └─ easter-egg/
 ├─ index.html
 └─ 404.html
 ```
@@ -397,13 +400,15 @@ Error Page分割時は、現在実装されているError表示をそのまま�
 
 ## 15. frontend-common
 
+物理配置:
+
 ```text
-src/shared/frontend-common/
+src/shared/frontend-common/src/
 ├─ af-client/
-├─ page-transition/
-├─ easter-egg/
 ├─ navigation/
-└─ errors/
+├─ page-transition/
+├─ branding/
+└─ easter-egg/
 ```
 
 Framework非依存機能のみ配置する。
@@ -411,12 +416,13 @@ Framework非依存機能のみ配置する。
 共通化対象:
 
 - AF API Call / Response処理
+- Route URL定数 / Application metadata
 - Page Transition CSS / 定数
-- Easter Egg Trigger / Asset-aware Random Selection
-- Route URL定数
+- Branding Logo Asset / Logo variant controller / CSS
+- Character Easter Egg Trigger / Asset-aware Random Selection / Display controller / CSS
 - Framework非依存Error整形
 
-Framework固有Component / Routerは配置しない。描画Componentは各Frontend Applicationが所有する。
+Framework固有Component / Routerは配置しない。描画ComponentとLifecycle接続は各Frontend Applicationが所有する。
 
 ---
 
@@ -440,53 +446,72 @@ Back専用Animation、Exit Animationは実装しない。NavigationをAnimation�
 
 ---
 
-## 17. Easter Egg
+## 17. Branding
 
-Easter Egg「謎のおっさん」は全Frontend Applicationで利用可能な共通Frontend機能とする。AFは関与しない。
-
-セリフ本文、Asset、Assetごとの発話可能Category対応表は別途確定済みデータを正とし、本設計では選択・表示Contractのみ定義する。
+Brandingは全Frontend Applicationで利用可能な共通Frontend機能とする。AFは関与しない。
 
 物理配置:
 
 ```text
-src/shared/frontend-common/easter-egg/
-├─ index.ts
-├─ asset/
-│  ├─ *.png
-│  ├─ *.svg
-│  └─ ...
-└─ voice/
-   ├─ categories/
-   │  ├─ basic.json
-   │  ├─ workout.json
-   │  ├─ annoyed.json
-   │  ├─ meaningless.json
-   │  ├─ close.json
-   │  ├─ rare.json
-   │  ├─ protein.json
-   │  ├─ smoking.json
-   │  ├─ salaryman.json
-   │  ├─ gay.json
-   │  ├─ swim.json
-   │  ├─ fundoshi.json
-   │  ├─ jockstrap.json
-   │  ├─ dirty.json
-   │  └─ dirty-heavy.json
-   └─ pages/
-      ├─ portal.json
-      ├─ dashboard.json
-      ├─ workouts.json
-      ├─ exercises.json
-      ├─ analytics.json
-      ├─ settings.json
-      └─ errors.json
+src/shared/frontend-common/src/branding/
+├─ index.js
+├─ index.d.ts
+├─ styles.css
+└─ assets/
+   ├─ logo_svg_primary.svg
+   └─ logo_svg_secondary.svg
 ```
 
-`asset/` は完成済み表示Assetを管理する。PNG / SVG等を許容する。
+Branding Easter Egg Trigger:
+
+```text
+Logo SVG click
+↓
+primary / secondary Full Toggle
+↓
+localStorage保存
+```
+
+localStorage key:
+
+```text
+atlament.system.branding.logoVariant
+```
+
+Primary Logoを標準Logoとする。Secondary LogoはLogo clickで切り替える。Settings UIにLogo選択項目は追加しない。
+
+Portal faviconはPrimary Logo固定とし、Logo Toggle状態とは連動しない。
+
+---
+
+## 18. Character Easter Egg
+
+Character Easter Egg「謎のおっさん」は全Frontend Applicationで利用可能な共通Frontend機能とする。AFは関与しない。
+
+セリフ本文、Asset、Assetごとの発話可能Category対応表は確定済みデータを正とし、本設計では選択・表示Contractのみ定義する。
+
+物理配置:
+
+```text
+src/shared/frontend-common/src/easter-egg/
+├─ index.js
+├─ index.d.ts
+├─ assets.js
+├─ selection.js
+├─ trigger-controller.js
+├─ display-controller.js
+├─ voices.js
+├─ styles.css
+├─ assets/
+│  └─ *.png
+└─ voice/
+   └─ categories/
+      └─ *.json
+```
+
+`assets/` は完成済み表示Assetを管理する。Repositoryへ格納された完成AssetをRuntimeで再加工・再生成・内容改変しない。
 
 `voice/categories/` はセリフを意味Category単位で管理する。Category名とAssetの許可Categoryは確定済み対応表へ従う。
-
-`voice/pages/` は将来の画面固有セリフ用拡張領域とする。MVPでは空または未作成を許容し、画面固有セリフを必須としない。
 
 Selection Contract:
 
@@ -502,10 +527,10 @@ Category内Voiceから1件選択
 
 AssetとVoiceを独立にRandom選択してはならない。これにより衣装・ポーズと不整合なセリフを発話させない。
 
-Trigger:
+Character Easter Egg Trigger:
 
 ```text
-各画面の Atlament / <Page> 相当要素
+Application name text
 ↓
 画面表示中の累積5クリック
 ↓
@@ -518,23 +543,26 @@ Count Reset
 
 表示仕様:
 
-- viewport左下へfixed配置するEaster Egg Cardとして表示
-- Card内にAssetと可変長Voice Textを表示
+- viewport左下へfixed配置するCharacter表示として表示
+- Character PNGを表示
+- DialogはCSS Tooltip風にCharacter上部へ表示
+- SVG吹き出しAssetは使用しない
 - 非Modal
 - `pointer-events: none`
 - Scrollしても左下に固定
 - 通常操作を妨害しない
-- 5秒表示
 - 再発動可能
+- 実行中TriggerはQueueへ積む
+- QueueはNavigation / Reloadで破棄する
 - 通常Contentより上、Modal / Dialogより下のz-index帯
-- Repositoryへ格納された完成AssetをRuntimeで再加工・再生成・内容改変しない
 - CSS配置時にAssetのアスペクト比を崩さない
 
-通常UIをEaster Eggに合わせて変更しない。
+通常UIをCharacter Easter Eggに合わせて変更しない。
+
+Error PagesへのBranding / Character Easter Egg適用は初回実装対象外とする。
 
 ---
-
-## 18. Windows Production Packaging
+## 19. Windows Production Packaging
 
 Production配布Root名は以下とする。
 
@@ -557,6 +585,9 @@ atlament/
       ├─ exercises/
       ├─ analytics/
       ├─ settings/
+      ├─ frontend-common/
+      │  ├─ branding/
+      │  └─ easter-egg/
       ├─ index.html
       └─ 404.html
 ```
@@ -582,7 +613,7 @@ Debug Buildの出力DirectoryはPlatform Build Systemへ委ね、本節のProduc
 
 ---
 
-## 19. Android Production Packaging
+## 20. Android Production Packaging
 
 AndroidではWindowsの「exe横data」を模倣せず、Platform標準Storageを利用する。
 
@@ -605,7 +636,7 @@ Common AFは物理Storage方式を認識せず、Platform Adapterから論理Roo
 
 ---
 
-## 20. 禁止事項
+## 21. 禁止事項
 
 - Source / Data / Docs / Tooling / Production Artifactを再混在させない。
 - Windows / Android Applicationを単一OSディレクトリへ混在させない。
@@ -627,7 +658,7 @@ Common AFは物理Storage方式を認識せず、Platform Adapterから論理Roo
 
 ---
 
-## 21. 完了条件
+## 22. 完了条件
 
 - Repositoryの責務別Directory Standardが成立している。
 - `npm run watch` で1 Portから全Development Frontendを利用できる。
