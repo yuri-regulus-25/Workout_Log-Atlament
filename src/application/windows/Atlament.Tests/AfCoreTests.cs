@@ -126,9 +126,9 @@ public sealed class AfCoreTests
             var missingStatic = hosting.TryResolveFile("/dashboard/assets/missing.js", out var missingUnavailable);
 
             Assert.False(staticUnavailable);
-            Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile);
+            Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile?.PhysicalPath);
             Assert.False(routeUnavailable);
-            Assert.Equal(Path.Combine(dashboardRoot, "index.html"), routeFile);
+            Assert.Equal(Path.Combine(dashboardRoot, "index.html"), routeFile?.PhysicalPath);
             Assert.False(missingUnavailable);
             Assert.Null(missingStatic);
         }

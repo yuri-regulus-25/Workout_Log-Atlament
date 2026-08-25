@@ -33,7 +33,13 @@
     <None Remove="Atlament.Tests\**\*" />
   </ItemGroup>
 
-  <Target Name="CopyFrontendArtifacts" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\..\dist')">
+  <ItemGroup Condition="'$(EmbedFrontendArtifacts)' == 'true' and Exists('$(MSBuildProjectDirectory)\..\..\..\dist')">
+    <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\..\dist\**\*.*">
+      <LogicalName>Frontend/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="CopyFrontendArtifacts" AfterTargets="Build" Condition="'$(EmbedFrontendArtifacts)' != 'true' and Exists('$(MSBuildProjectDirectory)\..\..\..\dist')">
     <ItemGroup>
       <FrontendArtifact Include="$(MSBuildProjectDirectory)\..\..\..\dist\**\*.*" />
     </ItemGroup>

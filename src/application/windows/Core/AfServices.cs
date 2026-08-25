@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -896,9 +897,17 @@ public sealed class GithubAccessService
         path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
 }
 
+public sealed record FrontendArtifactFile(string RequestPath, string? PhysicalPath, string? ResourceName)
+{
+    public bool IsEmbedded => ResourceName is not null;
+}
+
 public sealed class HostingStatusService
 {
+    private const string EmbeddedFrontendPrefix = "Frontend/";
     private readonly WindowsPathProvider _paths;
+    private readonly Assembly _resourceAssembly;
+    private readonly IReadOnlyDictionary<string, string> _embeddedResources;
     private static readonly IReadOnlyDictionary<string, string> ArtifactNames = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["portal"] = "portal",
@@ -912,6 +921,11 @@ public sealed class HostingStatusService
     public HostingStatusService(WindowsPathProvider paths)
     {
         _paths = paths;
+        _resourceAssembly = typeof(HostingStatusService).Assembly;
+        _embeddedResources = _resourceAssembly.GetManifestResourceNames()
+            .Select(name => new { Key = NormalizeResourceName(name), ResourceName = name })
+            .Where(resource => resource.Key.StartsWith(EmbeddedFrontendPrefix, StringComparison.Ordinal))
+            .ToDictionary(resource => resource.Key, resource => resource.ResourceName, StringComparer.Ordinal);
     }
 
     public HostingComponentState GetStatus() => new(
@@ -922,7 +936,7 @@ public sealed class HostingStatusService
         Status("analytics"),
         Status("settings"));
 
-    public string? TryResolveFile(string requestPath, out bool artifactUnavailable)
+    public FrontendArtifactFile? TryResolveFile(string requestPath, out bool artifactUnavailable)
     {
         artifactUnavailable = false;
         var normalized = requestPath.Trim('/');
@@ -936,45 +950,93 @@ public sealed class HostingStatusService
         return Resolve("portal", normalized.Length == 0 ? "index.html" : normalized, out artifactUnavailable);
     }
 
-    private string Status(string app)
+    public Stream OpenRead(FrontendArtifactFile file)
     {
-        var index = app == "portal"
-            ? Path.Combine(_paths.FrontendArtifactRoot, "index.html")
-            : Path.Combine(_paths.FrontendArtifactRoot, ArtifactNames[app], "index.html");
-        return File.Exists(index) ? ComponentStatus.available.ToString() : ComponentStatus.unavailable.ToString();
+        if (file.PhysicalPath is not null)
+        {
+            return File.OpenRead(file.PhysicalPath);
+        }
+
+        if (file.ResourceName is not null)
+        {
+            return _resourceAssembly.GetManifestResourceStream(file.ResourceName)
+                ?? throw new FileNotFoundException("Embedded frontend artifact was not found.", file.ResourceName);
+        }
+
+        throw new FileNotFoundException("Frontend artifact does not have a readable source.", file.RequestPath);
     }
 
-    private string? Resolve(string app, string relative, out bool artifactUnavailable)
+    private string Status(string app)
+    {
+        return ResolveIndex(app) is not null
+            ? ComponentStatus.available.ToString()
+            : ComponentStatus.unavailable.ToString();
+    }
+
+    private FrontendArtifactFile? Resolve(string app, string relative, out bool artifactUnavailable)
     {
         artifactUnavailable = false;
-        var root = app == "portal"
-            ? _paths.FrontendArtifactRoot
-            : Path.Combine(_paths.FrontendArtifactRoot, ArtifactNames[app]);
-        if (!Directory.Exists(root))
+        var sanitized = relative.Replace('\\', '/').TrimStart('/');
+        if (sanitized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == ".."))
+        {
+            return null;
+        }
+
+        var resolved = ResolveExact(app, sanitized);
+        if (resolved is not null)
+        {
+            return resolved;
+        }
+
+        if (app != "portal" && Path.GetExtension(sanitized).Length == 0)
+        {
+            return ResolveIndex(app);
+        }
+
+        if (!HasAppArtifactRoot(app))
         {
             artifactUnavailable = true;
-            return null;
-        }
-
-        var candidate = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-        if (!candidate.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        if (File.Exists(candidate))
-        {
-            return candidate;
-        }
-
-        if (app != "portal" && Path.GetExtension(relative).Length == 0)
-        {
-            var index = Path.Combine(root, "index.html");
-            return File.Exists(index) ? index : null;
         }
 
         return null;
     }
+
+    private FrontendArtifactFile? ResolveIndex(string app) => ResolveExact(app, "index.html");
+
+    private FrontendArtifactFile? ResolveExact(string app, string relative)
+    {
+        var root = PhysicalRoot(app);
+        if (Directory.Exists(root))
+        {
+            var candidate = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+            var fullRoot = Path.GetFullPath(root);
+            if (candidate.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase) && File.Exists(candidate))
+            {
+                return new FrontendArtifactFile(candidate, candidate, null);
+            }
+        }
+
+        var embeddedPath = EmbeddedPath(app, relative);
+        return _embeddedResources.TryGetValue(embeddedPath, out var resourceName)
+            ? new FrontendArtifactFile(embeddedPath, null, resourceName)
+            : null;
+    }
+
+    private bool HasAppArtifactRoot(string app) => Directory.Exists(PhysicalRoot(app)) || ResolveIndex(app) is not null;
+
+    private string PhysicalRoot(string app) => app == "portal"
+        ? _paths.FrontendArtifactRoot
+        : Path.Combine(_paths.FrontendArtifactRoot, ArtifactNames[app]);
+
+    private static string EmbeddedPath(string app, string relative)
+    {
+        var normalized = relative.Replace('\\', '/').TrimStart('/');
+        return app == "portal"
+            ? EmbeddedFrontendPrefix + normalized
+            : EmbeddedFrontendPrefix + ArtifactNames[app] + "/" + normalized;
+    }
+
+    private static string NormalizeResourceName(string resourceName) => resourceName.Replace('\\', '/');
 }
 
 public sealed class OperationGate
