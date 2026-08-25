@@ -409,7 +409,7 @@ function App() {
               <h2>リモートデータ同期</h2>
             </div>
             <button class="primary-action" type="button" disabled={!canOperate() || busy() === 'sync'} onClick={syncNow}>
-              今すぐ同期
+              Sync immediately
             </button>
           </div>
           <p class="muted">GitHubから最新データを取得します。</p>
