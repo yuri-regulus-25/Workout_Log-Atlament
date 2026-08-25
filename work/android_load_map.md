@@ -32,8 +32,16 @@ feature-android-application
 - Windows AFはDevelop Done扱い。
 - Frontend Common / Branding / Character Easter Eggは対象Frontendへ展開済み。
 - Windows x64単体exe配布Buildは完了済み。
-- Android Application Sourceは未作成。
-- `src/application/android/` は未作成。
+- Android Application SourceはPhase Bで骨格作成済み。
+- `src/application/android/` は作成済み。
+- Phase AのAndroid仕様確定は完了。
+- Phase Bの実機起動確認は完了。
+- Android Studio日本語化は任意。IntelliJ IDEA依存の案内が出たため、現時点では保留。
+- Phase C localhost HTTP Server / status API / packaged frontend hosting の実機疎通確認は完了。
+- Settings画面の実機表示確認は完了。
+- Repository情報の保存・読込の実機確認は完了。
+- Credential保存・状態読込の実機確認は完了。
+- Manual SyncのGitHub取得・Runtime保存の最小実装はビルド確認済み。
 
 ## リリースまでの推奨手順
 
@@ -89,12 +97,12 @@ feature-android-application
 
 作業:
 
-1. Android Hostを実装する。
-2. localhost HTTP Serverを起動する。
-3. `/api/v1/common/` API routeを実装する。
-4. packaged frontend assetsのHostingを実装する。
-5. Android Internal Storage Providerを実装する。
-6. Android Secure Storage Adapterを実装する。
+1. Android Hostを実装する。（localhost HTTP Server骨格は着手済み）
+2. localhost HTTP Serverを起動する。（Primary 14108 / Secondary 45194 の起動処理は着手済み）
+3. `/api/v1/common/` API routeを実装する。（status / configuration / credential status / sync / runtime workouts の最小スタブは着手済み）
+4. packaged frontend assetsのHostingを実装する。（dist同期とassets配信は着手済み）
+5. Android Internal Storage Providerを実装する。（configuration保存/読込の最小実装は着手済み）
+6. Android Secure Storage Adapterを実装する。（GitHub token保存/状態読込の最小実装は着手済み）
 7. Android SQLite Loggingを実装する。
 8. Startup / Shutdown / LifecycleをAndroid Activity lifecycleへ接続する。
 
@@ -114,11 +122,11 @@ feature-android-application
 
 1. ConfigurationをInternal Storageへ保存・読込する。
 2. GitHub tokenをSecure Storageへ保存・読込する。
-3. GitHub AccessをAndroidから実行する。
+3. GitHub AccessをAndroidから実行する。（Contents / Raw APIによる最小取得は着手済み）
 4. Root Path + Resource Path解決をWindows AFと同一規則にする。
-5. Manual Syncを実装する。
+5. Manual Syncを実装する。（取得データをRuntime JSONとしてInternal Storageへ保存する最小実装は着手済み）
 6. Startup Syncを起動時1回実行する。
-7. Runtime DataをInternal Storageへ保存する。
+7. Runtime DataをInternal Storageへ保存する。（files + masterData形式の保存は着手済み）
 8. Local Fallbackを実装する。
 
 完了条件:
@@ -236,147 +244,109 @@ Android確認:
 - Android MVPが設計上の完了条件を満たす。
 - READMEと実装手順が一致している。
 
-## 現時点でユーザーが決めるべき仕様不足点
+## Phase A 確定仕様
 
 ### 1. Android実装技術
 
-未確定:
+採用:
 
-- Native Android Kotlin / Javaで実装するか。
-- .NET MAUI / Xamarin系で実装するか。
-- その他のAndroid Runtimeを使うか。
-
-推奨:
-
-- Native Android Kotlinを第一候補にする。
+- Native Android Kotlin
 
 理由:
 
 - Android Application固有Storage、Keystore、SQLite、WebView、LifecycleをPlatform標準で扱いやすい。
 - Windows AFと同じ外部HTTP Contractを保ちながら、内部実装はAndroid Platform Adapterへ閉じ込めやすい。
 
+Core実装方針:
+
+- WindowsはC# Coreを継続する。
+- AndroidはKotlinで実装する。
+- AF外部仕様、HTTP API Contract、Runtime Data Contract、Error ContractはWindows / Androidで共通化する。
+
 ### 2. Android build system
 
-未確定:
-
-- Gradle Kotlin DSLを使うか、Groovy DSLを使うか。
-- root buildへAndroid commandを統合するか。
-
-推奨:
+採用:
 
 - Gradle Kotlin DSLを使用する。
 - root `package.json` には後続Phaseで `build:android` などの入口を追加する。
 
 ### 3. package name / applicationId
 
-未確定:
+採用:
 
-- Androidの正式applicationId。
-
-候補:
-
-```text
-jp.atlament.workoutlog
-com.atlament.workoutlog
-```
-
-推奨:
-
-- 将来公開予定のドメインまたは所有Namespaceに合わせて決定する。
+- `jp.yuri_regulus_25.atlament`
 
 ### 4. app表示名
 
-未確定:
+採用:
 
-- Launcher / Android設定画面上の表示名。
-
-候補:
-
-```text
-Atlament
-Workout Log Atlament
-```
-
-推奨:
-
-- Windows exe名と合わせて `Atlament`。
+- Launcher / Android設定画面上の表示名は `Atlament`。
 
 ### 5. minSdk / targetSdk
 
-未確定:
+採用:
 
-- 対応Android OS範囲。
-
-ユーザー判断が必要な理由:
-
-- minSdkは実装可能API、WebView、Keystore、配布対象端末に影響する。
-- targetSdkはGoogle Play配布要件に影響する。
-
-推奨:
-
+- 実機対象はAndroid 13。
+- minSdkはAndroid 10 (API 29)。
 - targetSdkは現在のAndroid Studio推奨値に合わせる。
-- minSdkは実機対象が決まってから確定する。
 
 ### 6. 配布形式
 
-未確定:
-
-- APK配布か。
-- AAB配布か。
-- Google Play配布か。
-- 手動install用APK配布か。
-
-推奨:
+採用:
 
 - MVP/STはDebug APKまたは署名済みRelease APKで確認する。
 - 公開配布を考える段階でAABを追加する。
+- 配布順序は Debug APK -> Release APK -> 将来的にAAB。
 
 ### 7. Android localhost HTTP Server方式
 
-未確定:
+採用:
 
-- Androidアプリ内でどのHTTP Server実装を使うか。
-- 127.0.0.1固定か、localhost表記も許容するか。
-- Windows AFと同じPrimary / Secondary Portを使うか。
-
-設計上の前提:
-
-- 外部HTTP InterfaceはWindows / Androidで共通。
-- Primary Port 14108 / Secondary 45194が設計済み。
-
-推奨:
-
+- Android Application内 localhost HTTP Server方式を使う。
 - Androidも `127.0.0.1:14108` をPrimary、`127.0.0.1:45194` をSecondaryとして開始する。
 - Port競合時の挙動はWindows AFと同等にする。
 
 ### 8. Android WebView UX
 
-未確定:
+採用:
 
-- Backボタンの扱い。
-- 画面回転時の扱い。
-- 外部ブラウザ遷移を許可するURL範囲。
-- WebView cache / storageの扱い。
-
-推奨:
-
-- MVPではPortrait固定または現状維持を選ぶ。
-- BackボタンはWebView履歴があれば戻る、なければアプリ終了確認なしで通常終了を候補にする。
+- BackボタンはWebView履歴があればWebView back、履歴がなければ通常終了する。
+- RotationはPortrait固定とする。
 - 外部URLはGitHub token作成など必要最小限のみ外部ブラウザへ委譲する。
 
 ### 9. Credential削除 / 再設定UX
 
-未確定:
-
-- Android Settingsで保存済みTokenを削除できるようにするか。
-- Windows AFと同一MVP範囲に留めるか。
-
-推奨:
+採用:
 
 - 初回MVPではWindows AFの正式API Contractに合わせる。
 - Token削除APIが設計上未定義なら追加しない。
 
-### 10. Android Release署名情報の管理
+### 10. Frontend Artifact
+
+採用:
+
+- 既存Frontendは変更しない。
+- `npm run build` 成果物を利用する。
+- Android package assetsへ同梱する。
+- Runtimeで外部dist参照しない。
+
+### 11. Android Icon
+
+採用:
+
+- Primary Logo SVGをAndroid用Assetとして複製する。
+- Adaptive Icon生成はAndroid Studio Image Assetを利用する。
+- 詳細調整はPreview確認後に行う。
+
+### 12. Error Pages
+
+採用:
+
+- Android固有導線は追加しない。
+
+## Phase A 保留事項
+
+### Android Release署名情報の管理
 
 未確定:
 
@@ -384,11 +354,12 @@ Workout Log Atlament
 - CIで署名するか、ローカル手動署名にするか。
 - key alias / password管理方法。
 
-推奨:
+管理方針:
 
 - keystoreはRepository外に置く。
 - パスワードは環境変数またはローカル未追跡設定で扱う。
 - Repositoryへ秘密情報を含めない。
+- Debug APK作成には影響させない。
 
 ## 現時点でユーザー側で生成・準備するもの
 
@@ -430,9 +401,9 @@ adb devices
 
 ユーザー作業:
 
-1. Android launcher iconとして使用する正式Logo方針を決める。
-2. Primary Logoをそのまま使うか、Android icon用に調整したAssetを作るか決める。
-3. 必要であればAndroid StudioのImage Asset機能でadaptive iconを生成する。
+1. Primary Logo SVGをAndroid用Assetとして複製する。
+2. Android StudioのImage Asset機能でadaptive iconを生成する。
+3. Preview確認後に必要な詳細調整を行う。
 
 Android Studioでの生成手順候補:
 
@@ -619,3 +590,4 @@ Platform Adapter:
 - Android Unit / Instrumentation Test。
 - Android Debug / Release Build command。
 - Android README。
+
