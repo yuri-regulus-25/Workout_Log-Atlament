@@ -1,6 +1,6 @@
 # Workout Log Atlament
 
-Workout Log Atlament は、ワークアウト記録を複数のFrontendで閲覧し、Windows Application Framework（Windows AF）からGitHub上のデータを同期して利用するためのRepositoryです。
+Workout Log Atlament は、ワークアウト記録を複数のFrontendで閲覧し、Windows Application Framework（Windows AF）からGitHub上のデータを同期して利用するRepositoryです。
 
 ## Repository構成
 
@@ -11,14 +11,16 @@ Workout Log Atlament は、ワークアウト記録を複数のFrontendで閲覧
 ├─ src/
 │  ├─ application/windows/        # Windows AF
 │  ├─ frontend/                   # 画面別Frontend
-│  └─ shared/                     # Frontend共通Package
-├─ tools/                         # Build / Preview / Validation Script
+│  └─ shared/                     # 共通Package
+├─ tools/                         # Build / Preview / Validation / Dev Runtime Script
+├─ work/                          # 作業メモ・ロードマップ
 ├─ dist/                          # npm run buildで生成されるFrontend Artifact
+├─ dist-windows/                  # npm run build:windowsで生成されるWindows配布物
 ├─ package.json
 └─ package-lock.json
 ```
 
-`dist/` は生成物です。Git管理対象として扱わず、必要な時に `npm run build` で作成します。
+`dist/` と `dist-windows/` は生成物です。Git管理対象ではなく、必要な時にコマンドで作成します。
 
 ## 前提環境
 
@@ -28,7 +30,7 @@ Workout Log Atlament は、ワークアウト記録を複数のFrontendで閲覧
 - WebView2 Runtime
 - Visual Studio または `dotnet` CLI
 
-Windows AFは `.NET 8.0 Windows Forms`、localhost HTTP Server、WebView2で構成されています。
+Windows AFは .NET 8.0 Windows Forms、ASP.NET Core / Kestrel localhost HTTP Server、WebView2で構成されています。
 
 ## 初回準備
 
@@ -38,7 +40,7 @@ Repository直下で依存関係を取得します。
 npm ci
 ```
 
-Windows AFのNuGet依存関係は、`dotnet build` またはVisual Studio Build時に復元されます。
+Windows AFのNuGet依存関係は、`dotnet build`、Visual Studio Build、または `npm run build:windows` 実行時に復元されます。
 
 ## Frontend Build
 
@@ -57,17 +59,34 @@ dist/
 ├─ exercises/
 ├─ analytics/
 ├─ settings/
+├─ frontend-common/
 ├─ index.html
 ├─ style.css
 ├─ main.js
 ├─ common.html
+├─ 404.html
 ├─ 500.html
 ├─ 503.html
-├─ error.css
-└─ 404.html
+└─ error.css
 ```
 
-Windows Production Packagingでは、この `dist/` を `<exe directory>/data/frontend/` へ配置します。
+## Windows単体配布Build
+
+Windows x64向けの自己完結・単一exe配布物を作成します。
+
+```sh
+npm run build:windows
+```
+
+このコマンドは内部で `npm run build` を実行し、生成された `dist/` をWindows AF exeへ埋め込みます。出力先は以下です。
+
+```text
+dist-windows/
+└─ Atlament-v1.0.0-win-x64/
+   └─ Atlament.exe
+```
+
+配布時は `Atlament.exe` を実行します。Frontend Artifactはexeに埋め込まれるため、配布物に `data/frontend/` を同梱する必要はありません。
 
 ## Frontend Preview
 
@@ -79,7 +98,17 @@ npm run preview:mpa
 
 PreviewはBuildを実行しません。事前に `npm run build` を実行してください。
 
-## Windows AF Build
+## 開発用Gateway
+
+複数Frontendを開発用固定Portで起動し、Gatewayから確認します。
+
+```sh
+npm run watch
+```
+
+Gatewayは `http://127.0.0.1:5173/` で起動します。Production Build、Windows AF、`preview:mpa` には影響しません。
+
+## Windows AF Build / Test
 
 Solution Buildを実行します。
 
@@ -95,46 +124,18 @@ dotnet test src/application/windows/Atlament.sln
 
 Visual Studioで確認する場合は、`src/application/windows/Atlament.sln` を開き、`Atlament` ProjectをDebug起動します。
 
-## Windows版の資材配置
+## Windows AF実行時データ
 
-Debug Buildでは `Atlament.csproj` のBuild Targetにより、Repository直下の `dist/` が存在する場合に、Build出力先へ自動コピーされます。
+Windows AFは実行Directory配下の `data/` に、設定・Credential・Runtime Data・Logを保存します。
 
 ```text
-src/application/windows/bin/Debug/net8.0-windows/
-├─ Atlament.exe
-└─ data/
-   └─ frontend/
-      ├─ dashboard/
-      ├─ workouts/
-      ├─ exercises/
-      ├─ analytics/
-      ├─ settings/
-      ├─ index.html
-      ├─ style.css
-      ├─ main.js
-      ├─ common.html
-      ├─ 500.html
-      ├─ 503.html
-      ├─ error.css
-      └─ 404.html
+data/
+├─ configuration/
+├─ runtime/
+└─ logs/
 ```
 
-手動でProduction相当のFolderを作る場合は、以下の順で実施します。
-
-```sh
-npm run build
-dotnet build src/application/windows/Atlament.sln -c Release
-```
-
-その後、Release出力先の `data/frontend/` へ `dist/` の中身を配置します。
-
-```powershell
-$output = "src/application/windows/bin/Release/net8.0-windows"
-New-Item -ItemType Directory -Force "$output/data/frontend"
-Copy-Item -Recurse -Force "dist/*" "$output/data/frontend/"
-```
-
-Windows AFはProduction RuntimeとしてRepository直下の `dist/` を直接参照しません。実行時は、`.exe` と同じDirectory配下の `data/frontend/` をFrontend Hosting Rootとして使用します。
+Debug Buildでは、Repository直下に `dist/` が存在する場合、従来どおりBuild出力先の `data/frontend/` へFrontend Artifactを自動コピーします。単体配布Buildでは `data/frontend/` を使用しません。
 
 ## Windows AF起動後の利用手順
 
@@ -152,15 +153,17 @@ Windows AFはProduction RuntimeとしてRepository直下の `dist/` を直接参
 npm test
 npm run build
 npm run check:mpa
+npm run build:windows
 dotnet build src/application/windows/Atlament.sln
 dotnet test src/application/windows/Atlament.sln
 ```
 
 ## 既知Warning
 
-- `dotnet build/test` で `WindowsBase` の参照競合警告が出る場合があります。現時点ではBuild/Testを阻害しない既知Warningです。
-- Dashboard / AnalyticsなどでViteのchunk size warningが出る場合があります。現時点ではBuild失敗扱いではありません。
+- `dotnet build/test/publish` で `WindowsBase` の参照競合警告が出る場合があります。現時点ではBuild/Testを阻害しない既知Warningです。
+- Dashboard / AnalyticsなどでViteのchunk size warningが出る場合があります。
+- Exercises Angularでbundle budget warningが出る場合があります。
 
 ## 設計書
 
-実装判断は `docs/design/` を正とします。特にWindows AFは `docs/design/07_af_detailed_design.md`、Repository / Build / Runtimeは `docs/design/10_repository_build_runtime_design.md` を確認してください。
+実装判断は `docs/design/` を正とします。特にWindows AFは `docs/design/07_af_detailed_design.md`、Frontend Settingsは `docs/design/09_frontend_settings_detailed_design.md`、Repository / Build / Runtimeは `docs/design/10_repository_build_runtime_design.md` を確認してください。

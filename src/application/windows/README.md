@@ -28,17 +28,33 @@ dotnet build src/application/windows/Atlament.sln
 dotnet test src/application/windows/Atlament.sln
 ```
 
-## Frontend Artifact配置
+## Debug / 通常Build時のFrontend Artifact配置
 
-Windows AFは実行Directory配下の `data/frontend/` をHosting Rootとして使用します。
-
-Debug Buildでは、Repository直下に `dist/` が存在する場合、Build時に以下へ自動コピーされます。
+Repository直下に `dist/` が存在する場合、Build時に以下へ自動コピーされます。
 
 ```text
 src/application/windows/bin/Debug/net8.0-windows/data/frontend/
 ```
 
-Production相当では、`npm run build` で生成した `dist/` の中身を `<exe directory>/data/frontend/` へ配置します。
+この方式はVisual Studio Debug起動や通常の `dotnet build` 用です。
+
+## Windows単体配布Build
+
+Windows x64向けの自己完結・単一exe配布物はRepository直下から生成します。
+
+```sh
+npm run build:windows
+```
+
+出力先は以下です。
+
+```text
+dist-windows/
+└─ Atlament-v1.0.0-win-x64/
+   └─ Atlament.exe
+```
+
+単体配布Buildでは、Frontend Artifactは `Atlament.exe` に埋め込まれます。配布物に `data/frontend/` は不要です。
 
 ## Runtime Data配置
 
@@ -46,17 +62,16 @@ Production相当では、`npm run build` で生成した `dist/` の中身を `<
 
 ```text
 data/
-├─ configuration/
-├─ runtime/
-├─ logs/
-└─ frontend/
+├─ configuration/   # Repository設定・Credential保存ファイル
+├─ runtime/         # 生成済みRuntime Data
+└─ logs/            # Log
 ```
 
 CredentialはWindowsのSecure Storage方針に従い、Token値をFrontendやLogへ出力しません。
 
 ## 起動確認
 
-Visual Studio Debug起動、またはBuild出力先の `Atlament.exe` を起動します。
+Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-windows/Atlament-v1.0.0-win-x64/Atlament.exe` を起動します。
 
 起動後はPortalがWebView2に表示され、localhost HTTP Serverから以下のrouteを配信します。
 
@@ -70,3 +85,9 @@ Visual Studio Debug起動、またはBuild出力先の `Atlament.exe` を起動�
 ```
 
 主要APIは `/api/v1/common/` 配下です。
+
+## 配布時の注意
+
+- WebView2 Runtimeは同梱しません。実行環境にWebView2 Runtimeが必要です。
+- Installerは現時点では用意していません。
+- exe起動後、WebView2 User Dataと `data/` は実行Directory配下に生成されます。

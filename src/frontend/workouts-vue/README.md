@@ -22,7 +22,7 @@ Vue 3 + TypeScript + ViteでWorkout History画面を実装しています。
 npm run dev:workouts
 ```
 
-Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run dev` も使用できます。
+Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/workouts/` を開きます。Workoutsの開発Server固定Portは `127.0.0.1:5176` です。
 
 ## Build
 
@@ -34,10 +34,18 @@ npm run build
 
 ## Routing
 
-`vite.config.ts` で `base: './'` を指定しているため、`dist/index.html` は `file://` でも assets を相対パスで参照できます。ただし、通常の確認は `npm run dev` または `npm run prod` を推奨します。
-
-通常の server 経由では設計書通り `/workouts/` と `/workouts/:date` を使います。`file://` 直開き時のみ、ブラウザ制約を避けるため hash routing に自動で切り替えます。
+通常のserver経由では設計書通り `/workouts/` と `/workouts/:date` を使います。`file://` 直開き時のみ、ブラウザ制約を避けるためhash routingに自動で切り替えます。
 
 ## Runtime Data
 
 Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRuntime Dataを取得します。
+
+## 共通層
+
+- `@workout-lab/workout-types`
+- `@workout-lab/workout-data`
+- `@workout-lab/workout-core`
+- `@workout-lab/design-tokens`
+- `@workout-lab/frontend-common`
+
+`@workout-lab/frontend-common` からNavigation、Page Transition、Branding、Character Easter Eggの共通基盤を利用します。

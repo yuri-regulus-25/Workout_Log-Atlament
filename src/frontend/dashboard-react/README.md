@@ -23,7 +23,7 @@ React + TypeScript + ViteでDashboard画面を実装しています。
 npm run dev:dashboard
 ```
 
-Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run dev` も使用できます。
+Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/dashboard/` を開きます。Dashboardの開発Server固定Portは `127.0.0.1:5175` です。
 
 ## Build
 
@@ -43,3 +43,6 @@ Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRunti
 - `@workout-lab/workout-data`
 - `@workout-lab/workout-core`
 - `@workout-lab/design-tokens`
+- `@workout-lab/frontend-common`
+
+`@workout-lab/frontend-common` からNavigation、Page Transition、Branding、Character Easter Eggの共通基盤を利用します。

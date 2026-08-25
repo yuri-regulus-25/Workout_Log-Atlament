@@ -11,6 +11,9 @@
 - `07_af_detailed_design.md`  
   Windows AF / AF Core / API Contractの詳細設計です。
 
+- `08_common_js_detailed_design.md`  
+  Frontend共通JS / Runtime API接続の詳細設計です。
+
 - `09_frontend_settings_detailed_design.md`  
   Settings Frontendの詳細設計です。
 

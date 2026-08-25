@@ -2,7 +2,7 @@
 
 ## 目的
 
-Windows AF MVPを `master` へ取り込んだ時点で、設計書と実装を比較し、残っている不足・差異・次に着手すべき順序を整理する。
+Windows AF MVP、Frontend Common、Windows配布整備を `master` へ反映した時点で、設計書と実装を比較し、残っている不足・差異・次に着手すべき順序を整理する。
 
 ## 現時点の到達点
 
@@ -16,42 +16,77 @@ Windows AF MVPを `master` へ取り込んだ時点で、設計書と実装を�
 - Portal / Error PageはSource Applicationとして分離済み。
 - `npm run watch` / `watch:<domain>` / Development Gatewayは実装済み。
 - Node Development RuntimeはAF互換EnvelopeのMVP APIを実装済み。
+- Frontend Common関連作業は完了済み。
+- Windows AF配布向けIcon / Assembly metadata / Form名称整理は完了済み。
+- Windows x64向け自己完結・単一exe配布Buildは完了済み。
+- README群と `BUILD_COMMAND_LINE.md` は現行Build / Runtime / 配布構成に合わせて更新済み。
 
-## 優先度A: 次に必ず確認する項目
+## 優先度A: Windows配布整備結果
 
-### A-1. README手順での人間再現確認
+### A-1. Windows AF Application整備
 
-今回READMEを拡充したため、記載手順どおりに別作業者が製造できるか確認する。
+現実装:
 
-確認順:
+- Application Iconを `src/application/windows/Assets/Atlament.ico` に正式配置済み。
+- `Atlament.csproj` に `ApplicationIcon` を設定済み。
+- WinForms Window左上Iconもexe iconと同一になるよう設定済み。
+- テンプレート名 `Form1` は `AtlamentMainForm` へ整理済み。
+- Assembly metadataを配布向けに設定済み。
+- exe名は `Atlament.exe`。
 
-1. `npm ci`
-2. `npm run build`
-3. `dotnet build src/application/windows/Atlament.sln`
-4. `dotnet test src/application/windows/Atlament.sln`
-5. Visual Studio Debug起動
-6. Settings設定
-7. Manual Sync
-8. 各Frontend表示
+結果:
 
-### A-2. Production相当Folderでの資材配置確認
+- Windows AF Application整備は完了。
 
-READMEに記載したProduction相当の配置手順を実際に確認する。
+### A-2. Windows単体配布Build
 
-確認対象:
+現実装:
 
-- `dist/` の内容が `<exe directory>/data/frontend/` へ配置されること
-- `/settings/` を含む全routeがWindows AFから表示できること
-- `data/configuration/`
-- `data/runtime/`
-- `data/logs/`
-- CredentialがFrontendやLogへ露出しないこと
+- root commandとして `npm run build:windows` を追加済み。
+- `tools/build/build-windows.mjs` でWindows x64向け配布物を生成する。
+- 内部で `npm run build` と `dotnet publish` を実行する。
+- publish条件はRelease / win-x64 / self-contained / single-file。
+- Frontend Artifactは `Atlament.exe` へ埋め込み済み。
+- 配布版では `data/frontend/` を同梱しない。
+- 配布出力Rootは `dist-windows/`。
+
+生成物:
+
+```text
+dist-windows/
+└─ Atlament-v1.0.0-win-x64/
+   └─ Atlament.exe
+```
+
+確認済み:
+
+- `npm run build:windows` PASS。
+- リポジトリ外へ `Atlament.exe` をコピーして起動可能。
+- `/`、`/dashboard/`、`/workouts/`、`/exercises/`、`/analytics/`、`/settings/`、`/404.html` がHTTP 200。
+- 各JS / CSS / faviconがHTTP 200。
+- 配布Folderには `Atlament.exe` のみを配置する。
+- 起動後の `data/`、WebView2 User Dataは実行Directory配下に生成される。
+
+結果:
+
+- Windows単体配布Buildは完了。
+
+### A-3. Documentation整備
+
+現実装:
+
+- root READMEを現行構成に合わせて更新済み。
+- 各DirectoryのREADMEを更新済み。
+- root `BUILD_COMMAND_LINE.md` を追加済み。
+- Build / Test / Preview / Development Gateway / Development Runtime / Windows配布Buildの用途を日本語で整理済み。
+
+結果:
+
+- Windows配布前に必要な利用者向け基本説明は完了。
 
 ## 優先度B: Development Build / Runtime 整備結果
 
 ### B-1. Portal / Error PageのSource分離
-
-`docs/design/10_repository_build_runtime_design.md` では、PortalとError PagesはSource Applicationとして分離する方針になっている。
 
 現実装:
 
@@ -61,23 +96,11 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 - `tools/build/build-mpa.mjs` はPortal / Error PageのUI文字列生成を行わず、各FrontendのBuild Artifactを `dist/` へ集約する責務に整理済み。
 - Production Frontend Artifact Rootは引き続き `./dist/`。
 
-残課題:
+結果:
 
-- `src/frontend/portal/` / `src/frontend/errors/` のREADMEとroot READMEの記述が実装結果と完全一致しているか継続確認する。
-- Error PageのVisual / routeは現状維持しているため、今後Branding導入時に正式Asset方針と合わせて再確認する。
-
-次にやること:
-
-1. C系作業へ進む前に、Portal / Error PageがBuild Script生成へ戻っていないことを回帰確認する。
-2. Branding導入時に、Portal / Error Page / favicon / Windows iconのAsset配置規則をまとめて確認する。
-
-推奨:
-
-- B-1は完了扱い。追加変更はC系またはBranding工程で扱う。
+- B-1は完了。
 
 ### B-2. watch系Command / Development Gateway
-
-`docs/design/10_repository_build_runtime_design.md` では `npm run watch`、`watch:<domain>`、Development Gateway構成が定義されている。
 
 現実装:
 
@@ -99,22 +122,13 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 残課題:
 
 - `dev:<domain>` は旧 `4317 /api/workout-data` 系Wrapperを利用しており、`watch:<domain>` とRuntime経路が二重化している。
-- C系で共通Frontend化を進める前に、日常開発の主経路を `watch` / Gatewayへ寄せるか、旧 `dev:<domain>` を残すか整理が必要。
-- Angularは `--serve-path /exercises/` 指定でGateway配下表示を成立させているため、Angular更新時はbase / asset pathを重点回帰する。
+- 日常開発の主経路を `watch` / Gatewayへ寄せるか、旧 `dev:<domain>` を長期互換として残すか判断が必要。
 
-次にやること:
+結果:
 
-1. C系作業前に、`watch` をFrontend開発の標準手順としてREADMEへ明記する。
-2. 旧 `dev:<domain>` の位置づけを「互換維持」か「削除予定」か決める。
-3. HMR / route / asset 200確認をC系変更ごとの回帰項目に入れる。
-
-推奨:
-
-- B-2は完了扱い。次は旧dev経路の整理方針を決める。
+- B-2はMVP完了。
 
 ### B-3. Node Development RuntimeのAF互換API
-
-設計上、Node Development RuntimeはAF互換Response Envelopeを返す薄いAdapterとする。
 
 現実装:
 
@@ -131,22 +145,14 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 
 残課題:
 
-- 旧 `/api/workout-data` がDevelopment Runtime / preview / Vite plugin / `dev:<domain>` に残っている。
-- `preview:mpa` は設計上 `dist/` のStatic Serveのみだが、現実装では旧 `/api/workout-data` も提供している。
-- Master / Workoutディレクトリ欠落時のError Contractが本番AFと完全一致しているか追加確認が必要。
-- `src/shared/workout-data/src/node.ts` は `./index.ts` を直接importしており、Node version依存があるため、READMEまたはpackage設定でNode要件を明確にする必要がある。
+- 旧 `/api/workout-data` の退役時期を決める。
+- `preview:mpa` を静的配信専用へ戻すか、Preview用互換APIを正式に許容するか判断する。
+- Master / Workoutディレクトリ欠落時のError Contractが本番AFと完全一致しているか追加確認する。
 - Settings系APIはMVPでは未実装。Settings開発でAFなし運用が必要になった段階で追加判断する。
 
-次にやること:
+結果:
 
-1. 旧 `/api/workout-data` の退役時期を決める。
-2. `preview:mpa` を静的配信専用へ戻すか、Preview用互換APIを正式に許容するか判断する。
-3. data欠落 / Master破損 / Raw invalid / Master Resolve FailureのDevelopment Runtime挙動を本番AF Contractと照合する。
-4. Development Runtimeのsmoke testを追加するか判断する。
-
-推奨:
-
-- B-3はMVP完了扱い。ただし旧API互換の整理はC系へ進む前に方針決定する。
+- B-3はMVP完了。
 
 ## 優先度C: Frontend Common / Branding / Easter Egg 整備結果
 
@@ -155,7 +161,7 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 現実装:
 
 - `src/shared/frontend-common/src/navigation/` に共通Route定義とApplication metadataを実装済み。
-- 最低限のmetadataとして `id / route / displayName` を保持する。
+- metadataとして `id / route / displayName` を保持する。
 - 将来のDrawer Navigationや共通導線の情報源として利用可能な状態。
 
 結果:
@@ -228,40 +234,15 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 2. Error PagesでCharacter Easter Eggを許容するか判断する。
 3. 適用する場合はError Pageの責務と非操作画面としての性質を踏まえて別工程で扱う。
 
-### C-6. Windows配布整備 / README / exe配布確認
-
-現状:
-
-- Windows AFはDevelop Done扱い。
-- Frontend Common関連作業は完了。
-- 次工程として、Android着手前にWindows配布手順と資材配置を固める必要がある。
-
-次にやること:
-
-1. Windows Production相当Folderへ `dist/` を `<exe directory>/data/frontend/` として配置する手順を再確認する。
-2. root READMEおよび関連Directory READMEに、Windows版の製造・配置・起動・確認手順を追記または補強する。
-3. exe配布単位でPortal / Dashboard / Workouts / Exercises / Analytics / Settings / frontend-common assetsが表示できることを確認する。
-4. Credential / Runtime / Logs / Configurationの配置と初回起動手順をREADMEへ反映する。
-
-推奨:
-
-- 次工程はWindows配布整備を優先する。Android Applicationはその後に着手する。
-
-### C-7. Android Application
-
-現状:
-
-- Android Applicationは未着手。
-- Windows配布整備完了後に、Android AFの対象範囲を改めて定義する。
 ## 優先度D: 品質改善
 
 ### D-1. WindowsBase警告
 
-`dotnet build/test` で `WindowsBase` の参照競合警告が発生する。
+`dotnet build/test/publish` で `WindowsBase` の参照競合警告が発生する。
 
 現状:
 
-- Build / TestはPASS。
+- Build / Test / PublishはPASS。
 - ST1では非ブロッキング扱い。
 
 次にやること:
@@ -270,9 +251,9 @@ READMEに記載したProduction相当の配置手順を実際に確認する。
 2. WPF参照が不要なら除外可能か調査する。
 3. 変更する場合はWebView2初期化回帰を必ず確認する。
 
-### D-2. Vite chunk size warning
+### D-2. Frontend bundle warning
 
-Dashboard / Analyticsでchunk size warningが発生する。
+Dashboard / AnalyticsでVite chunk size warning、Exercises Angularでbundle budget warningが発生する。
 
 現状:
 
@@ -285,14 +266,56 @@ Dashboard / Analyticsでchunk size warningが発生する。
 2. 必要ならdynamic importを検討する。
 3. 表示速度の実測後に対応優先度を決める。
 
+## 優先度E: 次工程候補
+
+### E-1. 旧Development API整理
+
+対象:
+
+- 旧 `/api/workout-data`
+- 旧 `dev:<domain>` wrapper
+- `preview:mpa` の互換API提供有無
+
+目的:
+
+- Development Gateway / Development Runtimeを標準開発経路として定着させる。
+- 本番AF API Contractと開発Runtimeの差異を減らす。
+
+### E-2. Error Pages Branding適用判断
+
+対象:
+
+- `src/frontend/errors/`
+- `dist/common.html`
+- `dist/404.html`
+- `dist/500.html`
+- `dist/503.html`
+
+目的:
+
+- Error PagesへLogoを出すか、Easter Eggを許容するかを決める。
+- 非操作画面としての責務を崩さない範囲で検討する。
+
+### E-3. Android Application着手判断
+
+現状:
+
+- Android Applicationは未着手。
+- Windows AFとFrontend Commonの主要整備は完了済み。
+
+次にやること:
+
+1. Android AFの対象範囲を定義する。
+2. Windows AFと共有できる責務、共有しない責務を整理する。
+3. Androidで必要なRuntime / Credential / GitHub Access方針を設計する。
+
 ## 次工程の推奨作業順
 
-1. Windows配布整備に着手する。
-2. root READMEと関連Directory READMEへ、Windows版の製造・資材配置・起動・確認手順を網羅的に追記する。
-3. Production相当Folderで、`dist/` から `<exe directory>/data/frontend/` への配置と起動確認を行う。
-4. exe配布単位でPortal / Dashboard / Workouts / Exercises / Analytics / Settings / frontend-common assetsの表示を確認する。
-5. 旧 `/api/workout-data`、`preview:mpa` の互換API、Development RuntimeのError Contractを整理する。
-6. Windows配布整備完了後、Android Applicationの着手可否と対象範囲を判断する。
+1. 旧Development API整理方針を決める。
+2. `preview:mpa` の責務を静的配信専用に戻すか、互換API込みで正式化するか判断する。
+3. Error PagesへのBranding / Easter Egg適用可否を判断する。
+4. WindowsBase warningとFrontend bundle warningを品質改善として扱うか、次Releaseへ送るか決める。
+5. Android ApplicationのScope定義へ進む。
 
 ## 現時点で人間判断が必要な事項
 
@@ -300,4 +323,4 @@ Dashboard / Analyticsでchunk size warningが発生する。
 2. `preview:mpa` を完全なStatic Serve専用へ戻すか、Preview用互換APIを正式に許容するか。
 3. 現行 `dev:<domain>` commandを互換維持するか、`watch:<domain>` / Gatewayへ集約するか。
 4. Error PagesへBranding / Easter Eggを適用するか。
-5. Android AFをWindows配布整備後すぐ開始するか、別Phaseへ送るか。
+5. Android AFを次工程として開始するか、別Phaseへ送るか。

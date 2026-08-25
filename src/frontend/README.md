@@ -37,6 +37,7 @@ dist/
 ├─ 500.html
 ├─ 503.html
 ├─ error.css
+├─ frontend-common/
 ├─ dashboard/
 ├─ workouts/
 ├─ exercises/
@@ -56,6 +57,16 @@ npm run dev:analytics
 npm run dev:settings
 ```
 
+複数FrontendをGateway経由でまとめて確認する場合は以下を使用します。
+
+```sh
+npm run watch
+```
+
 ## Runtime Data接続
 
-各FrontendはWindows AF環境では `/api/v1/common/runtime/workouts` を優先して参照します。Previewや単体開発では既存の開発Runtime endpointをFallbackとして使用します。
+各FrontendはWindows AF環境では `/api/v1/common/runtime/workouts` を優先して参照します。Previewや単体開発ではDevelopment Runtimeまたは既存の開発Runtime endpointを使用します。
+
+## 共通基盤
+
+Frontend横断のRoute定義、Application metadata、Page Transition、Branding、Character Easter Eggは `src/shared/frontend-common/` を利用します。Framework固有Componentは各Frontend Application側に残します。

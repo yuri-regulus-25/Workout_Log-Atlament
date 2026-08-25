@@ -25,7 +25,7 @@ Angular + TypeScriptでPerformance Detail画面を実装しています。
 npm run dev:exercises
 ```
 
-Repository直下から実行します。画面単体Directoryで作業する場合は、Workspaceの `npm run start` も使用できます。
+Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/exercises/` を開きます。Exercisesの開発Server固定Portは `127.0.0.1:5177` です。
 
 ## Build
 
@@ -33,7 +33,7 @@ Repository直下から実行します。画面単体Directoryで作業する場�
 npm run build
 ```
 
-統合Buildにより、AngularのBuild Artifactは `dist/exercises/` に配置されます。
+統合Buildにより、AngularのBuild Artifactは `dist/exercises/` に配置されます。Production buildでは `/exercises/` をbase hrefとして使用します。
 
 ## Favicon
 
@@ -49,3 +49,6 @@ Windows AF環境では `/api/v1/common/runtime/workouts` から同期済みRunti
 - `@workout-lab/workout-data`
 - `@workout-lab/workout-core`
 - `@workout-lab/design-tokens`
+- `@workout-lab/frontend-common`
+
+`@workout-lab/frontend-common` からNavigation、Page Transition、Branding、Character Easter Eggの共通基盤を利用します。

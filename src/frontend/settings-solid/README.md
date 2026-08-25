@@ -25,6 +25,8 @@ Repository直下で実行します。
 npm run dev:settings
 ```
 
+Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/settings/` を開きます。Settingsの開発Server固定Portは `127.0.0.1:5179` です。
+
 ## Build
 
 ```sh
@@ -46,3 +48,9 @@ SettingsはWindows AFの正式API Contractを使用します。
 ```
 
 Token値はFrontend Storageへ保存せず、AF APIからも再表示しません。
+
+## 共通層
+
+- `@workout-lab/frontend-common`
+
+Navigation、Page Transition、Branding、Character Easter Eggの共通基盤を利用します。設定保存、Credential保存、Sync処理は必ずAF API経由で実行します。

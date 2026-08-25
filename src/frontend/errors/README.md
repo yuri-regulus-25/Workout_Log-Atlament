@@ -43,3 +43,4 @@ node src/frontend/errors/build.mjs
 - Error routeの意味やHTTP StatusはWindows AF / Preview側が管理します。
 - 本SourceはError Pageの表示資材のみを管理します。
 - Error Pageは任意の失敗URLで表示されるため、共有CSSはHosting Root基準の `/error.css` として参照します。
+- Branding / Character Easter Eggの適用は現時点では対象外です。
