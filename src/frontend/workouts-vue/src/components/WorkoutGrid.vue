@@ -65,7 +65,15 @@ function selectRow(row: WorkoutRow) {
     emit('openSession', session)
   }
 }
+function fullGymName(row: WorkoutRow): string {
+  return props.sessions.find((item) => item.session_id === row.sessionId)?.gym.name ?? row.gym
+}
 
+function displayGymName(row: WorkoutRow): string {
+  const gym = props.sessions.find((item) => item.session_id === row.sessionId)?.gym
+
+  return gym?.short_name ?? gym?.name ?? row.gym
+}
 function goToPage(page: number) {
   currentPage.value = Math.min(Math.max(page, 1), pageCount.value)
 }
@@ -100,7 +108,7 @@ function sortMark(key: SortKey): string {
           @click="selectRow(row)"
         >
           <td>{{ formatDisplayDate(row.date) }}</td>
-          <td>{{ row.gym }}</td>
+          <td class="gym-cell" :title="fullGymName(row)">{{ displayGymName(row) }}</td>
           <td>{{ row.exerciseCount }}</td>
           <td>{{ row.totalSets }}</td>
           <td>{{ row.totalVolume.toLocaleString() }} kg</td>
@@ -128,3 +136,4 @@ function sortMark(key: SortKey): string {
     </div>
   </div>
 </template>
+

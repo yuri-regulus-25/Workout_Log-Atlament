@@ -9,11 +9,14 @@
 
 .operation-overlay {
   align-items: center;
-  background: rgba(15, 23, 42, 0.42);
+  background: rgba(15, 23, 42, 0.46);
   display: flex;
+  height: 100dvh;
   inset: 0;
+  width: 100vw;
   justify-content: center;
   position: fixed;
+  transform: translateZ(0);
   z-index: 2000;
 }
 
@@ -317,3 +320,4 @@
     align-items: stretch;
   }
 }
+

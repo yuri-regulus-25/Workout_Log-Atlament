@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import {
   applicationRoutes,
   pageTransitionClassName,
@@ -259,9 +260,11 @@ function App() {
   return (
     <main class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
-        <div class="operation-overlay" role="status" aria-live="polite" aria-label="処理中">
-          <div class="circular-loader" aria-hidden="true" />
-        </div>
+        <Portal>
+          <div class="operation-overlay" role="status" aria-live="polite" aria-label="処理中">
+            <div class="circular-loader" aria-hidden="true" />
+          </div>
+        </Portal>
       </Show>
 
       <header class="page-hero">
@@ -528,3 +531,4 @@ function scrollToTop() {
 }
 
 export default App
+
