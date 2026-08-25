@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount } from 'solid-js'
 import {
+  applicationRoutes,
   getAfStatus,
   getConfiguration,
   getCredentialStatus,
@@ -245,11 +246,11 @@ function App() {
         <div class="hero-top">
           <p class="eyebrow">Atlament / Application Settings</p>
           <nav class="global-nav" aria-label="Global navigation">
-            <a href="/">Portal</a>
-            <a href="/dashboard/">Dashboard</a>
-            <a href="/workouts/">Workouts</a>
-            <a href="/analytics/">Analytics</a>
-            <a class="active" href="/settings/">Settings</a>
+            <a href={applicationRoutes.portal}>Portal</a>
+            <a href={applicationRoutes.dashboard}>Dashboard</a>
+            <a href={applicationRoutes.workouts}>Workouts</a>
+            <a href={applicationRoutes.analytics}>Analytics</a>
+            <a class="active" href={applicationRoutes.settings}>Settings</a>
           </nav>
         </div>
         <h1>Application Settings</h1>
