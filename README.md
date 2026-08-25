@@ -58,6 +58,8 @@ dist/
 ├─ analytics/
 ├─ settings/
 ├─ index.html
+├─ style.css
+├─ main.js
 └─ 404.html
 ```
 
@@ -104,6 +106,8 @@ src/application/windows/bin/Debug/net8.0-windows/
       ├─ analytics/
       ├─ settings/
       ├─ index.html
+      ├─ style.css
+      ├─ main.js
       └─ 404.html
 ```
 
