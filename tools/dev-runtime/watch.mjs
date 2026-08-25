@@ -9,7 +9,7 @@ const requiredPorts = [
   { name: 'Exercises', port: 5177 },
   { name: 'Analytics', port: 5178 },
   { name: 'Settings', port: 5179 },
-  { name: 'Workout Data API', port: 4317 },
+  { name: 'Node Development Runtime', port: 5180 },
 ]
 
 for (const item of requiredPorts) {
@@ -18,7 +18,7 @@ for (const item of requiredPorts) {
 
 const processes = [
   start('portal', process.execPath, ['tools/dev-runtime/portal-dev-server.mjs']),
-  start('workout-data-api', process.execPath, ['tools/dev-runtime/workout-data-api.mjs']),
+  start('development-runtime', process.execPath, ['tools/dev-runtime/development-runtime.mjs']),
   startNpm('dashboard', ['run', 'watch:dashboard']),
   startNpm('workouts', ['run', 'watch:workouts']),
   startNpm('exercises', ['run', 'watch:exercises']),

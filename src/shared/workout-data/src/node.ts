@@ -6,7 +6,7 @@ import {
   parseExerciseMaster,
   parseGymMaster,
   sampleMasterData,
-} from './index'
+} from './index.ts'
 
 export async function loadWorkoutSessionsFromDirectory(
   rootDirectory: string,

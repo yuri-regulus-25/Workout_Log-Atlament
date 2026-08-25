@@ -400,8 +400,13 @@ export function normalizeWorkoutRecord(
   const exercises = exercisesValue
     .map((exercise, index) => normalizeExercise(exercise, index, masterLookup, issues, filePath, line))
     .filter((exercise): exercise is WorkoutExercise => exercise !== null)
+  const exerciseIssues = issues.slice(exerciseIssueCountBefore)
 
-  if (status === 'complete' && exercises.length === 0) {
+  if (
+    status === 'complete' &&
+    exercises.length === 0 &&
+    (exerciseIssues.length === 0 || !exerciseIssues.every(isMasterResolveIssue))
+  ) {
     issues.push({
       filePath,
       line,
@@ -409,7 +414,7 @@ export function normalizeWorkoutRecord(
     })
   }
 
-  if (issues.length > exerciseIssueCountBefore) {
+  if (issues.length > 0) {
     return { sessions: [], issues }
   }
 
@@ -425,6 +430,10 @@ export function normalizeWorkoutRecord(
   }
 
   return { sessions: [session], issues }
+}
+
+function isMasterResolveIssue(issue: WorkoutParseIssue): boolean {
+  return issue.message.startsWith('Unknown exercise_id:') || issue.message.startsWith('Unknown gym_id:')
 }
 
 function normalizeExercise(

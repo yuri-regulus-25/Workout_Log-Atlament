@@ -18,6 +18,7 @@
     "dev:analytics": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/analytics-svelte",
     "dev:dashboard": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/dashboard-react",
     "dev:exercises": "node tools/dev-runtime/dev-with-workout-data.mjs npm run start -w @workout-lab/exercises-angular",
+    "dev:runtime": "node tools/dev-runtime/development-runtime.mjs",
     "dev:settings": "npm run dev -w @workout-lab/settings-solid",
     "dev:workouts": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/workouts-vue",
     "prod:analytics": "npm run prod -w @workout-lab/analytics-svelte",

@@ -5,6 +5,14 @@ const port = 5173
 
 const routes = [
   {
+    name: 'development-runtime',
+    prefixes: ['/api'],
+    target: {
+      host: '127.0.0.1',
+      port: 5180,
+    },
+  },
+  {
     name: 'dashboard',
     prefixes: ['/dashboard'],
     target: {
