@@ -7,6 +7,8 @@ import type {
   ApexStroke,
   ApexXAxis,
 } from 'ng-apexcharts';
+import { applicationRoutes } from '@workout-lab/frontend-common/navigation';
+import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
 import type { WorkoutSession } from '@workout-lab/workout-types';
 import {
@@ -30,6 +32,8 @@ import {
   styleUrl: './app.css',
 })
 export class App {
+  protected readonly applicationRoutes = applicationRoutes;
+  protected readonly pageTransitionClassName = pageTransitionClassName;
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly loadError = signal<string | null>(null);
   protected readonly exerciseOptions = computed(() => getExerciseOptions(this.sessions()));
@@ -136,11 +140,11 @@ export class App {
   protected selectExercise(exerciseId: string) {
     this.selectedExerciseId.set(exerciseId);
     this.hasInvalidExerciseIdParameter.set(false);
-    window.history.pushState(null, '', `/exercises/${exerciseId}`);
+    window.history.pushState(null, '', `${applicationRoutes.exercises}${exerciseId}`);
   }
 
   private getPathExerciseId(): string | undefined {
-    return window.location.pathname.split('/exercises/')[1]?.split('/')[0] || undefined;
+    return window.location.pathname.split(applicationRoutes.exercises)[1]?.split('/')[0] || undefined;
   }
 
   private selectExerciseIdFromPath() {
@@ -155,8 +159,8 @@ export class App {
     this.invalidExerciseId.set(pathExerciseId ?? '');
     this.selectedExerciseId.set(nextExerciseId);
 
-    if (window.location.pathname !== `/exercises/${nextExerciseId}`) {
-      window.history.replaceState(null, '', `/exercises/${nextExerciseId}`);
+    if (window.location.pathname !== `${applicationRoutes.exercises}${nextExerciseId}`) {
+      window.history.replaceState(null, '', `${applicationRoutes.exercises}${nextExerciseId}`);
     }
   }
 }

@@ -2,6 +2,8 @@
   import ApexCharts from 'apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { onDestroy, onMount } from 'svelte'
+  import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
+  import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
   import {
@@ -126,14 +128,14 @@
   }
 </script>
 
-<main class="app-shell">
+<main class={`app-shell ${pageTransitionClassName}`}>
   <header class="page-hero">
     <div class="hero-top">
       <p class="eyebrow">Atlament / Analytics</p>
       <nav class="global-nav" aria-label="Global navigation">
-        <a href="/dashboard/">Dashboard</a>
-        <a href="/workouts/">Workouts</a>
-        <a class="active" href="/analytics/">Analytics</a>
+        <a href={applicationRoutes.dashboard}>Dashboard</a>
+        <a href={applicationRoutes.workouts}>Workouts</a>
+        <a class="active" href={applicationRoutes.analytics}>Analytics</a>
       </nav>
     </div>
     <h1>Analytics</h1>
@@ -204,7 +206,7 @@
       <p class="muted">
         記録期間全体での週あたり平均セッション数。
       </p>
-      <a class="primary-action" href="/dashboard/">Back to Dashboard</a>
+      <a class="primary-action" href={applicationRoutes.dashboard}>Back to Dashboard</a>
     </article>
   </section>
 

@@ -1,6 +1,8 @@
 import ReactApexChart from 'react-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useEffect, useState } from 'react'
+import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
+import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
@@ -162,15 +164,15 @@ function App() {
   ]
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${pageTransitionClassName}`}>
       <header className="page-hero">
         <div className="hero-top">
           <p className="eyebrow">Atlament / Dashboard</p>
           <nav className="global-nav" aria-label="Global navigation">
-            <a href="../">Portal</a>
-            <a className="active" href="/dashboard/">Dashboard</a>
-            <a href="/workouts/">Workouts</a>
-            <a href="/analytics/">Analytics</a>
+            <a href={applicationRoutes.portal}>Portal</a>
+            <a className="active" href={applicationRoutes.dashboard}>Dashboard</a>
+            <a href={applicationRoutes.workouts}>Workouts</a>
+            <a href={applicationRoutes.analytics}>Analytics</a>
           </nav>
         </div>
         <h1>Dashboard</h1>
@@ -202,7 +204,7 @@ function App() {
               <p className="eyebrow">Volume Trends</p>
               <h2>ボリューム推移</h2>
             </div>
-            <a href="/analytics/" className="text-link">
+            <a href={applicationRoutes.analytics} className="text-link">
               View Analytics
             </a>
           </div>
@@ -234,7 +236,7 @@ function App() {
                 {getTotalSets(latestWorkout)} sets<br />
                 {latestWorkout.exercises.length} machines
               </p>
-              <a className="primary-action" href={`/workouts/${latestWorkout.date}`}>
+              <a className="primary-action" href={`${applicationRoutes.workouts}${latestWorkout.date}`}>
                 View Workout Detail
               </a>
             </>
@@ -282,7 +284,7 @@ function App() {
             <p className="eyebrow">Recent Workouts</p>
             <h2>最近のワークアウト</h2>
           </div>
-          <a href="/workouts/" className="text-link">
+          <a href={applicationRoutes.workouts} className="text-link">
             View Workout Domain
           </a>
         </div>
@@ -295,7 +297,7 @@ function App() {
             <span>Volume</span>
           </div>
           {recentRows.map((row) => (
-            <a key={row.sessionId} className="recent-row" href={`/workouts/${row.date}`}>
+            <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}`}>
               <span>{formatDisplayDate(row.date)}</span>
               <span>{row.gym}</span>
               <span>{row.exercises}</span>
