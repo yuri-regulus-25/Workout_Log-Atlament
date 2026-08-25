@@ -1,0 +1,37 @@
+.atl-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atl-logo-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.atl-logo {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.atl-character-trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .atl-logo-trigger,
+  .atl-logo {
+    width: 56px;
+    height: 56px;
+  }
+}

@@ -1,0 +1,653 @@
+package jp.yuri_regulus_25.atlament
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.io.BufferedInputStream
+import java.io.BufferedReader
+import java.io.ByteArrayInputStream
+import java.io.Closeable
+import java.io.File
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.URL
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.security.KeyStore
+import java.time.LocalDate
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONArray
+import org.json.JSONObject
+
+class AndroidLocalhostServer(private val context: Context) : Closeable {
+    private data class RuntimeSourceFile(val path: String, val content: String)
+    private data class SyncResponse(val status: Int, val body: String)
+    private val appNames = setOf("dashboard", "workouts", "exercises", "analytics", "settings")
+    private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
+    private val credentialPreferences: SharedPreferences = context.getSharedPreferences("atlament_secure_credential", Context.MODE_PRIVATE)
+    private val credentialKeyAlias = "atlament_github_token"
+    private val credentialCiphertextKey = "github_token_ciphertext"
+    private val credentialIvKey = "github_token_iv"
+    private val credentialLimitDateKey = "github_token_limit_date"
+    private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
+    @Volatile private var manualSyncStatus = "idle"
+    @Volatile private var githubAvailable = false
+    private val running = AtomicBoolean(false)
+    private val acceptExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val requestExecutor: ExecutorService = Executors.newCachedThreadPool()
+    private var serverSocket: ServerSocket? = null
+
+    var port: Int = 0
+        private set
+
+    val baseUrl: String
+        get() = "http://127.0.0.1:$port/"
+
+    fun start() {
+        if (running.get()) return
+
+        val lastError = mutableListOf<Exception>()
+        for (candidate in listOf(14108, 45194)) {
+            try {
+                val socket = ServerSocket(candidate, 50, InetAddress.getByName("127.0.0.1"))
+                serverSocket = socket
+                port = candidate
+                running.set(true)
+                acceptExecutor.execute { acceptLoop(socket) }
+                return
+            } catch (ex: Exception) {
+                lastError.add(ex)
+            }
+        }
+
+        throw IllegalStateException("Primary and secondary HTTP ports are unavailable.", lastError.lastOrNull())
+    }
+
+    private fun acceptLoop(socket: ServerSocket) {
+        while (running.get()) {
+            try {
+                val client = socket.accept()
+                requestExecutor.execute { handleClient(client) }
+            } catch (_: Exception) {
+                if (running.get()) break
+            }
+        }
+    }
+
+    private fun handleClient(socket: Socket) {
+        socket.use { client ->
+            val input = BufferedInputStream(client.getInputStream())
+            val reader = BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8))
+            val requestLine = reader.readLine() ?: return
+            var contentLength = 0
+            while (true) {
+                val line = reader.readLine() ?: break
+                if (line.isEmpty()) break
+                val separator = line.indexOf(':')
+                if (separator > 0 && line.substring(0, separator).equals("Content-Length", ignoreCase = true)) {
+                    contentLength = line.substring(separator + 1).trim().toIntOrNull() ?: 0
+                }
+            }
+            val body = if (contentLength > 0) {
+                val chars = CharArray(contentLength)
+                val count = reader.read(chars, 0, contentLength)
+                if (count > 0) String(chars, 0, count) else ""
+            } else {
+                ""
+            }
+
+            val parts = requestLine.split(" ")
+            if (parts.size < 2) {
+                sendJson(client.getOutputStream(), 400, failJson("COMMON_INVALID_REQUEST", "HTTP request line is invalid."))
+                return
+            }
+
+            val method = parts[0]
+            val path = sanitizePath(parts[1])
+            if (path.startsWith("/api/")) {
+                handleApi(client.getOutputStream(), method, path, body)
+            } else if (method == "GET") {
+                serveAsset(client.getOutputStream(), path)
+            } else {
+                sendJson(client.getOutputStream(), 405, failJson("METHOD_NOT_ALLOWED", "Only GET is supported for frontend assets."))
+            }
+        }
+    }
+
+
+    private fun handleApi(output: OutputStream, method: String, path: String, body: String) {
+        val route = path.removePrefix("/api/v1/common").removePrefix("/api/common")
+        when {
+            method == "GET" && route == "/status" -> sendJson(output, 200, statusJson())
+            method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
+            method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
+            method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
+            method == "POST" && route == "/configuration" -> sendJson(output, 200, okJson(saveConfigurationJson(body)))
+            method == "POST" && route == "/credential" -> sendJson(output, 200, okJson(credentialUpdateResultJson(body)))
+            method == "POST" && route == "/sync" -> sendManualSync(output)
+            method == "POST" && route == "/shutdown" -> sendJson(output, 200, okJson("{ \"accepted\": true, \"alreadyShuttingDown\": false }"))
+            else -> sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
+        }
+    }
+
+    private fun sanitizePath(rawPath: String): String {
+        val withoutQuery = rawPath.substringBefore('?').substringBefore('#')
+        val decoded = URLDecoder.decode(withoutQuery, StandardCharsets.UTF_8.name()).replace('\\', '/')
+        val segments = decoded.split('/').filter { it.isNotEmpty() }
+        val normalized = mutableListOf<String>()
+        for (segment in segments) {
+            when (segment) {
+                "." -> Unit
+                ".." -> return "/__invalid__"
+                else -> normalized.add(segment)
+            }
+        }
+        return "/" + normalized.joinToString("/")
+    }
+
+    private fun serveAsset(output: OutputStream, path: String) {
+        val assetPath = resolveAssetPath(path)
+        if (assetPath == null) {
+            sendText(output, 404, "text/plain; charset=utf-8", "Not Found")
+            return
+        }
+
+        try {
+            context.assets.open(assetPath).use { stream ->
+                sendStream(output, 200, contentType(assetPath), stream)
+            }
+        } catch (_: Exception) {
+            sendText(output, 404, "text/plain; charset=utf-8", "Not Found")
+        }
+    }
+
+    private fun resolveAssetPath(path: String): String? {
+        val normalized = path.trimStart('/')
+        return when {
+            path == "/" || normalized.isEmpty() -> "frontend/index.html"
+            normalized.startsWith("android/") -> normalized
+            normalized.startsWith("frontend/") -> normalized
+            normalized in appNames -> "frontend/$normalized/index.html"
+            normalized.contains('.') -> "frontend/$normalized"
+            else -> "frontend/index.html"
+        }
+    }
+
+    private fun statusJson(): String = """
+        {
+          "success": true,
+          "errors": [],
+          "data": {
+            "version": "0.1.0-android-phase-c",
+            "application": {
+              "status": "degraded",
+              "degraded": true,
+              "acceptingRequests": true
+            },
+            "operations": {
+              "startup": "completed",
+              "manualSync": "${manualSyncStatus}",
+              "configurationUpdate": "idle",
+              "credentialUpdate": "idle",
+              "shutdown": "idle"
+            },
+            "components": {
+              "configuration": "${configurationStatus()}",
+              "credential": "${credentialComponentStatus()}",
+              "github": "${githubStatus()}",
+              "runtimeData": "${runtimeDataStatus()}",
+              "hosting": {
+                "portal": "available",
+                "dashboard": "degraded",
+                "workouts": "degraded",
+                "exercises": "degraded",
+                "analytics": "degraded",
+                "settings": "degraded"
+              }
+            },
+            "requiredActions": ${requiredActionsJson()}
+          }
+        }
+    """.trimIndent()
+
+
+
+    private fun configurationStatus(): String = if (configurationFile.exists()) "available" else "unavailable"
+
+    private fun requiredActionsJson(): String {
+        val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
+        if (credentialState() != "available") actions.add(0, "CREDENTIAL_REQUIRED")
+        if (!configurationFile.exists()) actions.add(0, "CONFIGURATION_REQUIRED")
+        return actions.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+    }
+
+    private fun loadConfigurationJson(): String = if (configurationFile.exists()) {
+        configurationFile.readText(StandardCharsets.UTF_8)
+    } else {
+        defaultConfigurationJson()
+    }
+
+    private fun saveConfigurationJson(updateJson: String): String {
+        configurationFile.parentFile?.mkdirs()
+        configurationFile.writeText(mergeConfigurationJson(updateJson), StandardCharsets.UTF_8)
+        return """
+            {
+              "saved": true,
+              "remoteChecked": false
+            }
+        """.trimIndent()
+    }
+    private fun okJson(dataJson: String): String = """
+        {
+          "success": true,
+          "errors": [],
+          "data": $dataJson
+        }
+    """.trimIndent()
+
+
+    private fun mergeConfigurationJson(updateJson: String): String {
+        val current = JSONObject(loadConfigurationJson())
+        if (updateJson.isBlank()) return current.toString(2)
+
+        val update = JSONObject(updateJson)
+        update.optJSONObject("repository")?.let { patch ->
+            val repository = current.getJSONObject("repository")
+            patch.keys().forEach { key ->
+                if (!patch.isNull(key)) repository.put(key, patch.get(key))
+            }
+        }
+        update.optJSONArray("resources")?.let { resources ->
+            current.put("resources", resources)
+        }
+        update.optJSONObject("timeouts")?.let { patch ->
+            val timeouts = current.getJSONObject("timeouts")
+            patch.keys().forEach { key ->
+                if (!patch.isNull(key)) timeouts.put(key, patch.get(key))
+            }
+        }
+        return current.toString(2)
+    }
+    private fun defaultConfigurationJson(): String = """
+        {
+          "schemaVersion": 1,
+          "repository": {
+            "owner": "",
+            "repository": "",
+            "ref": "main",
+            "rootPath": ""
+          },
+          "resources": [
+            { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory", "required": true, "emptyAllowed": false },
+            { "type": "EXERCISE_MASTER", "path": "master/exercises.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
+            { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file", "required": true, "emptyAllowed": false }
+          ],
+          "timeouts": {
+            "githubRequestTimeoutSec": 10,
+            "syncOperationTimeoutSec": 60,
+            "generalApiTimeoutSec": 30,
+            "shutdownTimeoutSec": 10
+          }
+        }
+    """.trimIndent()
+
+    private fun credentialStatusJson(): String = credentialStatusJsonFor(credentialState())
+
+    private fun credentialUpdateResultJson(updateJson: String): String {
+        val currentToken = readCredentialToken()
+        val update = if (updateJson.isBlank()) JSONObject() else JSONObject(updateJson)
+        val token = update.optString("token", "").trim().ifEmpty { currentToken }
+        val limitDate = if (update.has("limitDate") && !update.isNull("limitDate")) {
+            update.optString("limitDate", "").trim().ifEmpty { null }
+        } else {
+            null
+        }
+
+        if (!limitDate.isNullOrBlank() && runCatching { LocalDate.parse(limitDate) }.isFailure) {
+            return credentialStatusJsonFor("invalid", configured = hasEncryptedCredential(), limitDate = limitDate)
+        }
+        if (token.isNullOrBlank()) {
+            return credentialStatusJson()
+        }
+
+        writeCredentialToken(token, limitDate)
+        return credentialStatusJsonFor(credentialState(), configured = true, limitDate = limitDate)
+    }
+
+    private fun credentialStatusJsonFor(
+        state: String,
+        configured: Boolean = hasEncryptedCredential(),
+        limitDate: String? = credentialPreferences.getString(credentialLimitDateKey, null)
+    ): String {
+        val limitDateJson = limitDate?.let { "\"$it\"" } ?: "null"
+        return """
+            {
+              "configured": $configured,
+              "state": "$state",
+              "limitDate": $limitDateJson
+            }
+        """.trimIndent()
+    }
+
+    private fun credentialComponentStatus(): String = if (credentialState() == "available") "available" else "unavailable"
+
+    private fun credentialState(): String {
+        if (!hasEncryptedCredential()) return "missing"
+        if (readCredentialToken().isNullOrBlank()) return "invalid"
+        val limitDate = credentialPreferences.getString(credentialLimitDateKey, null)
+        if (!limitDate.isNullOrBlank()) {
+            val parsed = runCatching { LocalDate.parse(limitDate) }.getOrNull() ?: return "invalid"
+            if (parsed < LocalDate.now()) return "expired"
+        }
+        return "available"
+    }
+
+    private fun hasEncryptedCredential(): Boolean =
+        !credentialPreferences.getString(credentialCiphertextKey, null).isNullOrBlank() &&
+            !credentialPreferences.getString(credentialIvKey, null).isNullOrBlank()
+
+    private fun readCredentialToken(): String? = runCatching {
+        val ciphertext = credentialPreferences.getString(credentialCiphertextKey, null) ?: return null
+        val iv = credentialPreferences.getString(credentialIvKey, null) ?: return null
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, getCredentialKey(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+        String(cipher.doFinal(Base64.decode(ciphertext, Base64.NO_WRAP)), StandardCharsets.UTF_8)
+    }.getOrNull()
+
+    private fun writeCredentialToken(token: String, limitDate: String?) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getCredentialKey())
+        val encrypted = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
+        credentialPreferences.edit()
+            .putString(credentialCiphertextKey, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .putString(credentialIvKey, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .apply {
+                if (limitDate.isNullOrBlank()) remove(credentialLimitDateKey) else putString(credentialLimitDateKey, limitDate)
+            }
+            .apply()
+    }
+
+    private fun getCredentialKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (keyStore.getEntry(credentialKeyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey?.let { return it }
+
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        val spec = KeyGenParameterSpec.Builder(
+            credentialKeyAlias,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setRandomizedEncryptionRequired(true)
+            .build()
+        generator.init(spec)
+        return generator.generateKey()
+    }
+
+    private fun sendRuntimeWorkoutData(output: OutputStream) {
+        if (!runtimeDataFile.exists()) {
+            sendJson(output, 503, failJson("RUNTIME_DATA_UNAVAILABLE", "Runtime Data is unavailable."))
+            return
+        }
+
+        sendJson(output, 200, runtimeDataFile.readText(StandardCharsets.UTF_8))
+    }
+
+    private fun sendManualSync(output: OutputStream) {
+        val response = manualSyncResponse()
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun manualSyncResponse(): SyncResponse {
+        if (manualSyncStatus == "running") {
+            return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Sync is already running."))
+        }
+
+        manualSyncStatus = "running"
+        return try {
+            val payload = fetchRuntimeWorkoutPayload()
+            runtimeDataFile.parentFile?.mkdirs()
+            runtimeDataFile.writeText(payload, StandardCharsets.UTF_8)
+            githubAvailable = true
+            SyncResponse(200, okJson("""
+                {
+                  "source": "remote",
+                  "updated": true,
+                  "degraded": false
+                }
+            """.trimIndent()))
+        } catch (ex: Exception) {
+            githubAvailable = false
+            SyncResponse(503, failJson("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub sync failed."))
+        } finally {
+            manualSyncStatus = "idle"
+        }
+    }
+
+    private fun runtimeDataStatus(): String = if (runtimeDataFile.exists()) "available" else "unavailable"
+
+    private fun githubStatus(): String = if (githubAvailable) "available" else "unknown"
+
+    private fun fetchRuntimeWorkoutPayload(): String {
+        val configuration = JSONObject(loadConfigurationJson())
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        if (owner.isBlank() || repo.isBlank()) {
+            throw IllegalStateException("Repository configuration is required.")
+        }
+
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val token = readCredentialToken()
+        val workoutFiles = mutableListOf<RuntimeSourceFile>()
+        var exerciseMaster: JSONObject? = null
+        var gymMaster: JSONObject? = null
+        val resources = configuration.getJSONArray("resources")
+
+        for (index in 0 until resources.length()) {
+            val resource = resources.getJSONObject(index)
+            val type = resource.optString("type")
+            val resourcePath = resource.optString("path")
+            val kind = resource.optString("resourceKind", "file")
+            val required = resource.optBoolean("required", true)
+            val emptyAllowed = resource.optBoolean("emptyAllowed", false)
+            val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
+            val fetched = if (kind == "directory") {
+                fetchDirectoryFiles(owner, repo, ref, fullPath, token, timeoutSec)
+            } else {
+                listOf(fetchRawRuntimeFile(owner, repo, ref, fullPath, token, timeoutSec))
+            }
+
+            if (!emptyAllowed && fetched.isEmpty()) {
+                if (required) throw IllegalStateException("$resourcePath is empty.")
+                continue
+            }
+
+            when (type) {
+                "EXERCISE_MASTER" -> exerciseMaster = JSONObject(fetched.firstOrNull()?.content ?: "{}")
+                "GYM_MASTER" -> gymMaster = JSONObject(fetched.firstOrNull()?.content ?: "{}")
+                "WORKOUT" -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
+                else -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) && it.path.contains("workouts/", ignoreCase = true) })
+            }
+        }
+
+        val exercises = exerciseMaster ?: throw IllegalStateException("Required exercise master resource is missing.")
+        val gyms = gymMaster ?: throw IllegalStateException("Required gym master resource is missing.")
+        val filesJson = JSONArray()
+        workoutFiles.forEach { file ->
+            filesJson.put(JSONObject().put("path", file.path).put("content", file.content))
+        }
+
+        return JSONObject()
+            .put("files", filesJson)
+            .put("masterData", JSONObject().put("exercises", exercises).put("gyms", gyms))
+            .toString(2)
+    }
+
+    private fun fetchDirectoryFiles(
+        owner: String,
+        repo: String,
+        ref: String,
+        directoryPath: String,
+        token: String?,
+        timeoutSec: Int
+    ): List<RuntimeSourceFile> {
+        val escapedPath = escapeRemotePath(directoryPath)
+        val contentsPath = if (escapedPath.isEmpty()) "" else "/$escapedPath"
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents$contentsPath?ref=${urlPath(ref)}"
+        val entries = JSONArray(httpGet(url, token, timeoutSec, directoryPath))
+        val files = mutableListOf<RuntimeSourceFile>()
+
+        for (index in 0 until entries.length()) {
+            val entry = entries.getJSONObject(index)
+            val type = entry.optString("type")
+            val path = entry.optString("path")
+            if (type == "dir") {
+                files.addAll(fetchDirectoryFiles(owner, repo, ref, path, token, timeoutSec))
+            } else if (type == "file" && isJsonRuntimePath(path)) {
+                files.add(fetchRawRuntimeFile(owner, repo, ref, path, token, timeoutSec))
+            }
+        }
+
+        return files
+    }
+
+    private fun fetchRawRuntimeFile(
+        owner: String,
+        repo: String,
+        ref: String,
+        path: String,
+        token: String?,
+        timeoutSec: Int
+    ): RuntimeSourceFile {
+        val url = "https://raw.githubusercontent.com/${urlPath(owner)}/${urlPath(repo)}/${urlPath(ref)}/${escapeRemotePath(path)}"
+        return RuntimeSourceFile(path, httpGet(url, token, timeoutSec, path))
+    }
+
+    private fun httpGet(url: String, token: String?, timeoutSec: Int, pathForError: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            if (!token.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $token")
+        }
+
+        return try {
+            val status = connection.responseCode
+            if (status !in 200..299) throw IllegalStateException(mapGithubError(status, pathForError))
+            connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun combineRemote(rootPath: String, path: String): String =
+        listOf(rootPath, path)
+            .map { it.trim().trim('/') }
+            .filter { it.isNotBlank() }
+            .joinToString("/")
+
+    private fun escapeRemotePath(path: String): String =
+        path.trim('/').split('/').filter { it.isNotBlank() }.joinToString("/") { urlPath(it) }
+
+    private fun urlPath(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
+
+    private fun isJsonRuntimePath(path: String): Boolean =
+        path.endsWith(".json", ignoreCase = true) || path.endsWith(".jsonl", ignoreCase = true)
+
+    private fun mapGithubError(status: Int, path: String): String = when (status) {
+        401 -> "GitHub token is unauthorized."
+        403 -> "GitHub access is forbidden."
+        404 -> "GitHub resource not found: $path."
+        429 -> "GitHub rate limit reached."
+        else -> "GitHub server error: HTTP $status."
+    }
+    private fun failJson(code: String, message: String): String = """
+        {
+          "success": false,
+          "errors": [
+            { "code": "$code", "message": "$message", "recoverable": true }
+          ],
+          "data": null
+        }
+    """.trimIndent()
+
+    private fun sendJson(output: OutputStream, status: Int, json: String) {
+        sendText(output, status, "application/json; charset=utf-8", json)
+    }
+
+    private fun sendText(output: OutputStream, status: Int, contentType: String, body: String) {
+        sendStream(output, status, contentType, ByteArrayInputStream(body.toByteArray(StandardCharsets.UTF_8)))
+    }
+
+    private fun sendStream(output: OutputStream, status: Int, contentType: String, body: InputStream) {
+        val bytes = body.readBytes()
+        val header = buildString {
+            append("HTTP/1.1 ").append(status).append(' ').append(reason(status)).append("\r\n")
+            append("Content-Type: ").append(contentType).append("\r\n")
+            append("Content-Length: ").append(bytes.size).append("\r\n")
+            append("Connection: close\r\n")
+            append("Cache-Control: no-store\r\n")
+            append("\r\n")
+        }.toByteArray(StandardCharsets.UTF_8)
+        output.write(header)
+        output.write(bytes)
+        output.flush()
+    }
+
+    private fun reason(status: Int): String = when (status) {
+        200 -> "OK"
+        404 -> "Not Found"
+        400 -> "Bad Request"
+        405 -> "Method Not Allowed"
+        501 -> "Not Implemented"
+        else -> "Error"
+    }
+
+    private fun contentType(path: String): String = when (path.substringAfterLast('.', "").lowercase()) {
+        "html" -> "text/html; charset=utf-8"
+        "js" -> "text/javascript; charset=utf-8"
+        "css" -> "text/css; charset=utf-8"
+        "json" -> "application/json; charset=utf-8"
+        "svg" -> "image/svg+xml"
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "ico" -> "image/x-icon"
+        "woff" -> "font/woff"
+        "woff2" -> "font/woff2"
+        else -> "application/octet-stream"
+    }
+
+    override fun close() {
+        running.set(false)
+        serverSocket?.close()
+        serverSocket = null
+        acceptExecutor.shutdownNow()
+        requestExecutor.shutdownNow()
+    }
+}
+
+
+
+
+
+
+
+
+
