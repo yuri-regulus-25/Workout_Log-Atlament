@@ -60,6 +60,10 @@ dist/
 ├─ index.html
 ├─ style.css
 ├─ main.js
+├─ common.html
+├─ 500.html
+├─ 503.html
+├─ error.css
 └─ 404.html
 ```
 
@@ -108,6 +112,10 @@ src/application/windows/bin/Debug/net8.0-windows/
       ├─ index.html
       ├─ style.css
       ├─ main.js
+      ├─ common.html
+      ├─ 500.html
+      ├─ 503.html
+      ├─ error.css
       └─ 404.html
 ```
 

@@ -14,7 +14,7 @@ tools/
 ## 主要Script
 
 - `tools/build/build-mpa.mjs`  
-  各FrontendのBuild ArtifactをRepository直下 `dist/` に集約し、Portalと404を生成します。
+  各FrontendのBuild ArtifactをRepository直下 `dist/` に集約します。PortalとError PageのUI生成は各Source Applicationが担当します。
 
 - `tools/dev-runtime/preview-mpa.mjs`  
   Build済み `dist/` を静的配信します。

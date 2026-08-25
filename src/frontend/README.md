@@ -7,6 +7,7 @@
 ```text
 src/frontend/
 ├─ portal/
+├─ errors/
 ├─ dashboard-react/
 ├─ workouts-vue/
 ├─ exercises-angular/
@@ -14,7 +15,7 @@ src/frontend/
 └─ settings-solid/
 ```
 
-Portalは `src/frontend/portal/` のSource Applicationとして管理します。Error Pageは現時点ではBuild Scriptで生成されています。
+Portalは `src/frontend/portal/`、Error Pageは `src/frontend/errors/` のSource Applicationとして管理します。
 
 ## 統合Build
 
@@ -31,6 +32,11 @@ dist/
 ├─ index.html
 ├─ style.css
 ├─ main.js
+├─ common.html
+├─ 404.html
+├─ 500.html
+├─ 503.html
+├─ error.css
 ├─ dashboard/
 ├─ workouts/
 ├─ exercises/
