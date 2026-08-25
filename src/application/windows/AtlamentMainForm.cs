@@ -2,15 +2,16 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Atlament;
 
-public partial class Form1 : Form
+public partial class AtlamentMainForm : Form
 {
     private readonly WindowsBootstrap _bootstrap;
     private bool _initialSetupNoticeShown;
 
-    public Form1(WindowsBootstrap bootstrap)
+    public AtlamentMainForm(WindowsBootstrap bootstrap)
     {
         _bootstrap = bootstrap;
         InitializeComponent();
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;
     }
 
     protected override async void OnLoad(EventArgs e)

@@ -1,6 +1,6 @@
 ﻿namespace Atlament
 {
-    partial class Form1
+    partial class AtlamentMainForm
     {
         /// <summary>
         ///  Required designer variable.
@@ -44,7 +44,7 @@
             this.ClientSize = new System.Drawing.Size(1180, 760);
             this.Controls.Add(webView);
             this.MinimumSize = new System.Drawing.Size(960, 640);
-            this.Name = "Form1";
+            this.Name = "AtlamentMainForm";
             this.Text = "Atlament";
             ((System.ComponentModel.ISupportInitialize)webView).EndInit();
         }

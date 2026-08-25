@@ -20,7 +20,7 @@ internal static class Program
 
         try
         {
-            Application.Run(new Form1(bootstrap));
+            Application.Run(new AtlamentMainForm(bootstrap));
         }
         finally
         {
