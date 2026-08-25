@@ -140,8 +140,9 @@ public sealed class AfHttpHost : IAsyncDisposable
             return;
         }
 
-        context.Response.ContentType = GetContentType(file);
-        await context.Response.SendFileAsync(file);
+        context.Response.ContentType = GetContentType(file.RequestPath);
+        await using var stream = _hosting.OpenRead(file);
+        await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
     }
 
     private static string GetContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
@@ -156,6 +157,8 @@ public sealed class AfHttpHost : IAsyncDisposable
         ".ico" => "image/x-icon",
         ".woff" => "font/woff",
         ".woff2" => "font/woff2",
+        ".ttf" => "font/ttf",
+        ".eot" => "application/vnd.ms-fontobject",
         _ => "application/octet-stream"
     };
 }

@@ -34,7 +34,8 @@
     "watch:exercises": "npm run start -w @workout-lab/exercises-angular -- --host 127.0.0.1 --port 5177 --serve-path /exercises/",
     "watch:portal": "node tools/dev-runtime/watch-portal.mjs",
     "watch:settings": "npm run dev -w @workout-lab/settings-solid -- --host 127.0.0.1 --port 5179 --strictPort",
-    "watch:workouts": "npm run dev -w @workout-lab/workouts-vue -- --host 127.0.0.1 --port 5176 --strictPort"
+    "watch:workouts": "npm run dev -w @workout-lab/workouts-vue -- --host 127.0.0.1 --port 5176 --strictPort",
+    "build:windows": "node tools/build/build-windows.mjs"
   },
   "devDependencies": {
     "vitest": "^4.0.8"
