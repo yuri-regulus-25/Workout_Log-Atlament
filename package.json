@@ -26,7 +26,14 @@
     "prod:settings": "npm run prod -w @workout-lab/settings-solid",
     "prod:workouts": "npm run prod -w @workout-lab/workouts-vue",
     "preview:mpa": "node tools/dev-runtime/preview-mpa.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "watch": "node tools/dev-runtime/watch.mjs",
+    "watch:analytics": "npm run dev -w @workout-lab/analytics-svelte -- --host 127.0.0.1 --port 5178 --strictPort",
+    "watch:dashboard": "npm run dev -w @workout-lab/dashboard-react -- --host 127.0.0.1 --port 5175 --strictPort",
+    "watch:exercises": "npm run start -w @workout-lab/exercises-angular -- --host 127.0.0.1 --port 5177 --serve-path /exercises/",
+    "watch:portal": "node tools/dev-runtime/watch-portal.mjs",
+    "watch:settings": "npm run dev -w @workout-lab/settings-solid -- --host 127.0.0.1 --port 5179 --strictPort",
+    "watch:workouts": "npm run dev -w @workout-lab/workouts-vue -- --host 127.0.0.1 --port 5176 --strictPort"
   },
   "devDependencies": {
     "vitest": "^4.0.8"
