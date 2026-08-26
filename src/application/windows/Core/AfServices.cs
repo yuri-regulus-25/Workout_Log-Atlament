@@ -1212,6 +1212,7 @@ public sealed class AtlamentApplication
             var remoteChanged = update.Repository is not null || update.Resources is not null;
             _configuration = next;
             _configurationStatus = ComponentStatus.available;
+            _requiredActions.RemoveAll(action => action == "CONFIGURATION_REQUIRED");
             var responseErrors = new List<AfError>();
             if (remoteChanged)
             {
@@ -1219,6 +1220,7 @@ public sealed class AtlamentApplication
                 _githubStatus = responseErrors.Count == 0 ? ComponentStatus.available : ComponentStatus.degraded;
             }
 
+            _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("configurationUpdate", true);
             return (200, AfResponses.Ok(new ConfigurationUpdateResult(true, remoteChanged), responseErrors));
         }
@@ -1242,6 +1244,7 @@ public sealed class AtlamentApplication
         {
             var result = _credentialStore.Save(update);
             LoadCredential();
+            _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("credentialUpdate", result.State != CredentialState.invalid.ToString());
             return result.State == CredentialState.invalid.ToString()
                 ? (400, AfResponses.Fail<CredentialUpdateResult>(new AfError(AfErrorCodes.CredentialInvalid, "Credential is invalid.", true)))

@@ -341,6 +341,100 @@ public sealed class AfCoreTests
         }
     }
 
+    [Fact]
+    public async Task RequiredActionsAreClearedWhenStartupPrerequisitesAreResolved()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse("""
+                        [
+                          { "path": "data/workouts/2026-08-24.json", "type": "file" }
+                        ]
+                        """);
+                }
+
+                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-exercise").Content);
+                }
+
+                if (url.Contains("/data/master/exercises.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(ExerciseMaster.Content);
+                }
+
+                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(GymMaster.Content);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var paths = new WindowsPathProvider(root);
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var initial = application.GetStatus().Data!;
+            Assert.Contains("CONFIGURATION_REQUIRED", initial.RequiredActions);
+            Assert.Contains("CREDENTIAL_REQUIRED", initial.RequiredActions);
+            Assert.Contains("RUNTIME_DATA_REQUIRED", initial.RequiredActions);
+
+            var configuration = await application.UpdateConfigurationAsync(
+                new ConfigurationUpdate(new RepositoryConfigurationUpdate("owner", "repo", "master", "data"), null, null),
+                CancellationToken.None);
+            var afterConfiguration = application.GetStatus().Data!;
+            Assert.Equal(200, configuration.StatusCode);
+            Assert.DoesNotContain("CONFIGURATION_REQUIRED", afterConfiguration.RequiredActions);
+
+            var credential = application.UpdateCredential(new CredentialUpdate("github-token", "2026-12-31"));
+            var afterCredential = application.GetStatus().Data!;
+            Assert.Equal(200, credential.StatusCode);
+            Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterCredential.RequiredActions);
+
+            var sync = await application.ManualSyncAsync(CancellationToken.None);
+            var afterSync = application.GetStatus().Data!;
+            Assert.True(sync.Response.Success);
+            Assert.DoesNotContain("RUNTIME_DATA_REQUIRED", afterSync.RequiredActions);
+            Assert.Empty(afterSync.RequiredActions);
+            Assert.Equal("ready", afterSync.Application.Status);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    private static async Task WaitForStartupAsync(AtlamentApplication application)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            if (application.GetStatus().Data?.Operations.Startup != "running")
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+    }
+
     private static RuntimeSourceFile Workout(string path, string gymId, string exerciseId)
     {
         var sessionId = Path.GetFileNameWithoutExtension(path).Replace("missing-exercise", "missingExercise").Replace("missing-gym", "missingGym");

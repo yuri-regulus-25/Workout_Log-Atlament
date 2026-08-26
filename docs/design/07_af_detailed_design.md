@@ -889,6 +889,8 @@ Configuration不足、Credential不足、GitHub利用不能、Remote取得失敗
 
 Platform / HTTP Server初期化不能や Application 必須 Artifact 欠落等のみ Fatal。
 
+Windows Host は多重起動通知を除き、MainForm表示前にModal Dialogで設定不足・Credential不足・Runtime Data不足・GitHub接続失敗・Startup Sync失敗を通知してはならない。これらの状態はStatus API、`requiredActions`、Settings、Frontend UIで表現する。設定不足やStartup degradedを理由にDialog拒否からApplication終了へ分岐してはならない。
+
 ---
 
 ## 33. Self Health Check
@@ -936,7 +938,7 @@ Local なし + Remote 失敗でも AF 自体は Fatal にしない。Runtime Dat
 ```text
 Form Close
 API Shutdown Request
-Startup Failure
+Fatal Startup Failure
 Fatal Error
 Host / OS終了要求
         ↓
@@ -984,6 +986,8 @@ Windows Platform
 ```
 
 WinForms から Runtime Data Read、GitHub Access、Credential管理、Configuration論理処理を直接行わない。
+
+MainForm表示前のModal Dialogは原則禁止する。唯一の例外は多重起動通知であり、後発InstanceがMainFormを生成せず、既存Instanceへ影響を与えずに自己終了するための通知として許可する。初期設定不足、Repository設定不足、Startup degraded、Remote Sync Failure、Local Runtime Dataなしを理由にMainForm表示を阻害してはならない。
 
 ---
 
