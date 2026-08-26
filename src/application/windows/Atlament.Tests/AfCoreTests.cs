@@ -1,5 +1,6 @@
 using Atlament.Core;
 using System.Net;
+using System.Reflection;
 
 namespace Atlament.Tests;
 
@@ -314,6 +315,17 @@ public sealed class AfCoreTests
         try
         {
             var paths = new WindowsPathProvider(root);
+            Directory.CreateDirectory(paths.FrontendArtifactRoot);
+            File.WriteAllText(Path.Combine(paths.FrontendArtifactRoot, "version.json"), """
+                {
+                  "frontend": "1.0.0",
+                  "windows": "1.0.0",
+                  "android": {
+                    "versionName": "0.1.0",
+                    "versionCode": 1
+                  }
+                }
+                """);
             var application = new AtlamentApplication(
                 new ConfigurationStore(paths),
                 new CredentialStore(paths),
@@ -325,8 +337,14 @@ public sealed class AfCoreTests
 
             await application.StartAsync(CancellationToken.None);
             var status = application.GetStatus();
+            var expectedApplicationVersion =
+                typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
             Assert.True(status.Success);
+            Assert.Equal(expectedApplicationVersion, status.Data!.Version);
+            Assert.DoesNotContain("+", status.Data.Version, StringComparison.Ordinal);
+            Assert.Equal(status.Data!.Version, status.Data.Versions.ApplicationFramework);
+            Assert.Equal("1.0.0", status.Data.Versions.FrontendFramework);
             Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
             Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);
             Assert.Contains("RUNTIME_DATA_REQUIRED", status.Data.RequiredActions);
