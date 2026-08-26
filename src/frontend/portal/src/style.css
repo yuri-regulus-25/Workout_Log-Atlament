@@ -90,16 +90,33 @@ p {
   color: #4338ca;
   padding: 14px 16px;
   font-weight: 800;
+  opacity: 1;
   box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+  transition: opacity 0.5ms ease;
 }
 
 .sync-notice.visible {
   display: flex;
 }
 
+.sync-notice.fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sync-notice.success {
+  border-color: rgba(67, 160, 71, 0.3);
+  color: #43A047;
+}
+
 .sync-notice.warning {
   border-color: #fed7aa;
   color: #9a3412;
+}
+
+.sync-notice.error {
+  border-color: rgba(255, 56, 56, 0.3);
+  color: #ff3838;
 }
 
 .sync-loader {
@@ -112,7 +129,22 @@ p {
   flex: 0 0 auto;
 }
 
-.sync-notice.warning .sync-loader {
+.sync-icon {
+  display: none;
+  flex: 0 0 auto;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.sync-notice.success .sync-icon,
+.sync-notice.warning .sync-icon,
+.sync-notice.error .sync-icon {
+  display: inline-flex;
+}
+
+.sync-notice.success .sync-loader,
+.sync-notice.warning .sync-loader,
+.sync-notice.error .sync-loader {
   display: none;
 }
 

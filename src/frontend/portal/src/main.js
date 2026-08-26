@@ -4,7 +4,14 @@ import { getAfStatus } from './frontend-common/af-client.js'
 
 const notice = document.getElementById('sync-notice')
 const noticeText = document.getElementById('sync-notice-text')
+const noticeIcon = document.getElementById('sync-notice-icon')
+const successVisibleMs = 3000
+const successFadeMs = 1500
 let statusTimer = null
+let successFadeTimer = null
+let successHideTimer = null
+let noticeState = 'hidden'
+let syncWasRunning = false
 
 async function refreshStatusNotice() {
   try {
@@ -12,41 +19,89 @@ async function refreshStatusNotice() {
     const status = payload.data
     const startupRunning = status?.operations?.startup === 'running'
     const manualSyncRunning = status?.operations?.manualSync === 'running'
+    const startupFailed = status?.operations?.startup === 'failed'
+    const manualSyncFailed = status?.operations?.manualSync === 'failed'
     const runtimeRequired = Array.isArray(status?.requiredActions)
       && status.requiredActions.includes('RUNTIME_DATA_REQUIRED')
     const localFallbackActive = status?.components?.github === 'degraded'
       && status?.components?.runtimeData === 'available'
 
-    notice.classList.remove('warning')
     if (startupRunning) {
-      showStatusNotice('&#21516;&#26399;&#12487;&#12540;&#12479;&#12434;&#21462;&#24471;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', false)
+      syncWasRunning = true
+      showStatusNotice('&#21516;&#26399;&#12487;&#12540;&#12479;&#12434;&#21462;&#24471;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', 'loading')
     } else if (manualSyncRunning) {
-      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#12487;&#12540;&#12479;&#12434;&#21516;&#26399;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', false)
+      syncWasRunning = true
+      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#12487;&#12540;&#12479;&#12434;&#21516;&#26399;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', 'loading')
     } else if (runtimeRequired) {
-      showStatusNotice('&#21516;&#26399;&#28168;&#12415;&#12487;&#12540;&#12479;&#12364;&#12354;&#12426;&#12414;&#12379;&#12435;&#12290;<a href="/settings/">Application Settings</a>&#12391;&#35373;&#23450;&#12392;&#21516;&#26399;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', true)
+      syncWasRunning = false
+      showStatusNotice('&#21516;&#26399;&#28168;&#12415;&#12487;&#12540;&#12479;&#12364;&#12354;&#12426;&#12414;&#12379;&#12435;&#12290;<a href="/settings/">Application Settings</a>&#12391;&#35373;&#23450;&#12392;&#21516;&#26399;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', 'warning', 'mdi-alert-circle-outline')
     } else if (localFallbackActive) {
-      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#21516;&#26399;&#12395;&#22833;&#25943;&#12375;&#12414;&#12375;&#12383;&#12290;&#20445;&#23384;&#28168;&#12415;&#12487;&#12540;&#12479;&#12434;&#34920;&#31034;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;<a href="/settings/">Application Settings</a>&#12391;Repository&#35373;&#23450;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', true)
+      syncWasRunning = false
+      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#21516;&#26399;&#12395;&#22833;&#25943;&#12375;&#12414;&#12375;&#12383;&#12290;&#20445;&#23384;&#28168;&#12415;&#12487;&#12540;&#12479;&#12434;&#34920;&#31034;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;<a href="/settings/">Application Settings</a>&#12391;Repository&#35373;&#23450;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', 'warning', 'mdi-alert-circle-outline')
+    } else if (syncWasRunning && (startupFailed || manualSyncFailed)) {
+      syncWasRunning = false
+      showStatusNotice('同期データを取得できませんでした。', 'error', 'mdi-alert-box-outline')
+    } else if (syncWasRunning) {
+      syncWasRunning = false
+      showSuccessNotice()
+    } else if (noticeState === 'success' || noticeState === 'success-fading' || noticeState === 'error') {
+      return
     } else {
       hideStatusNotice()
     }
   } catch {
-    hideStatusNotice()
+    syncWasRunning = false
+    showStatusNotice('同期ステータスを確認できませんでした。', 'error', 'mdi-alert-box-outline')
   }
 }
-function showStatusNotice(message, warning) {
+
+function showStatusNotice(message, state, iconClass = '') {
+  clearSuccessTimers()
+  noticeState = state
   noticeText.innerHTML = message
-  notice.classList.toggle('warning', warning)
+  notice.classList.remove('loading', 'success', 'warning', 'error', 'fading')
+  notice.classList.add(state)
+  noticeIcon.className = `sync-icon mdi ${iconClass}`.trim()
   notice.classList.add('visible')
 }
 
+function showSuccessNotice() {
+  showStatusNotice('同期データを取得しました。', 'success', 'mdi-check-circle-outline')
+  successFadeTimer = window.setTimeout(() => {
+    if (noticeState !== 'success') return
+    noticeState = 'success-fading'
+    notice.classList.add('fading')
+    successHideTimer = window.setTimeout(() => {
+      if (noticeState === 'success-fading') {
+        hideStatusNotice()
+      }
+    }, successFadeMs)
+  }, successVisibleMs)
+}
+
 function hideStatusNotice() {
-  notice.classList.remove('visible', 'warning')
+  clearSuccessTimers()
+  noticeState = 'hidden'
+  notice.classList.remove('visible', 'loading', 'success', 'warning', 'error', 'fading')
+  noticeIcon.className = 'sync-icon mdi'
+}
+
+function clearSuccessTimers() {
+  if (successFadeTimer !== null) {
+    window.clearTimeout(successFadeTimer)
+    successFadeTimer = null
+  }
+  if (successHideTimer !== null) {
+    window.clearTimeout(successHideTimer)
+    successHideTimer = null
+  }
 }
 
 refreshStatusNotice()
 statusTimer = window.setInterval(refreshStatusNotice, 1500)
 window.addEventListener('pagehide', () => {
   if (statusTimer !== null) window.clearInterval(statusTimer)
+  clearSuccessTimers()
 })
 
 const brandingLogo = initializeBrandingLogo({
