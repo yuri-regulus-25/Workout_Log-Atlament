@@ -20,6 +20,8 @@
 - `10_repository_build_runtime_design.md`  
   Repository構成、Build、Packaging、Runtime配置の詳細設計です。
 
+- `11_v1_1_0_current_source_spec.md`: v1.1.0時点の現行Source Codeからリバース整理した横断仕様スナップショットです。
+
 ## instructions
 
 LLMや製造作業向けの指示ドキュメントを管理します。
