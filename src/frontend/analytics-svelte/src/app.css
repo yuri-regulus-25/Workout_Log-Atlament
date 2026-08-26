@@ -31,3 +31,10 @@
     grid-template-columns: 1fr;
   }
 }
+
+@container (max-width: 760px) {
+  .analytics-chart-grid,
+  .analytics-table-grid {
+    grid-template-columns: 1fr;
+  }
+}

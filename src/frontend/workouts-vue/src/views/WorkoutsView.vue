@@ -1,9 +1,12 @@
 <template>
     <section class="panel" style="margin-bottom: 16px">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Search Target Machine</p>
-          <h2>検索対象マシン</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-magnify" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Search Target Machine</p>
+            <h2>検索対象マシン</h2>
+          </div>
         </div>
         <WorkoutFilters v-model:selected-machine="selectedMachine" :machine-options="machineOptions" />
       </div>
@@ -17,9 +20,12 @@
 
     <section class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Workout Record</p>
-          <h2>ワークアウト記録</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-table" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Workout Record</p>
+            <h2>ワークアウト記録</h2>
+          </div>
         </div>
       </div>
       <WorkoutGrid
