@@ -11,10 +11,11 @@
 }
 
 .atl-navigation-drawer {
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--wl-surface-nav);
   border-right: 1px solid var(--wl-border);
-  box-shadow: 12px 0 34px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--wl-shadow-nav);
   padding: 24px 16px;
+  position: relative;
 }
 
 .atl-navigation-drawer-desktop {
@@ -32,6 +33,13 @@
 
 .atl-navigation-logo-trigger {
   margin-bottom: 20px;
+}
+
+.atl-navigation-theme-trigger {
+  bottom: 4px;
+  left: 4px;
+  margin: 0;
+  position: absolute;
 }
 
 .atl-navigation-menu {
@@ -53,12 +61,12 @@
 }
 
 .atl-navigation-link:hover {
-  background: var(--wl-surface-muted);
+  background: var(--wl-hover);
   color: var(--wl-primary-strong);
 }
 
 .atl-navigation-link.active {
-  color: #9968ed;
+  color: var(--wl-primary);
 }
 
 .atl-navigation-link .mdi {
@@ -111,7 +119,7 @@
   color: var(--wl-primary);
   font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -127,8 +135,8 @@
 .panel {
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-card);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+  background: var(--wl-surface-translucent);
+  box-shadow: var(--wl-shadow-card);
 }
 
 .metric-card {
@@ -151,7 +159,7 @@
 .metric-card strong {
   color: var(--wl-text-strong);
   font-size: 1.65rem;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   overflow-wrap: normal;
   white-space: nowrap;
   word-break: keep-all;
@@ -170,6 +178,20 @@
   max-width: 100%;
 }
 
+.panel .apexcharts-tooltip,
+.panel .apexcharts-tooltip-title {
+  background: var(--wl-chart-tooltip-bg) !important;
+  border-color: var(--wl-border) !important;
+  color: var(--wl-chart-tooltip-text) !important;
+}
+
+.panel .apexcharts-xaxistooltip,
+.panel .apexcharts-yaxistooltip {
+  background: var(--wl-chart-tooltip-bg);
+  border-color: var(--wl-border);
+  color: var(--wl-chart-tooltip-text);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -186,14 +208,14 @@
   color: var(--wl-text-strong);
   font-size: 2.75rem;
   font-weight: 900;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
 }
 
 .large-number-right {
   color: var(--wl-text-strong);
   font-size: 2.0em;
   font-weight: 900;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   text-align: right;
 }
 
@@ -209,7 +231,7 @@
   border: 0;
   border-radius: var(--wl-radius-control);
   background: var(--wl-primary);
-  color: #fff;
+  color: var(--wl-surface);
   cursor: pointer;
   margin-top: 18px;
   padding: 11px 16px;
@@ -217,7 +239,7 @@
 
 .primary-action:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: var(--wl-disabled-opacity);
 }
 
 .text-link,
@@ -252,17 +274,29 @@
 .field {
   display: grid;
   gap: 6px;
-  color: #475569;
+  color: var(--wl-chart-axis);
   font-size: 0.85rem;
   font-weight: 800;
 }
 
 .field select {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--wl-input-border);
   border-radius: var(--wl-radius-control);
-  background: #fff;
+  background: var(--wl-input-bg);
   color: var(--wl-text-strong);
   padding: 10px 14px;
+}
+
+.field input:focus,
+.field select:focus,
+.primary-action:focus-visible,
+.text-link:focus-visible,
+.text-action:focus-visible,
+.shortcut-list a:focus-visible,
+.atl-navigation-link:focus-visible,
+.atl-mobile-menu-button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--wl-focus-ring);
 }
 
 .recent-table,
@@ -344,9 +378,9 @@
 
   .atl-mobile-header {
     align-items: center;
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--wl-surface-nav);
     border-bottom: 1px solid var(--wl-border);
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--wl-shadow-mobile-nav);
     display: flex;
     gap: 10px;
     min-height: 60px;
@@ -360,7 +394,7 @@
     align-items: center;
     border: 1px solid var(--wl-border);
     border-radius: var(--wl-radius-control);
-    background: #fff;
+    background: var(--wl-input-bg);
     color: var(--wl-text-strong);
     cursor: pointer;
     display: inline-flex;
@@ -389,7 +423,7 @@
   }
 
   .atl-navigation-overlay {
-    background: rgba(15, 23, 42, 0.38);
+    background: var(--wl-overlay);
     border: 0;
     height: 100dvh;
     inset: 0;

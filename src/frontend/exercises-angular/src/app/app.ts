@@ -3,13 +3,19 @@ import { NgApexchartsModule } from 'ng-apexcharts';
 import type {
   ApexAxisChartSeries,
   ApexChart,
+  ApexDataLabels,
+  ApexGrid,
   ApexLegend,
   ApexStroke,
+  ApexTheme,
+  ApexTooltip,
   ApexXAxis,
+  ApexYAxis,
 } from 'ng-apexcharts';
 import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation';
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition';
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg';
+import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
 import type { WorkoutSession } from '@workout-lab/workout-types';
 import {
@@ -40,8 +46,10 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly pageTransitionClassName = pageTransitionClassName;
   private navigation: { dispose(): void } | null = null;
   private characterEasterEgg: { dispose(): void } | null = null;
+  private disposeThemeObserver: (() => void) | null = null;
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly loadError = signal<string | null>(null);
+  private readonly themeRevision = signal(0);
   protected readonly exerciseOptions = computed(() => getExerciseOptions(this.sessions()));
   private readonly pathExerciseId = this.getPathExerciseId();
 
@@ -59,11 +67,15 @@ export class App implements AfterViewInit, OnDestroy {
       host: document.body,
       assetBasePath: '/frontend-common/easter-egg/assets/',
     });
+    this.disposeThemeObserver = observeThemeChanges(() => {
+      this.themeRevision.update((revision) => revision + 1);
+    });
   }
 
   ngOnDestroy(): void {
     this.navigation?.dispose();
     this.characterEasterEgg?.dispose();
+    this.disposeThemeObserver?.();
   }
 
   constructor() {
@@ -131,30 +143,49 @@ export class App implements AfterViewInit, OnDestroy {
     stroke: ApexStroke;
     xaxis: ApexXAxis;
     colors: string[];
-    dataLabels: { enabled: boolean };
+    dataLabels: ApexDataLabels;
+    grid: ApexGrid;
     legend: ApexLegend;
-  }>(() => ({
-    series: [
-      {
-        name: 'Best Weight',
-        data: this.history().map((row) => row.bestWeight),
+    theme: ApexTheme;
+    tooltip: ApexTooltip;
+    yaxis: ApexYAxis;
+  }>(() => {
+    this.themeRevision();
+    const chartTheme = getChartTheme();
+
+    return {
+      series: [
+        {
+          name: 'Best Weight',
+          data: this.history().map((row) => row.bestWeight),
+        },
+      ],
+      chart: {
+        background: 'transparent',
+        foreColor: chartTheme.textMuted,
+        height: 320,
+        type: 'line',
+        toolbar: { show: false },
+        zoom: { enabled: false },
       },
-    ],
-    chart: {
-      height: 320,
-      type: 'line',
-      toolbar: { show: false },
-      zoom: { enabled: false },
-    },
-    colors: ['#2563eb'],
-    dataLabels: { enabled: false },
-    legend: { show: false },
-    stroke: { curve: 'smooth', width: 3 },
-    xaxis: {
-      categories: this.history().map((row) => formatDisplayDate(row.date)),
-      labels: { show: false },
-    },
-  }));
+      colors: [chartTheme.secondary],
+      dataLabels: { enabled: false },
+      grid: { borderColor: chartTheme.grid },
+      legend: { show: false },
+      stroke: { curve: 'smooth', width: 3 },
+      theme: { mode: chartTheme.mode },
+      tooltip: { theme: chartTheme.mode },
+      xaxis: {
+        axisBorder: { color: chartTheme.border },
+        axisTicks: { color: chartTheme.border },
+        categories: this.history().map((row) => formatDisplayDate(row.date)),
+        labels: { show: false, style: { colors: chartTheme.textMuted } },
+      },
+      yaxis: {
+        labels: { style: { colors: chartTheme.textMuted } },
+      },
+    };
+  });
 
   protected formatDate(date: string): string {
     return formatDisplayDate(date);

@@ -8,6 +8,10 @@
     "./navigation": "./src/navigation/index.ts",
     "./page-transition": "./src/page-transition/index.ts",
     "./page-transition.css": "./src/page-transition/page-transition.css",
+    "./theme": {
+      "types": "./src/theme/index.d.ts",
+      "import": "./src/theme/index.js"
+    },
     "./branding": {
       "types": "./src/branding/index.d.ts",
       "import": "./src/branding/index.js"

@@ -14,6 +14,8 @@
 }
 
 body {
+  background: var(--wl-bg);
+  color: var(--wl-text);
   margin: 0;
   min-width: 320px;
 }
@@ -28,7 +30,7 @@ h1 {
   color: var(--wl-text-strong);
   font-size: clamp(2.5rem, 7vw, 5rem);
   line-height: 0.95;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
 }
 
 h2 {

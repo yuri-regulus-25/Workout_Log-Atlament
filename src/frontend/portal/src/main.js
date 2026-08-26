@@ -1,7 +1,9 @@
 import { initializeBrandingLogo } from './frontend-common/branding/index.js'
 import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index.js'
+import { initializeStoredTheme } from './frontend-common/theme/index.js'
 import { getAfStatus } from './frontend-common/af-client.js'
 
+const storedTheme = initializeStoredTheme()
 const notice = document.getElementById('sync-notice')
 const noticeText = document.getElementById('sync-notice-text')
 const noticeIcon = document.getElementById('sync-notice-icon')
@@ -119,6 +121,7 @@ const characterEasterEgg = initializeCharacterEasterEgg({
 window.addEventListener('pagehide', () => {
   brandingLogo.dispose()
   characterEasterEgg.dispose()
+  storedTheme.dispose()
 })
 
 
