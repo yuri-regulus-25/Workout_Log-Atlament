@@ -191,7 +191,7 @@
 
 .large-number-right {
   color: var(--wl-text-strong);
-  font-size: 2.75rem;
+  font-size: 2.0em;
   font-weight: 900;
   letter-spacing: -0.06em;
   text-align: right;
