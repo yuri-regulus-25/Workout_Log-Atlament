@@ -1,4 +1,5 @@
 import { initializeBrandingLogo } from '../branding/index.js'
+import { initializeThemeToggle } from '../theme/index.js'
 import { drawerApplications, type ApplicationMetadata } from './apps'
 import type { ApplicationRouteId } from './routes'
 
@@ -56,6 +57,8 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
       trigger: mobileDrawer.logoTrigger,
       basePath: options.logoBasePath ?? logoBasePath,
     }),
+    initializeThemeToggle({ trigger: drawer.themeTrigger }),
+    initializeThemeToggle({ trigger: mobileDrawer.themeTrigger }),
   ]
 
   let open = false
@@ -133,15 +136,17 @@ function createDrawer(currentRouteId: ApplicationRouteId, variant: 'desktop' | '
 
   const { trigger: logoTrigger, image: logoImage } = createLogoTrigger('Toggle Atlament logo variant')
   logoTrigger.classList.add('atl-navigation-logo-trigger')
+  const themeTrigger = createThemeTrigger()
+  themeTrigger.classList.add('atl-navigation-theme-trigger')
 
   const nav = document.createElement('nav')
   nav.className = 'atl-navigation-menu'
   nav.setAttribute('aria-label', 'Application navigation')
   nav.append(...drawerApplications.map((application) => createNavigationLink(application, currentRouteId)))
 
-  element.append(logoTrigger, nav)
+  element.append(logoTrigger, nav, themeTrigger)
 
-  return { element, logoTrigger, logoImage }
+  return { element, logoTrigger, logoImage, themeTrigger }
 }
 
 function createLogoTrigger(label: string) {
@@ -158,6 +163,20 @@ function createLogoTrigger(label: string) {
   trigger.append(image)
 
   return { trigger, image }
+}
+
+function createThemeTrigger() {
+  const trigger = document.createElement('button')
+  trigger.className = 'atl-theme-trigger'
+  trigger.type = 'button'
+
+  const icon = document.createElement('i')
+  icon.className = 'mdi mdi-theme-light-dark'
+  icon.setAttribute('aria-hidden', 'true')
+
+  trigger.append(icon)
+
+  return trigger
 }
 
 function createNavigationLink(application: ApplicationMetadata, currentRouteId: ApplicationRouteId) {

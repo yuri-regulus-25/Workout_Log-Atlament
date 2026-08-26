@@ -15,6 +15,7 @@
   border-right: 1px solid var(--wl-border);
   box-shadow: var(--wl-shadow-nav);
   padding: 24px 16px;
+  position: relative;
 }
 
 .atl-navigation-drawer-desktop {
@@ -32,6 +33,13 @@
 
 .atl-navigation-logo-trigger {
   margin-bottom: 20px;
+}
+
+.atl-navigation-theme-trigger {
+  bottom: 4px;
+  left: 4px;
+  margin: 0;
+  position: absolute;
 }
 
 .atl-navigation-menu {
