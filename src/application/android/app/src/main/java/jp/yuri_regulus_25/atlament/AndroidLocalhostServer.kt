@@ -2,6 +2,7 @@ package jp.yuri_regulus_25.atlament
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.sqlite.SQLiteDatabase
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -44,8 +45,11 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private val credentialIvKey = "github_token_iv"
     private val credentialLimitDateKey = "github_token_limit_date"
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
+    private val logDatabaseFile = File(context.filesDir, "log/atlament-log.sqlite")
+    private val operationLock = Object()
+    @Volatile private var startupSyncStatus = "idle"
     @Volatile private var manualSyncStatus = "idle"
-    @Volatile private var githubAvailable = false
+    @Volatile private var githubComponentStatus = "unknown"
     private val running = AtomicBoolean(false)
     private val acceptExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val requestExecutor: ExecutorService = Executors.newCachedThreadPool()
@@ -67,7 +71,10 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
                 serverSocket = socket
                 port = candidate
                 running.set(true)
+                initializeLog()
+                writeLog("INFO", "HTTP server started on 127.0.0.1:$candidate.")
                 acceptExecutor.execute { acceptLoop(socket) }
+                startStartupSync()
                 return
             } catch (ex: Exception) {
                 lastError.add(ex)
@@ -162,7 +169,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun serveAsset(output: OutputStream, path: String) {
         val assetPath = resolveAssetPath(path)
         if (assetPath == null) {
-            sendText(output, 404, "text/plain; charset=utf-8", "Not Found")
+            sendErrorPage(output, 404)
             return
         }
 
@@ -170,20 +177,26 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             context.assets.open(assetPath).use { stream ->
                 sendStream(output, 200, contentType(assetPath), stream)
             }
+        } catch (_: java.io.FileNotFoundException) {
+            sendErrorPage(output, 404)
         } catch (_: Exception) {
-            sendText(output, 404, "text/plain; charset=utf-8", "Not Found")
+            sendErrorPage(output, 500)
         }
     }
 
     private fun resolveAssetPath(path: String): String? {
         val normalized = path.trimStart('/')
+        val root = normalized.substringBefore('/')
         return when {
             path == "/" || normalized.isEmpty() -> "frontend/index.html"
+            normalized == "error.css" -> "frontend/error.css"
+            normalized == "404.html" || normalized == "500.html" || normalized == "503.html" -> "frontend/$normalized"
             normalized.startsWith("android/") -> normalized
             normalized.startsWith("frontend/") -> normalized
             normalized in appNames -> "frontend/$normalized/index.html"
+            root in appNames && !normalized.contains('.') -> "frontend/$root/index.html"
             normalized.contains('.') -> "frontend/$normalized"
-            else -> "frontend/index.html"
+            else -> null
         }
     }
 
@@ -194,12 +207,12 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
           "data": {
             "version": "0.1.0-android-phase-c",
             "application": {
-              "status": "degraded",
-              "degraded": true,
+              "status": "${applicationStatus()}",
+              "degraded": ${applicationStatus() == "degraded"},
               "acceptingRequests": true
             },
             "operations": {
-              "startup": "completed",
+              "startup": "$startupSyncStatus",
               "manualSync": "${manualSyncStatus}",
               "configurationUpdate": "idle",
               "credentialUpdate": "idle",
@@ -210,14 +223,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
               "credential": "${credentialComponentStatus()}",
               "github": "${githubStatus()}",
               "runtimeData": "${runtimeDataStatus()}",
-              "hosting": {
-                "portal": "available",
-                "dashboard": "degraded",
-                "workouts": "degraded",
-                "exercises": "degraded",
-                "analytics": "degraded",
-                "settings": "degraded"
-              }
+              "hosting": ${hostingStatusJson()}
             },
             "requiredActions": ${requiredActionsJson()}
           }
@@ -226,13 +232,36 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
 
 
+    private fun hostingStatusJson(): String = """
+        {
+          "portal": "${assetStatus("frontend/index.html")}",
+          "dashboard": "${assetStatus("frontend/dashboard/index.html")}",
+          "workouts": "${assetStatus("frontend/workouts/index.html")}",
+          "exercises": "${assetStatus("frontend/exercises/index.html")}",
+          "analytics": "${assetStatus("frontend/analytics/index.html")}",
+          "settings": "${assetStatus("frontend/settings/index.html")}"
+        }
+    """.trimIndent()
+
+    private fun assetStatus(assetPath: String): String = if (assetExists(assetPath)) "available" else "degraded"
+
+    private fun assetExists(assetPath: String): Boolean = runCatching {
+        context.assets.open(assetPath).use { true }
+    }.getOrDefault(false)
     private fun configurationStatus(): String = if (configurationFile.exists()) "available" else "unavailable"
 
-    private fun requiredActionsJson(): String {
+    private fun applicationStatus(): String =
+        if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty() && githubStatus() != "degraded") "ready" else "degraded"
+
+    private fun requiredActionsJson(): String =
+        requiredActionNames().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+
+    private fun requiredActionNames(): List<String> {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
+        if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
         if (credentialState() != "available") actions.add(0, "CREDENTIAL_REQUIRED")
         if (!configurationFile.exists()) actions.add(0, "CONFIGURATION_REQUIRED")
-        return actions.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        return actions
     }
 
     private fun loadConfigurationJson(): String = if (configurationFile.exists()) {
@@ -251,14 +280,13 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             }
         """.trimIndent()
     }
-    private fun okJson(dataJson: String): String = """
+    private fun okJson(dataJson: String, errorsJson: String = "[]"): String = """
         {
           "success": true,
-          "errors": [],
+          "errors": $errorsJson,
           "data": $dataJson
         }
     """.trimIndent()
-
 
     private fun mergeConfigurationJson(updateJson: String): String {
         val current = JSONObject(loadConfigurationJson())
@@ -413,16 +441,51 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     }
 
     private fun manualSyncResponse(): SyncResponse {
-        if (manualSyncStatus == "running") {
+        if (!tryStartOperation("manualSync")) {
             return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Sync is already running."))
         }
 
-        manualSyncStatus = "running"
+        var success = false
+        return try {
+            val response = syncRuntimeData()
+            success = response.status in 200..299
+            response
+        } catch (ex: Exception) {
+            writeLog("ERROR", "Manual sync failed: ${ex.message.orEmpty()}")
+            SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Sync failed."))
+        } finally {
+            completeOperation("manualSync", success)
+        }
+    }
+
+    private fun startStartupSync() {
+        if (!tryStartOperation("startup")) return
+        requestExecutor.execute {
+            try {
+                if (configurationStatus() != "available" || credentialState() != "available") {
+                    writeLog("INFO", "Startup sync skipped because configuration or credential is unavailable.")
+                    completeOperation("startup", true)
+                    return@execute
+                }
+
+                val response = syncRuntimeData()
+                val success = response.status in 200..299
+                if (!success) writeLog("WARN", "Startup sync completed without remote runtime update.")
+                completeOperation("startup", success)
+            } catch (ex: Exception) {
+                writeLog("ERROR", "Startup sync failed: ${ex.message.orEmpty()}")
+                completeOperation("startup", false)
+            }
+        }
+    }
+
+    private fun syncRuntimeData(): SyncResponse {
         return try {
             val payload = fetchRuntimeWorkoutPayload()
             runtimeDataFile.parentFile?.mkdirs()
             runtimeDataFile.writeText(payload, StandardCharsets.UTF_8)
-            githubAvailable = true
+            githubComponentStatus = "available"
+            writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
                   "source": "remote",
@@ -431,16 +494,54 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
                 }
             """.trimIndent()))
         } catch (ex: Exception) {
-            githubAvailable = false
-            SyncResponse(503, failJson("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub sync failed."))
-        } finally {
-            manualSyncStatus = "idle"
+            githubComponentStatus = "degraded"
+            val message = ex.message ?: "GitHub sync failed."
+            writeLog("WARN", "Remote sync failed: $message")
+            if (runtimeDataFile.exists()) {
+                SyncResponse(200, okJson(
+                    """
+                    {
+                      "source": "local",
+                      "updated": false,
+                      "degraded": true
+                    }
+                    """.trimIndent(),
+                    errorsJson("GITHUB_CONNECTION_FAILED", message)
+                ))
+            } else {
+                SyncResponse(503, failJson("GITHUB_CONNECTION_FAILED", message))
+            }
+        }
+    }
+
+    private fun tryStartOperation(name: String): Boolean = synchronized(operationLock) {
+        if (name == "manualSync" && startupSyncStatus == "running") return@synchronized false
+        if (name == "startup" && manualSyncStatus == "running") return@synchronized false
+        when (name) {
+            "startup" -> {
+                if (startupSyncStatus == "running") return@synchronized false
+                startupSyncStatus = "running"
+            }
+            "manualSync" -> {
+                if (manualSyncStatus == "running") return@synchronized false
+                manualSyncStatus = "running"
+            }
+            else -> return@synchronized false
+        }
+        true
+    }
+
+    private fun completeOperation(name: String, success: Boolean) = synchronized(operationLock) {
+        val status = if (success) "completed" else "failed"
+        when (name) {
+            "startup" -> startupSyncStatus = status
+            "manualSync" -> manualSyncStatus = status
         }
     }
 
     private fun runtimeDataStatus(): String = if (runtimeDataFile.exists()) "available" else "unavailable"
 
-    private fun githubStatus(): String = if (githubAvailable) "available" else "unknown"
+    private fun githubStatus(): String = githubComponentStatus
 
     private fun fetchRuntimeWorkoutPayload(): String {
         val configuration = JSONObject(loadConfigurationJson())
@@ -581,13 +682,35 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun failJson(code: String, message: String): String = """
         {
           "success": false,
-          "errors": [
-            { "code": "$code", "message": "$message", "recoverable": true }
-          ],
+          "errors": ${errorsJson(code, message)},
           "data": null
         }
     """.trimIndent()
 
+    private fun errorsJson(code: String, message: String): String =
+        JSONArray()
+            .put(
+                JSONObject()
+                    .put("code", code)
+                    .put("message", message)
+                    .put("recoverable", true)
+            )
+            .toString()
+    private fun sendErrorPage(output: OutputStream, status: Int) {
+        val assetPath = when (status) {
+            404 -> "frontend/404.html"
+            500 -> "frontend/500.html"
+            503 -> "frontend/503.html"
+            else -> "frontend/500.html"
+        }
+        try {
+            context.assets.open(assetPath).use { stream ->
+                sendStream(output, status, contentType(assetPath), stream)
+            }
+        } catch (_: Exception) {
+            sendText(output, status, "text/plain; charset=utf-8", reason(status))
+        }
+    }
     private fun sendJson(output: OutputStream, status: Int, json: String) {
         sendText(output, status, "application/json; charset=utf-8", json)
     }
@@ -614,6 +737,8 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun reason(status: Int): String = when (status) {
         200 -> "OK"
         404 -> "Not Found"
+        500 -> "Internal Server Error"
+        503 -> "Service Unavailable"
         400 -> "Bad Request"
         405 -> "Method Not Allowed"
         501 -> "Not Implemented"
@@ -635,15 +760,42 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     }
 
     override fun close() {
+        writeLog("INFO", "HTTP server stopped.")
         running.set(false)
         serverSocket?.close()
         serverSocket = null
         acceptExecutor.shutdownNow()
         requestExecutor.shutdownNow()
     }
+
+    private fun initializeLog() {
+        logDatabaseFile.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(logDatabaseFile, null).use { database ->
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS af_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    level TEXT NOT NULL,
+                    message TEXT NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    private fun writeLog(level: String, message: String) {
+        runCatching {
+            logDatabaseFile.parentFile?.mkdirs()
+            SQLiteDatabase.openOrCreateDatabase(logDatabaseFile, null).use { database ->
+                database.execSQL(
+                    "INSERT INTO af_log(level, message) VALUES(?, ?)",
+                    arrayOf(level, message)
+                )
+            }
+        }
+    }
 }
-
-
 
 
 

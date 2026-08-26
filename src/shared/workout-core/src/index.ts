@@ -59,7 +59,7 @@ export function getExerciseHistory(
         bestReps: getBestSetValue(exercise.sets, (set) => set.reps),
         volume: getExerciseVolume(exercise),
       })),
-  ).sort((a, b) => b.date.localeCompare(a.date))
+  ).sort((a, b) => a.date.localeCompare(b.date))
 }
 
 export function getMaxWeight(sessions: WorkoutSession[], exerciseId: string): number {
@@ -370,3 +370,4 @@ function getBestSetValue(sets: ExerciseSet[], selectValue: (set: ExerciseSet) =>
 
   return Math.max(...sets.map(selectValue))
 }
+

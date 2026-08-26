@@ -20,7 +20,7 @@ feature-android-application
 - Common JS / FrontendはOS差異を理由に変更しない。
 - Android固有差異はAndroid Host / Android Platform Adapterへ閉じ込める。
 - HTTP API Contract、Runtime Data Contract、Frontend ArtifactはWindows AFと同一にする。
-- Frontend ArtifactはAPK / AABのpackage assetsへ同梱する。
+- Frontend ArtifactはAPKのpackage assetsへ同梱する。
 - AndroidではWindowsの「exe横data」を模倣しない。
 - Configuration / Runtime DataはAndroid Application Internal Storageへ保存する。
 - CredentialはAndroid Secure Storageを使う。
@@ -38,10 +38,19 @@ feature-android-application
 - Phase Bの実機起動確認は完了。
 - Android Studio日本語化は任意。IntelliJ IDEA依存の案内が出たため、現時点では保留。
 - Phase C localhost HTTP Server / status API / packaged frontend hosting の実機疎通確認は完了。
+- Status APIのHosting状態はpackaged assets存在判定へ接続済み。
 - Settings画面の実機表示確認は完了。
 - Repository情報の保存・読込の実機確認は完了。
 - Credential保存・状態読込の実機確認は完了。
 - Manual SyncのGitHub取得・Runtime保存の最小実装はビルド確認済み。
+- Release APKをローカル生成・署名できるBuild Flowは整備済み。
+- `app-release.apk` のapksigner検証は通過済み。
+- Release keystoreはRepository追跡対象外とし、ローカル管理する。
+- Startup Syncの最小実装はビルド確認済み。
+- Remote失敗時のLocal Fallback最小実装はビルド確認済み。
+- Remote失敗時にPortalで警告表示し、保存済みRuntime Dataを継続表示できることは実機確認済み。
+- PortalのLocal Fallback警告表示はビルド確認済み。
+- Android Application-owned SQLite Loggingの最小実装はビルド確認済み。
 
 ## リリースまでの推奨手順
 
@@ -100,11 +109,11 @@ feature-android-application
 1. Android Hostを実装する。（localhost HTTP Server骨格は着手済み）
 2. localhost HTTP Serverを起動する。（Primary 14108 / Secondary 45194 の起動処理は着手済み）
 3. `/api/v1/common/` API routeを実装する。（status / configuration / credential status / sync / runtime workouts の最小スタブは着手済み）
-4. packaged frontend assetsのHostingを実装する。（dist同期とassets配信は着手済み）
+4. packaged frontend assetsのHostingを実装する。（dist同期、assets配信、Hosting状態判定は着手済み）
 5. Android Internal Storage Providerを実装する。（configuration保存/読込の最小実装は着手済み）
 6. Android Secure Storage Adapterを実装する。（GitHub token保存/状態読込の最小実装は着手済み）
-7. Android SQLite Loggingを実装する。
-8. Startup / Shutdown / LifecycleをAndroid Activity lifecycleへ接続する。
+7. Android SQLite Loggingを実装する。（operation log保存の最小実装は着手済み）
+8. Startup / Shutdown / LifecycleをAndroid Activity lifecycleへ接続する。（起動時同期と終了時Server停止は着手済み）
 
 完了条件:
 
@@ -125,9 +134,9 @@ feature-android-application
 3. GitHub AccessをAndroidから実行する。（Contents / Raw APIによる最小取得は着手済み）
 4. Root Path + Resource Path解決をWindows AFと同一規則にする。
 5. Manual Syncを実装する。（取得データをRuntime JSONとしてInternal Storageへ保存する最小実装は着手済み）
-6. Startup Syncを起動時1回実行する。
+6. Startup Syncを起動時1回実行する。（最小実装は着手済み）
 7. Runtime DataをInternal Storageへ保存する。（files + masterData形式の保存は着手済み）
-8. Local Fallbackを実装する。
+8. Local Fallbackを実装する。（Remote失敗時に保存済みRuntime Dataを維持する最小実装は着手済み）
 
 完了条件:
 
@@ -178,7 +187,7 @@ feature-android-application
 7. Startup Sync。
 8. Dashboard / Workouts / Exercises / Analytics表示。
 9. Master Resolve Failure / Session Reject表示。
-10. Network failure時のLocal Fallback。
+10. Network failure時のLocal Fallback。（Remote失敗 + 保存済みRuntime Data継続表示は確認済み）
 11. アプリ終了 / 再起動。
 12. CredentialがUI / Log / Frontend Storageへ露出しないこと。
 
@@ -295,8 +304,8 @@ Core実装方針:
 採用:
 
 - MVP/STはDebug APKまたは署名済みRelease APKで確認する。
-- 公開配布を考える段階でAABを追加する。
-- 配布順序は Debug APK -> Release APK -> 将来的にAAB。
+- MVP配布形式はAPKで確定する。
+- AABとGoogle Play配布は今回対象外とする。
 
 ### 7. Android localhost HTTP Server方式
 
@@ -311,7 +320,7 @@ Core実装方針:
 採用:
 
 - BackボタンはWebView履歴があればWebView back、履歴がなければ通常終了する。
-- RotationはPortrait固定とする。
+- Rotationは端末回転を許容する。
 - 外部URLはGitHub token作成など必要最小限のみ外部ブラウザへ委譲する。
 
 ### 9. Credential削除 / 再設定UX
@@ -335,30 +344,31 @@ Core実装方針:
 採用:
 
 - Primary Logo SVGをAndroid用Assetとして複製する。
-- Adaptive Icon生成はAndroid Studio Image Assetを利用する。
-- 詳細調整はPreview確認後に行う。
+- Adaptive Iconは実機確認済みのPrimary Logo / 現在のサイズ・配置 / 白背景デザインを正式採用する。
 
 ### 12. Error Pages
 
 採用:
 
+- 既存の404/500/503 HTMLを採用する。
+- 不正frontend pathはPortal fallbackではなく404.htmlを返す。
+- Error Pageの /error.css はAndroid localhost serverから配信する。
+
+
+採用:
+
 - Android固有導線は追加しない。
 
-## Phase A 保留事項
+## Phase A 追加確定事項
 
 ### Android Release署名情報の管理
 
-未確定:
+確定:
 
-- keystoreをRepository外管理にするか。
-- CIで署名するか、ローカル手動署名にするか。
-- key alias / password管理方法。
-
-管理方針:
-
-- keystoreはRepository外に置く。
-- パスワードは環境変数またはローカル未追跡設定で扱う。
-- Repositoryへ秘密情報を含めない。
+- Release keystoreはRepository配下のローカル未追跡ファイルとして扱う。
+- password等のCredentialは平文commitしない。
+- passwordは環境変数または未追跡 `local.properties` で扱う。
+- Release APKはローカルで生成・署名できるBuild Flowを正とする。
 - Debug APK作成には影響させない。
 
 ## 現時点でユーザー側で生成・準備するもの
@@ -442,9 +452,9 @@ keytool -genkeypair \
 
 管理方針:
 
-- `atlament-release.keystore` はRepositoryへcommitしない。
-- password類もRepositoryへcommitしない。
-- ローカル環境変数、または未追跡のlocal propertiesで管理する。
+- Release keystoreはローカルの `src/application/android/app/signing/atlament-release.jks` を利用する。
+- password類はRepositoryへcommitしない。
+- ローカル環境変数、または未追跡の `src/application/android/local.properties` で管理する。
 
 注意:
 
@@ -555,7 +565,7 @@ Platform Adapter:
 - build system: Gradle Kotlin DSL
 - app表示名: Atlament
 - package name: ユーザー所有Namespaceで決定
-- 配布形式: まずDebug APK / 署名済みRelease APK、公開段階でAAB
+- 配布形式: MVPはAPKで確定。AAB / Google Playは今回対象外
 - Frontend Artifact: `npm run build` の `dist/` をAPK assetsへ同梱
 - Runtime Storage: Android Internal Storage
 - Credential: Android Keystoreを利用したSecure Storage
@@ -564,30 +574,20 @@ Platform Adapter:
 
 ## 残る人間判断事項
 
-1. Android実装技術をNative Kotlinで進めてよいか。
-2. Android package name / applicationId。
-3. app表示名。
-4. minSdk / targetSdk。
-5. 配布形式をAPK MVPから始めるか、AABまで初回Release対象にするか。
-6. Android launcher iconを既存Primary Logoから生成してよいか。
-7. release keystoreの管理場所と署名方式。
-8. Android Backボタン / 画面回転 / 外部URL遷移のMVP仕様。
-9. Windows AFのC# Core実装をAndroidへどこまで移植するか、またはKotlinで同一Contract実装とするか。
-10. Error PagesへAndroid固有の戻る導線を追加しない方針でよいか。
+- 現時点では追加の人間判断事項なし。
 
-## 現時点の未着手項目
+## 現時点の未着手・残作業項目
 
-- `src/application/android/` 作成。
-- Android Project / Gradle導入。
-- Android WebView Shell。
-- Android localhost HTTP Server。
-- Android packaged frontend hosting。
-- Android Configuration Store。
-- Android Secure Credential Store。
-- Android GitHub Access。
-- Android Runtime Data Store。
-- Android SQLite Logging。
+- Windows AFと同等のRuntime Data validation / build parity。
+- Master Resolve Failure / Session RejectのAndroid ST。
+- CredentialがUI / Log / Frontend Storageへ露出しないことの確認。
+- SQLite Logの閲覧・export・rotation。
 - Android Unit / Instrumentation Test。
-- Android Debug / Release Build command。
-- Android README。
+- Release署名設定。
+- Release APKの実機最終確認。
+- Adaptive Iconの最終調整。
+
+
+
+
 

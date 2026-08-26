@@ -14,8 +14,13 @@
   }
 }
 
+.atl-page-transition-android {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .atl-page-transition {
     animation: none;
   }
 }
+

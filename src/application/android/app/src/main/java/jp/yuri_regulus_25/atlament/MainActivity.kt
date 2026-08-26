@@ -23,11 +23,20 @@ class MainActivity : Activity() {
             )
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.userAgentString = settings.userAgentString + " AtlamentAndroidWebView"
             webViewClient = AtlamentWebViewClient()
         }
 
         setContentView(webView)
-        startLocalhostServer()
+        startLocalhostServer(loadInitialUrl = savedInstanceState == null)
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        webView.saveState(outState)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -45,12 +54,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startLocalhostServer() {
+    private fun startLocalhostServer(loadInitialUrl: Boolean) {
         try {
             val server = AndroidLocalhostServer(applicationContext)
             server.start()
             localhostServer = server
-            webView.loadUrl(server.baseUrl)
+            if (loadInitialUrl) {
+                webView.loadUrl(server.baseUrl)
+            }
         } catch (ex: Exception) {
             setContentView(TextView(this).apply {
                 text = "Atlament localhost server failed to start.\n${ex.message.orEmpty()}"
@@ -74,4 +85,6 @@ class MainActivity : Activity() {
         }
     }
 }
+
+
 

@@ -167,7 +167,7 @@ export class App implements AfterViewInit, OnDestroy {
   protected selectExercise(exerciseId: string) {
     this.selectedExerciseId.set(exerciseId);
     this.hasInvalidExerciseIdParameter.set(false);
-    window.history.pushState(null, '', `${applicationRoutes.exercises}${exerciseId}`);
+    window.history.pushState(null, '', `${applicationRoutes.exercises}${exerciseId}/`);
   }
 
   private getPathExerciseId(): string | undefined {
@@ -186,8 +186,10 @@ export class App implements AfterViewInit, OnDestroy {
     this.invalidExerciseId.set(pathExerciseId ?? '');
     this.selectedExerciseId.set(nextExerciseId);
 
-    if (window.location.pathname !== `${applicationRoutes.exercises}${nextExerciseId}`) {
-      window.history.replaceState(null, '', `${applicationRoutes.exercises}${nextExerciseId}`);
+    if (window.location.pathname !== `${applicationRoutes.exercises}${nextExerciseId}/`) {
+      window.history.replaceState(null, '', `${applicationRoutes.exercises}${nextExerciseId}/`);
     }
   }
 }
+
+

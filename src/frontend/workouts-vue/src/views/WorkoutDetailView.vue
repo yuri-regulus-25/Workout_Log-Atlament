@@ -84,7 +84,7 @@ const totalVolume = computed(() =>
               <h3>{{ exercise.name }}</h3>
               <p>{{ formatBodyPart(exercise.body_part) }} · {{ formatTotalWeight(getExerciseVolume(exercise)) }}</p>
             </div>
-            <a class="text-action" :href="`${applicationRoutes.exercises}${exercise.exercise_id}`">View Performance Detail</a>
+            <a class="text-action" :href="`${applicationRoutes.exercises}${exercise.exercise_id}/`">View Performance Detail</a>
           </div>
           <ul>
             <li v-for="set in exercise.sets" :key="set.set">
@@ -107,3 +107,4 @@ const totalVolume = computed(() =>
     <a class="text-action" :href="applicationRoutes.workouts"><i class="mdi mdi-chevron-double-left" />Back to Workout Domain</a>
   </section>
 </template>
+
