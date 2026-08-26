@@ -5,6 +5,7 @@
   import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
+  import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
   import {
@@ -39,6 +40,7 @@
   let bodyPartChart: ApexCharts | null = null
   let navigation: { dispose: () => void } | null = null
   let characterEasterEgg: { dispose: () => void } | null = null
+  let disposeThemeObserver: (() => void) | null = null
 
   onMount(async () => {
     navigation = initializeAppNavigation({
@@ -49,6 +51,14 @@
       trigger: characterTriggerElement,
       host: document.body,
       assetBasePath: '/frontend-common/easter-egg/assets/',
+    })
+    disposeThemeObserver = observeThemeChanges(() => {
+      trendChart?.updateOptions(createTrendOptions(sessions), false, true)
+      bodyPartChart?.updateOptions(
+        createBodyPartOptions(orderByBodyPartDisplayOrder(getBodyPartSummary(sessions))),
+        false,
+        true,
+      )
     })
 
     try {
@@ -72,21 +82,35 @@
   onDestroy(() => {
     navigation?.dispose()
     characterEasterEgg?.dispose()
+    disposeThemeObserver?.()
     trendChart?.destroy()
     bodyPartChart?.destroy()
   })
 
   function createTrendOptions(sourceSessions: WorkoutSession[]): ApexOptions {
+    const chartTheme = getChartTheme()
+
     return {
       chart: {
         type: 'area',
         height: 320,
+        background: 'transparent',
+        foreColor: chartTheme.textMuted,
         toolbar: { show: false },
         zoom: { enabled: false },
       },
-      colors: ['#7c3aed'],
+      colors: [chartTheme.primary],
       dataLabels: { enabled: false },
+      fill: {
+        gradient: {
+          opacityFrom: chartTheme.mode === 'dark' ? 0.34 : 0.28,
+          opacityTo: chartTheme.mode === 'dark' ? 0.04 : 0.02,
+        },
+        type: 'gradient',
+      },
+      grid: { borderColor: chartTheme.grid },
       stroke: { curve: 'smooth', width: 3 },
+      theme: { mode: chartTheme.mode },
       series: [
         {
           name: 'Total Weight',
@@ -95,9 +119,12 @@
       ],
       xaxis: {
         categories: sourceSessions.map((session) => formatDisplayDate(session.date)),
-        labels: { show: false },
+        axisBorder: { color: chartTheme.border },
+        axisTicks: { color: chartTheme.border },
+        labels: { show: false, style: { colors: chartTheme.textMuted } },
       },
       tooltip: {
+        theme: chartTheme.mode,
         y: {
           formatter: (value) => `${value.toLocaleString()} kg`,
         },
@@ -106,14 +133,19 @@
   }
 
   function createBodyPartOptions(sourceSummary: ReturnType<typeof getBodyPartSummary>): ApexOptions {
+    const chartTheme = getChartTheme()
+
     return {
       chart: {
         type: 'bar',
         height: 320,
+        background: 'transparent',
+        foreColor: chartTheme.textMuted,
         toolbar: { show: false },
       },
-      colors: ['#2563eb'],
+      colors: [chartTheme.secondary],
       dataLabels: { enabled: false },
+      grid: { borderColor: chartTheme.grid },
       plotOptions: {
         bar: {
           borderRadius: 8,
@@ -128,7 +160,15 @@
       ],
       xaxis: {
         categories: sourceSummary.map((item) => formatBodyPart(item.bodyPart)),
+        axisBorder: { color: chartTheme.border },
+        axisTicks: { color: chartTheme.border },
+        labels: { style: { colors: chartTheme.textMuted } },
       },
+      yaxis: {
+        labels: { style: { colors: chartTheme.textMuted } },
+      },
+      theme: { mode: chartTheme.mode },
+      tooltip: { theme: chartTheme.mode },
     }
   }
 

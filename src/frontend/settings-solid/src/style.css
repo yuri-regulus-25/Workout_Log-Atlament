@@ -9,7 +9,7 @@
 
 .operation-overlay {
   align-items: center;
-  background: rgba(15, 23, 42, 0.46);
+  background: var(--wl-overlay);
   display: flex;
   height: 100dvh;
   inset: 0;
@@ -22,9 +22,9 @@
 
 .circular-loader {
   animation: settings-spin 0.9s linear infinite;
-  border: 5px solid rgba(255, 255, 255, 0.45);
+  border: 5px solid color-mix(in srgb, var(--wl-surface) 45%, transparent);
   border-radius: 50%;
-  border-top-color: #fff;
+  border-top-color: var(--wl-surface);
   height: 58px;
   width: 58px;
 }
@@ -39,6 +39,7 @@
   color: var(--wl-text-strong);
   font-size: clamp(3rem, 8vw, 5.25rem);
   line-height: 0.95;
+  letter-spacing: 0;
   margin: 8px 0 0;
 }
 
@@ -68,9 +69,9 @@
 .field input,
 .field select {
   width: 100%;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--wl-input-border);
   border-radius: var(--wl-radius-control);
-  background: #fff;
+  background: var(--wl-input-bg);
   color: var(--wl-text-strong);
   font: inherit;
   font-weight: 700;
@@ -81,7 +82,7 @@
 .field input:focus,
 .field select:focus {
   border-color: var(--wl-primary);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
+  box-shadow: 0 0 0 3px var(--wl-focus-ring);
   outline: 0;
 }
 
@@ -96,7 +97,7 @@
   align-items: center;
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-control);
-  background: #fff;
+  background: var(--wl-input-bg);
   color: var(--wl-primary-strong);
   cursor: pointer;
   display: inline-flex;
@@ -112,7 +113,7 @@
 .secondary-action:disabled,
 .icon-action:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: var(--wl-disabled-opacity);
 }
 
 .icon-action {
@@ -139,7 +140,7 @@
 
 .check-field {
   align-items: center;
-  color: #475569;
+  color: var(--wl-chart-axis);
   display: inline-flex;
   font-size: 0.85rem;
   font-weight: 900;
@@ -228,33 +229,33 @@
 }
 
 .required-actions span {
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--wl-warning-bg);
+  color: var(--wl-warning-text);
 }
 
 .status-pill {
-  background: #eef2ff;
-  color: #3730a3;
+  background: var(--wl-info-bg);
+  color: var(--wl-info-text);
 }
 
 .status-pill.ready,
 .status-pill.available {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--wl-success-bg);
+  color: var(--wl-success-text);
 }
 
 .status-pill.degraded,
 .status-pill.expired {
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--wl-warning-bg);
+  color: var(--wl-warning-text);
 }
 
 .status-pill.failed,
 .status-pill.invalid,
 .status-pill.missing,
 .status-pill.unavailable {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--wl-error-bg);
+  color: var(--wl-error-text);
 }
 
 .credential-state {
@@ -269,7 +270,7 @@
   align-items: center;
   background: var(--wl-primary);
   border-radius: 50%;
-  color: #fff;
+  color: var(--wl-surface);
   display: inline-flex;
   font-size: 1.1rem;
   height: 34px;
@@ -290,21 +291,21 @@
 }
 
 .message.success {
-  background: #ecfdf5;
-  border-color: #bbf7d0;
-  color: #047857;
+  background: var(--wl-success-bg);
+  border-color: var(--wl-success-border);
+  color: var(--wl-success-text);
 }
 
 .message.warning {
-  background: #fff7ed;
-  border-color: #fed7aa;
-  color: #9a3412;
+  background: var(--wl-warning-bg);
+  border-color: var(--wl-warning-border);
+  color: var(--wl-warning-text);
 }
 
 .message.error {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: var(--wl-error-bg);
+  border-color: var(--wl-error-border);
+  color: var(--wl-error-text);
 }
 
 @media (max-width: 980px) {

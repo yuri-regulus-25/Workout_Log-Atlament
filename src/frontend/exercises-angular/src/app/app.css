@@ -17,17 +17,17 @@
   display: grid;
   gap: 8px;
   margin-bottom: 8px;
-  border: 1px solid rgba(220, 38, 38, 0.18);
+  border: 1px solid var(--wl-error-border);
   border-radius: var(--wl-radius-card);
-  background-color: #ffddddeb;
-  box-shadow: 0 20px 60px rgba(220, 38, 38, 0.08);
+  background-color: var(--wl-error-bg);
+  box-shadow: var(--wl-shadow-card);
   padding: 20px;
 }
 
 .parameter-error-card .eyebrow,
 .parameter-error-card h2,
 .parameter-error-message {
-  color: #dc2626;
+  color: var(--wl-danger);
 }
 
 .parameter-error-message {

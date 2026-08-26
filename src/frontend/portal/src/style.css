@@ -1,6 +1,8 @@
+@import "./design-tokens/tokens.css";
+
 :root {
-  color: #172033;
-  background: #f4f6fb;
+  color: var(--wl-text);
+  background: var(--wl-bg);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -9,6 +11,8 @@
 }
 
 body {
+  background: var(--wl-bg);
+  color: var(--wl-text);
   margin: 0;
 }
 
@@ -30,6 +34,7 @@ main {
   justify-content: center;
   width: 64px;
   height: 64px;
+  margin: 4px 0 0 -4px;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -49,24 +54,24 @@ main {
 }
 
 .eyebrow {
-  color: #7c3aed;
+  color: var(--wl-primary);
   font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 h1 {
-  color: #111827;
+  color: var(--wl-text-strong);
   font-size: clamp(2.75rem, 8vw, 5.5rem);
   line-height: 0.95;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   margin: 8px 0 16px;
 }
 
 p {
   max-width: 720px;
-  color: #64748b;
+  color: var(--wl-text-muted);
   font-size: 1.05rem;
   line-height: 1.7;
   margin: 0;
@@ -84,14 +89,14 @@ p {
   align-items: center;
   gap: 12px;
   margin-top: 24px;
-  border: 1px solid #ddd6fe;
+  border: 1px solid var(--wl-primary-soft);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #4338ca;
+  background: var(--wl-surface-translucent);
+  color: var(--wl-primary-strong);
   padding: 14px 16px;
   font-weight: 800;
   opacity: 1;
-  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--wl-shadow-card);
   transition: opacity 0.5ms ease;
 }
 
@@ -105,25 +110,25 @@ p {
 }
 
 .sync-notice.success {
-  border-color: rgba(67, 160, 71, 0.3);
-  color: #43A047;
+  border-color: color-mix(in srgb, var(--wl-sync-success) 30%, transparent);
+  color: var(--wl-sync-success);
 }
 
 .sync-notice.warning {
-  border-color: #fed7aa;
-  color: #9a3412;
+  border-color: var(--wl-warning-border);
+  color: var(--wl-warning-text);
 }
 
 .sync-notice.error {
-  border-color: rgba(255, 56, 56, 0.3);
-  color: #ff3838;
+  border-color: color-mix(in srgb, var(--wl-sync-error) 30%, transparent);
+  color: var(--wl-sync-error);
 }
 
 .sync-loader {
   width: 22px;
   height: 22px;
-  border: 3px solid rgba(124, 58, 237, 0.22);
-  border-top-color: #7c3aed;
+  border: 3px solid color-mix(in srgb, var(--wl-primary) 22%, transparent);
+  border-top-color: var(--wl-primary);
   border-radius: 50%;
   animation: portal-spin 0.9s linear infinite;
   flex: 0 0 auto;
@@ -166,13 +171,13 @@ p {
   gap: 8px;
   min-height: 180px;
   align-content: space-between;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--wl-border);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #111827;
+  background: var(--wl-surface-translucent);
+  color: var(--wl-text-strong);
   padding: 22px;
   text-decoration: none;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--wl-shadow-card);
   transform: translateY(0);
   transition:
     transform 180ms ease,
@@ -194,8 +199,8 @@ p {
 
 .app-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(124, 58, 237, 0.25);
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.14);
+  border-color: var(--wl-primary-soft);
+  box-shadow: var(--wl-shadow-card-hover);
 }
 
 .app-pointer {
@@ -218,11 +223,11 @@ p {
 .app-category,
 .app-pointer,
 .framework-badge {
-  color: #64748b;
+  color: var(--wl-text-muted);
 }
 
 .app-title {
-  color: #111827;
+  color: var(--wl-text-strong);
   font-size: 1.35rem;
   line-height: 1.18;
 }
@@ -238,7 +243,7 @@ p {
 }
 
 .framework-label {
-  color: #94a3b8;
+  color: var(--wl-text-muted);
 }
 
 .framework-stack {

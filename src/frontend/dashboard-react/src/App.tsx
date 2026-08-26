@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
+import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
@@ -25,6 +26,7 @@ const currentMonth = 8
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [, setThemeRevision] = useState(0)
   const shellRef = useRef<HTMLElement | null>(null)
   const characterTriggerRef = useRef<HTMLParagraphElement | null>(null)
 
@@ -68,6 +70,8 @@ function App() {
     }
   }, [])
 
+  useEffect(() => observeThemeChanges(() => setThemeRevision((revision) => revision + 1)), [])
+
   const monthlySessions = getMonthlySessions(sessions, currentYear, currentMonth)
   const latestWorkout = sessions.at(-1)
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
@@ -75,27 +79,43 @@ function App() {
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
   const bodyBalanceRows = getDashboardBodyBalanceRows(monthlySessions)
   const recent28Sessions = getRecentSessions(sessions, 28)
+  const chartTheme = getChartTheme()
 
   const volumeChartOptions: ApexOptions = {
     chart: {
       type: 'area',
       height: 320,
+      background: 'transparent',
+      foreColor: chartTheme.textMuted,
       toolbar: { show: false },
       zoom: { enabled: false },
     },
-    colors: ['#7c3aed'],
+    colors: [chartTheme.primary],
     dataLabels: { enabled: false },
+    fill: {
+      gradient: {
+        opacityFrom: chartTheme.mode === 'dark' ? 0.34 : 0.28,
+        opacityTo: chartTheme.mode === 'dark' ? 0.04 : 0.02,
+      },
+      type: 'gradient',
+    },
+    grid: { borderColor: chartTheme.grid },
     stroke: { curve: 'smooth', width: 3 },
+    theme: { mode: chartTheme.mode },
     xaxis: {
       categories: recent28Sessions.map((session) => formatDisplayDate(session.date)),
-      labels: { show: false },
+      axisBorder: { color: chartTheme.border },
+      axisTicks: { color: chartTheme.border },
+      labels: { show: false, style: { colors: chartTheme.textMuted } },
     },
     yaxis: {
       labels: {
         formatter: (value) => `${Math.round(value).toLocaleString()} kg`,
+        style: { colors: chartTheme.textMuted },
       },
     },
     tooltip: {
+      theme: chartTheme.mode,
       y: {
         formatter: (value) => `${value.toLocaleString()} kg`,
       },
@@ -111,9 +131,10 @@ function App() {
   const volumeChartKey = recent28Sessions.map((session) => session.session_id).join('|')
 
   const frequencyChartOptions: ApexOptions = {
-    chart: { toolbar: { show: false } },
-    colors: ['#2563eb'],
+    chart: { background: 'transparent', foreColor: chartTheme.textMuted, toolbar: { show: false } },
+    colors: [chartTheme.secondary],
     dataLabels: { enabled: false },
+    grid: { borderColor: chartTheme.grid },
     plotOptions: {
       bar: {
         borderRadius: 8,
@@ -122,14 +143,19 @@ function App() {
     },
     xaxis: {
       categories: sessions.map((session) => formatDisplayDate(session.date).slice(5)),
-      labels: { show: false },
+      axisBorder: { color: chartTheme.border },
+      axisTicks: { color: chartTheme.border },
+      labels: { show: false, style: { colors: chartTheme.textMuted } },
     },
     yaxis: {
       min: 0,
       labels: {
         formatter: (value) => `${Math.round(value)} sets`,
+        style: { colors: chartTheme.textMuted },
       },
     },
+    theme: { mode: chartTheme.mode },
+    tooltip: { theme: chartTheme.mode },
   }
 
   const frequencyChartSeries = [
@@ -141,9 +167,11 @@ function App() {
 
   const bodyBalanceChartOptions: ApexOptions = {
     chart: {
+      background: 'transparent',
+      foreColor: chartTheme.textMuted,
       toolbar: { show: false },
     },
-    colors: ['#7c3aed'],
+    colors: [chartTheme.primary],
     dataLabels: {
       enabled: false,
     },
@@ -156,6 +184,7 @@ function App() {
       },
     },
     tooltip: {
+      theme: chartTheme.mode,
       y: {
         formatter: (value) => `${Math.round(Number(value))} sets`,
       },
@@ -169,11 +198,12 @@ function App() {
     yaxis: {
       labels: {
         style: {
-          colors: '#475569',
+          colors: chartTheme.textMuted,
           fontWeight: 800,
         },
       },
     },
+    theme: { mode: chartTheme.mode },
   }
 
   const bodyBalanceChartSeries = [

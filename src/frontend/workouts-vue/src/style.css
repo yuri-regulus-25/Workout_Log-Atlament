@@ -11,7 +11,7 @@
   margin-top: 8px;
   font-size: clamp(2rem, 4vw, 3.25rem);
   line-height: 1.05;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
 }
 
 .field select {
@@ -25,9 +25,9 @@
 .back-link {
   display: inline-flex;
   width: fit-content;
-  border: 1px solid #ddd6fe;
+  border: 1px solid var(--wl-primary-soft);
   border-radius: var(--wl-radius-control);
-  background: #fff;
+  background: var(--wl-input-bg);
   color: var(--wl-primary-strong);
   font-weight: 800;
   margin-top: 18px;
@@ -67,7 +67,7 @@
   gap: 6px;
   margin: 12px 0 0;
   padding-left: 20px;
-  color: #475569;
+  color: var(--wl-chart-axis);
 }
 
 .workout-table-wrap {
@@ -82,7 +82,7 @@
   table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--wl-surface);
   font-size: 0.9rem;
 }
 
@@ -92,16 +92,16 @@
 }
 
 .workout-table tbody tr.selected {
-  border-left-color: #22c55e;
-  background: #f0fdf4;
+  border-left-color: var(--wl-success-text);
+  background: var(--wl-success-bg);
 }
 
 .workout-table tbody tr:hover {
-  background: var(--wl-surface-muted);
+  background: var(--wl-hover);
 }
 
 .workout-table tbody tr.selected:hover {
-  background: #ecfdf5;
+  background: var(--wl-success-bg);
 }
 
 .workout-table th,
@@ -182,9 +182,9 @@
 
 .pagination-bar select,
 .pagination-bar button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--wl-input-border);
   border-radius: var(--wl-radius-control);
-  background: #fff;
+  background: var(--wl-input-bg);
   color: var(--wl-text-strong);
   padding: 6px 10px;
 }
@@ -196,12 +196,12 @@
 
 .pagination-bar button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: var(--wl-disabled-opacity);
 }
 
 .note-line {
   margin-top: 10px;
-  color: #475569;
+  color: var(--wl-chart-axis);
 }
 
 .session-notes {

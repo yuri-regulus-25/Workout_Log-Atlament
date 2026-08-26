@@ -10,6 +10,7 @@
   justify-content: center;
   width: 64px;
   height: 64px;
+  margin: 4px 0 0 -4px;
   border: 0;
   background: transparent;
   cursor: pointer;
