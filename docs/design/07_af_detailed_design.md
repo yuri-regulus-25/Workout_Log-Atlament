@@ -754,6 +754,8 @@ Operation: idle / running / completed / failed
 
 設定不足等は `requiredActions` で表現する。
 
+Application StatusはAF全体の利用可否を示す。Remote Sync Failure等でGitHub Componentが`degraded`でも、Configurationが有効で、最後に正常生成されたLocal Runtime Dataを利用でき、Required Actionsが空の場合は`ready`とする。Remote Sync Failureの詳細はOperation State、GitHub Component、Sync API Responseの`success=false` / `source=local` / `degraded=true` / Error Codeで表現する。
+
 初回起動または起動時Validationで、Repository Configuration / GitHub Credential / Runtime Data 等の利用前提が不足している場合は、Fatal Errorではなくユーザー操作で解消可能な初期設定不足として扱う。
 
 代表的なRequired Actions:

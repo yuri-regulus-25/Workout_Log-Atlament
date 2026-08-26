@@ -255,7 +255,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun configurationStatus(): String = if (configurationFile.exists()) "available" else "unavailable"
 
     private fun applicationStatus(): String =
-        if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty() && githubStatus() != "degraded") "ready" else "degraded"
+        if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
 
     private fun requiredActionsJson(): String =
         requiredActionNames().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
