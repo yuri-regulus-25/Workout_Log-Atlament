@@ -235,9 +235,6 @@ function App() {
               <p className="eyebrow">Volume Trends</p>
               <h2>ボリューム推移</h2>
             </div>
-            <a href={applicationRoutes.analytics} className="text-link">
-              View Analytics
-            </a>
           </div>
           {recent28Sessions.length > 0 ? (
             <ReactApexChart
@@ -267,9 +264,6 @@ function App() {
                 {getTotalSets(latestWorkout)} sets<br />
                 {latestWorkout.exercises.length} machines
               </p>
-              <a className="primary-action" href={`${applicationRoutes.workouts}${latestWorkout.date}/`}>
-                View Workout Detail
-              </a>
             </>
           ) : (
             <p className="muted">No workout data loaded.</p>
@@ -315,9 +309,6 @@ function App() {
             <p className="eyebrow">Recent Workouts</p>
             <h2>最近のワークアウト</h2>
           </div>
-          <a href={applicationRoutes.workouts} className="text-link">
-            View Workout Domain
-          </a>
         </div>
         <div className="recent-table">
           <div className="recent-row header">

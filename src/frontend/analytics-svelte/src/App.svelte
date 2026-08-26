@@ -234,7 +234,6 @@
       <p class="muted">
         記録期間全体での週あたり平均セッション数。
       </p>
-      <a class="primary-action" href={applicationRoutes.dashboard}>Back to Dashboard</a>
     </article>
   </section>
 
