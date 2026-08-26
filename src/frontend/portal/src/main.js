@@ -28,16 +28,16 @@ async function refreshStatusNotice() {
 
     if (startupRunning) {
       syncWasRunning = true
-      showStatusNotice('&#21516;&#26399;&#12487;&#12540;&#12479;&#12434;&#21462;&#24471;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', 'loading')
+      showStatusNotice('GitHubからデータを取得しています。', 'loading')
     } else if (manualSyncRunning) {
       syncWasRunning = true
-      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#12487;&#12540;&#12479;&#12434;&#21516;&#26399;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;', 'loading')
+      showStatusNotice('GitHubからデータを取得しています。', 'loading')
     } else if (runtimeRequired) {
       syncWasRunning = false
-      showStatusNotice('&#21516;&#26399;&#28168;&#12415;&#12487;&#12540;&#12479;&#12364;&#12354;&#12426;&#12414;&#12379;&#12435;&#12290;<a href="/settings/">Application Settings</a>&#12391;&#35373;&#23450;&#12392;&#21516;&#26399;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', 'warning', 'mdi-alert-circle-outline')
+      showStatusNotice('同期済みデータがありません。設定情報と同期情報を確認してください。', 'warning', 'mdi-alert-circle-outline')
     } else if (localFallbackActive) {
       syncWasRunning = false
-      showStatusNotice('&#12522;&#12514;&#12540;&#12488;&#21516;&#26399;&#12395;&#22833;&#25943;&#12375;&#12414;&#12375;&#12383;&#12290;&#20445;&#23384;&#28168;&#12415;&#12487;&#12540;&#12479;&#12434;&#34920;&#31034;&#12375;&#12390;&#12356;&#12414;&#12377;&#12290;<a href="/settings/">Application Settings</a>&#12391;Repository&#35373;&#23450;&#12434;&#30906;&#35469;&#12375;&#12390;&#12367;&#12384;&#12373;&#12356;&#12290;', 'warning', 'mdi-alert-circle-outline')
+      showStatusNotice('取得に失敗しました。設定を確認の上、手動同期を行ってください。', 'warning', 'mdi-alert-circle-outline')
     } else if (syncWasRunning && (startupFailed || manualSyncFailed)) {
       syncWasRunning = false
       showStatusNotice('同期データを取得できませんでした。', 'error', 'mdi-alert-box-outline')
