@@ -321,3 +321,17 @@
   }
 }
 
+@container (max-width: 880px) {
+  .settings-grid,
+  .form-grid.two,
+  .subsection-grid,
+  .status-grid,
+  .resource-row {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-row {
+    align-items: stretch;
+  }
+}
+

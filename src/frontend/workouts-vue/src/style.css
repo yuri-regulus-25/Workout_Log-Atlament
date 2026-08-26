@@ -71,7 +71,7 @@
 }
 
 .workout-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--wl-border);
@@ -79,7 +79,7 @@
 }
 
 .workout-table {
-  min-width: 680px;
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   background: #fff;
@@ -133,27 +133,34 @@
   text-transform: inherit;
 }
 .workout-table .gym-cell {
-  max-width: 150px;
+  white-space: normal;
+}
+
+.workout-table .date-cell {
+  width: 104px;
+}
+
+.workout-table .gym-cell {
+  width: 24%;
+}
+
+.workout-table .machines-cell,
+.workout-table .sets-cell {
+  width: 78px;
+}
+
+.workout-table .volume-cell {
+  width: 106px;
+}
+
+.workout-table .machine-names-cell {
+  width: 28%;
+}
+
+.workout-table td.machine-names-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.workout-table td:nth-child(1),
-.workout-table th:nth-child(1) {
-  min-width: 96px;
-}
-
-.workout-table td:nth-child(3),
-.workout-table th:nth-child(3),
-.workout-table td:nth-child(4),
-.workout-table th:nth-child(4),
-.workout-table td:nth-child(5),
-.workout-table th:nth-child(5) {
-  min-width: 76px;
-}
-.workout-table td:nth-child(6),
-.workout-table th:nth-child(6) {
-  min-width: 260px;
-  line-height: 1.5;
 }
 
 .pagination-bar {
@@ -209,20 +216,65 @@
 
   .workout-table {
     font-size: 0.82rem;
-    min-width: 620px;
   }
 
   .workout-table th,
   .workout-table td {
     padding: 10px 9px;
   }
-
-  .workout-table .gym-cell {
-    max-width: 120px;
-  }
   .pagination-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@container (max-width: 980px) {
+  .workout-table .machine-names-cell {
+    display: none;
+  }
+
+  .workout-table .date-cell {
+    width: 104px;
+  }
+
+  .workout-table .gym-cell {
+    width: auto;
+  }
+
+  .workout-table .machines-cell,
+  .workout-table .sets-cell {
+    width: 76px;
+  }
+
+  .workout-table .volume-cell {
+    width: 112px;
+  }
+}
+
+@container (max-width: 560px) {
+  .workout-table {
+    font-size: 0.76rem;
+  }
+
+  .workout-table th,
+  .workout-table td {
+    padding: 9px 6px;
+  }
+
+  .workout-table .volume-cell {
+    display: none;
+  }
+
+  .workout-table .date-cell {
+    width: 78px;
+  }
+
+  .workout-table .machines-cell {
+    width: 62px;
+  }
+
+  .workout-table .sets-cell {
+    width: 42px;
   }
 }
 
