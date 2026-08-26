@@ -45,6 +45,18 @@ describe('workout-core', () => {
     })
   })
 
+  it('returns exercise history from oldest to newest for chronological charts', () => {
+    const history = getExerciseHistory([
+      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
+        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 25, reps: 10 }] },
+      ]),
+      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
+        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+      ]),
+    ], 'pec-deck')
+
+    expect(history.map((row) => row.date)).toEqual(['2026-08-10', '2026-08-16'])
+  })
   it('handles empty exercise sets defensively without returning Infinity values', () => {
     const emptySetSessions: WorkoutSession[] = [
       {
@@ -224,3 +236,4 @@ function createSessionWithExercises(
     exercises,
   }
 }
+

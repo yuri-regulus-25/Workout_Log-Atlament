@@ -1,0 +1,12 @@
+.gradle/
+build/
+app/build/
+local.properties
+*.jks
+*.keystore
+
+.idea/
+
+gradle/gradle-daemon-jvm.properties
+app/signing/*
+

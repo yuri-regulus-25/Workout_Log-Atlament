@@ -35,7 +35,9 @@
     "watch:portal": "node tools/dev-runtime/watch-portal.mjs",
     "watch:settings": "npm run dev -w @workout-lab/settings-solid -- --host 127.0.0.1 --port 5179 --strictPort",
     "watch:workouts": "npm run dev -w @workout-lab/workouts-vue -- --host 127.0.0.1 --port 5176 --strictPort",
-    "build:windows": "node tools/build/build-windows.mjs"
+    "build:windows": "node tools/build/build-windows.mjs",
+    "build:android": "npm run build && node tools/build/build-android.mjs",
+    "build:android:release": "npm run build && node tools/build/build-android-release.mjs"
   },
   "devDependencies": {
     "vitest": "^4.0.8"
@@ -45,3 +47,4 @@
     "@mdi/js": "^7.4.47"
   }
 }
+

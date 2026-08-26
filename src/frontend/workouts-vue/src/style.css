@@ -71,12 +71,15 @@
 }
 
 .workout-table-wrap {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-inner);
 }
 
 .workout-table {
+  min-width: 680px;
   width: 100%;
   border-collapse: collapse;
   background: #fff;
@@ -104,6 +107,8 @@
 .workout-table th,
 .workout-table td {
   border-bottom: 1px solid var(--wl-border);
+  overflow-wrap: normal;
+  word-break: keep-all;
   padding: 12px;
   text-align: left;
   vertical-align: top;
@@ -127,7 +132,24 @@
   text-align: left;
   text-transform: inherit;
 }
+.workout-table .gym-cell {
+  max-width: 150px;
+  white-space: nowrap;
+}
 
+.workout-table td:nth-child(1),
+.workout-table th:nth-child(1) {
+  min-width: 96px;
+}
+
+.workout-table td:nth-child(3),
+.workout-table th:nth-child(3),
+.workout-table td:nth-child(4),
+.workout-table th:nth-child(4),
+.workout-table td:nth-child(5),
+.workout-table th:nth-child(5) {
+  min-width: 76px;
+}
 .workout-table td:nth-child(6),
 .workout-table th:nth-child(6) {
   min-width: 260px;
@@ -185,12 +207,22 @@
     width: 100%;
   }
 
-  .workout-table-wrap {
-    overflow-x: auto;
+  .workout-table {
+    font-size: 0.82rem;
+    min-width: 620px;
   }
 
+  .workout-table th,
+  .workout-table td {
+    padding: 10px 9px;
+  }
+
+  .workout-table .gym-cell {
+    max-width: 120px;
+  }
   .pagination-bar {
     align-items: flex-start;
     flex-direction: column;
   }
 }
+

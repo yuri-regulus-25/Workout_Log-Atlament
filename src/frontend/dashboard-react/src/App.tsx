@@ -267,7 +267,7 @@ function App() {
                 {getTotalSets(latestWorkout)} sets<br />
                 {latestWorkout.exercises.length} machines
               </p>
-              <a className="primary-action" href={`${applicationRoutes.workouts}${latestWorkout.date}`}>
+              <a className="primary-action" href={`${applicationRoutes.workouts}${latestWorkout.date}/`}>
                 View Workout Detail
               </a>
             </>
@@ -328,7 +328,7 @@ function App() {
             <span>Volume</span>
           </div>
           {recentRows.map((row) => (
-            <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}`}>
+            <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
               <span>{formatDisplayDate(row.date)}</span>
               <span>{row.gym}</span>
               <span>{row.exercises}</span>
@@ -377,3 +377,4 @@ function getDashboardBodyBalanceRows(monthlySessions: WorkoutSession[]) {
 }
 
 export default App
+
