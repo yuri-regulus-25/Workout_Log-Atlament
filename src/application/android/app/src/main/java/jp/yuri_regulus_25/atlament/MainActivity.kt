@@ -56,7 +56,9 @@ class MainActivity : Activity() {
 
     private fun startLocalhostServer(loadInitialUrl: Boolean) {
         try {
-            val server = AndroidLocalhostServer(applicationContext)
+            val server = AndroidLocalhostServer(applicationContext) {
+                runOnUiThread { finish() }
+            }
             server.start()
             localhostServer = server
             if (loadInitialUrl) {

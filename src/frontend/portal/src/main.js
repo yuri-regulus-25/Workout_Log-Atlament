@@ -1,5 +1,6 @@
 import { initializeBrandingLogo } from './frontend-common/branding/index.js'
 import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index.js'
+import { getAfStatus } from './frontend-common/af-client.js'
 
 const notice = document.getElementById('sync-notice')
 const noticeText = document.getElementById('sync-notice-text')
@@ -7,17 +8,7 @@ let statusTimer = null
 
 async function refreshStatusNotice() {
   try {
-    const response = await fetch('/api/v1/common/status', {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    })
-
-    if (!response.ok) {
-      hideStatusNotice()
-      return
-    }
-
-    const payload = await response.json()
+    const payload = await getAfStatus()
     const status = payload.data
     const startupRunning = status?.operations?.startup === 'running'
     const manualSyncRunning = status?.operations?.manualSync === 'running'

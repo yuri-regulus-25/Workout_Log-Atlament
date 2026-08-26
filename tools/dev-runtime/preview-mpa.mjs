@@ -19,14 +19,6 @@ const contentTypes = {
   '.svg': 'image/svg+xml',
 }
 
-const fallbacks = [
-  { prefix: '/dashboard', file: 'dashboard/index.html' },
-  { prefix: '/workouts', file: 'workouts/index.html' },
-  { prefix: '/exercises', file: 'exercises/index.html' },
-  { prefix: '/analytics', file: 'analytics/index.html' },
-  { prefix: '/settings', file: 'settings/index.html' },
-]
-
 createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 
@@ -130,8 +122,15 @@ function resolveFile(pathname) {
     return index
   }
 
-  const fallback = fallbacks.find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`))
-  return fallback ? safeJoin(root, fallback.file) : null
+  const fallback = resolveDefinedMpaRoute(pathname)
+  return fallback ? safeJoin(root, fallback) : null
+}
+
+function resolveDefinedMpaRoute(pathname) {
+  const normalized = pathname.replace(/\/+$/, '')
+  if (/^\/workouts\/\d{4}-\d{2}-\d{2}$/.test(normalized)) return 'workouts/index.html'
+  if (/^\/exercises\/[A-Za-z0-9][A-Za-z0-9_-]*$/.test(normalized)) return 'exercises/index.html'
+  return null
 }
 
 function safeJoin(base, ...parts) {

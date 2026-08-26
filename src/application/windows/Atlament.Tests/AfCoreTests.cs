@@ -111,21 +111,33 @@ public sealed class AfCoreTests
         {
             var paths = new WindowsPathProvider(root);
             var dashboardRoot = Path.Combine(paths.FrontendArtifactRoot, "dashboard");
+            var workoutsRoot = Path.Combine(paths.FrontendArtifactRoot, "workouts");
+            var exercisesRoot = Path.Combine(paths.FrontendArtifactRoot, "exercises");
             Directory.CreateDirectory(Path.Combine(dashboardRoot, "assets"));
+            Directory.CreateDirectory(workoutsRoot);
+            Directory.CreateDirectory(exercisesRoot);
             File.WriteAllText(Path.Combine(paths.FrontendArtifactRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "index.html"), "<html></html>");
+            File.WriteAllText(Path.Combine(workoutsRoot, "index.html"), "<html></html>");
+            File.WriteAllText(Path.Combine(exercisesRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "assets", "app.js"), "console.log('ok');");
 
             var hosting = new HostingStatusService(paths);
 
             var staticFile = hosting.TryResolveFile("/dashboard/assets/app.js", out var staticUnavailable);
-            var routeFile = hosting.TryResolveFile("/dashboard/2026-08-24", out var routeUnavailable);
+            var workoutRouteFile = hosting.TryResolveFile("/workouts/2026-08-24", out var workoutRouteUnavailable);
+            var exerciseRouteFile = hosting.TryResolveFile("/exercises/known-exercise", out var exerciseRouteUnavailable);
+            var unknownRoute = hosting.TryResolveFile("/dashboard/2026-08-24", out var unknownRouteUnavailable);
             var missingStatic = hosting.TryResolveFile("/dashboard/assets/missing.js", out var missingUnavailable);
 
             Assert.False(staticUnavailable);
             Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile?.PhysicalPath);
-            Assert.False(routeUnavailable);
-            Assert.Equal(Path.Combine(dashboardRoot, "index.html"), routeFile?.PhysicalPath);
+            Assert.False(workoutRouteUnavailable);
+            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "index.html"), workoutRouteFile?.PhysicalPath);
+            Assert.False(exerciseRouteUnavailable);
+            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "exercises", "index.html"), exerciseRouteFile?.PhysicalPath);
+            Assert.False(unknownRouteUnavailable);
+            Assert.Null(unknownRoute);
             Assert.False(missingUnavailable);
             Assert.Null(missingStatic);
         }
@@ -165,6 +177,14 @@ public sealed class AfCoreTests
                 Directory.Delete(root, true);
             }
         }
+    }
+
+    [Fact]
+    public void ConfigurationValidationRequiresRepositoryIdentity()
+    {
+        var errors = ConfigurationStore.Validate(AfConfiguration.Default);
+
+        Assert.Contains(errors, error => error.Code == AfErrorCodes.ConfigInvalid);
     }
 
     [Fact]

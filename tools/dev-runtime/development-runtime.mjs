@@ -157,9 +157,8 @@ async function loadRuntimeWorkoutData() {
 
   const workoutResult = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
   const errors = workoutResult.issues.map(toAfError)
-  const technicalInvalid = errors.some((error) => !isMasterResolveFailure(error.code))
 
-  if (technicalInvalid) {
+  if (errors.length > 0) {
     return {
       success: false,
       sessions: [],
@@ -263,10 +262,6 @@ function toAfError(issue) {
     message,
     recoverable: false,
   }
-}
-
-function isMasterResolveFailure(code) {
-  return code === 'MASTER_EXERCISE_NOT_FOUND' || code === 'MASTER_GYM_NOT_FOUND'
 }
 
 function writeJson(response, status, payload) {
