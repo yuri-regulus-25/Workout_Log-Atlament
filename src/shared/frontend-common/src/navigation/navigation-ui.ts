@@ -19,6 +19,8 @@ const logoBasePath = '/frontend-common/branding/assets/'
 export function initializeAppNavigation(options: AppNavigationOptions): AppNavigationController {
   const shell = options.shell ?? document.querySelector<HTMLElement>('.app-shell')
 
+  // Portal remains the entry surface and owns its own header. Other apps receive the shared drawer
+  // so cross-app navigation can be changed in one place.
   if (!shell || options.currentRouteId === 'portal') {
     return { dispose() {} }
   }
@@ -64,6 +66,8 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
   let open = false
 
   function setOpen(nextOpen: boolean) {
+    // Mobile drawer state is expressed on body and aria attributes so CSS, overlay, and assistive
+    // technology all read the same source of truth.
     open = nextOpen
     document.body.classList.toggle('atl-navigation-open', open)
     mobileHeader.menuButton.setAttribute('aria-expanded', String(open))
@@ -144,6 +148,8 @@ function createDrawer(currentRouteId: ApplicationRouteId, variant: 'desktop' | '
   nav.setAttribute('aria-label', 'Application navigation')
   nav.append(...drawerApplications.map((application) => createNavigationLink(application, currentRouteId)))
 
+  // The Theme trigger is deliberately outside the nav item list; it changes application appearance
+  // rather than navigating to a route.
   element.append(logoTrigger, nav, themeTrigger)
 
   return { element, logoTrigger, logoImage, themeTrigger }

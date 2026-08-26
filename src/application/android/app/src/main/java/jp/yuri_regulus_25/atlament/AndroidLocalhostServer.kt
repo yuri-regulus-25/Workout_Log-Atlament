@@ -86,6 +86,8 @@ class AndroidLocalhostServer(
         val lastError = mutableListOf<Exception>()
         for (candidate in listOf(14108, 45194)) {
             try {
+                // Match Windows AF port order so Frontend and smoke checks can share the same
+                // primary/secondary localhost assumptions across platforms.
                 val socket = ServerSocket(candidate, 50, InetAddress.getByName("127.0.0.1"))
                 serverSocket = socket
                 port = candidate
@@ -156,6 +158,7 @@ class AndroidLocalhostServer(
 
 
     private fun handleApi(output: OutputStream, method: String, path: String, body: String) {
+        // Android keeps the v1 and legacy common API prefixes behaviorally identical to Windows.
         val route = path.removePrefix("/api/v1/common").removePrefix("/api/common")
         when {
             method == "GET" && route == "/status" -> sendJson(output, 200, statusJson())
@@ -171,6 +174,8 @@ class AndroidLocalhostServer(
     }
 
     private fun sanitizePath(rawPath: String): String {
+        // Asset serving accepts browser paths, not filesystem paths. Normalize before routing so
+        // encoded traversal attempts cannot escape the packaged frontend directory.
         val withoutQuery = rawPath.substringBefore('?').substringBefore('#')
         val decoded = URLDecoder.decode(withoutQuery, StandardCharsets.UTF_8.name()).replace('\\', '/')
         val segments = decoded.split('/').filter { it.isNotEmpty() }
@@ -688,6 +693,8 @@ class AndroidLocalhostServer(
     private fun failedSync(errors: JSONArray): SyncResponse {
         githubComponentStatus = "degraded"
         return if (runtimeDataFile.exists()) {
+            // Preserve offline usability: remote sync failure becomes degraded success from the
+            // user's perspective when cached runtime data is still available.
             SyncResponse(200, responseJson(false, """
                 {
                   "source": "local",
@@ -701,6 +708,8 @@ class AndroidLocalhostServer(
     }
 
     private fun tryStartOperation(name: String): Boolean = synchronized(operationLock) {
+        // All write-like operations share one gate because configuration, credential, and sync can
+        // affect the same Status API state observed by Portal.
         if (shutdownStatus == "running" && name != "shutdown") return@synchronized false
         if (name in setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate")) {
             if (startupSyncStatus == "running" || manualSyncStatus == "running" || configurationUpdateStatus == "running" || credentialUpdateStatus == "running") {
@@ -749,6 +758,8 @@ class AndroidLocalhostServer(
     private fun githubStatus(): String = githubComponentStatus
 
     private fun fetchRuntimeWorkoutData(): RuntimeBuildResult {
+        // Android mirrors the Windows runtime builder contract in-place so packaged APKs can sync
+        // without a shared .NET runtime dependency.
         val configuration = JSONObject(loadConfigurationJson())
         val fetched = fetchConfiguredResources(configuration)
         val workoutFiles = fetched.workoutFiles
@@ -809,6 +820,8 @@ class AndroidLocalhostServer(
             val required = resource.optBoolean("required", true)
             val emptyAllowed = resource.optBoolean("emptyAllowed", false)
             val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
+            // Resource entries can point at files or directories. Directory mode expands to JSON
+            // files before type-specific master/workout classification.
             val fetched = if (kind == "directory") {
                 fetchDirectoryFiles(owner, repo, ref, fullPath, token, timeoutSec)
             } else {

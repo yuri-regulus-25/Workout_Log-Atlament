@@ -31,6 +31,8 @@ function getBrandingStorage(storage) {
 }
 
 export function normalizeBrandVariant(value) {
+  // Brand Variant is the public Theme token axis. Logo Variant is kept as the storage format for
+  // backward compatibility with the original Brand Icon toggle.
   if (value === brandVariants.violet || value === logoVariants.secondary) return brandVariants.violet
   return brandVariants.green
 }
@@ -72,6 +74,8 @@ export function writeLogoVariant(variant, storage) {
 }
 
 function dispatchBrandVariantChange(logoVariant) {
+  // Multiple navigation shells can exist on narrow screens. A document-level event keeps their
+  // logo image and data-brand state synchronized without coupling the components together.
   globalThis.dispatchEvent?.(new CustomEvent(brandVariantChangeEvent, {
     detail: {
       logoVariant,
@@ -102,6 +106,8 @@ export function initializeBrandingLogo({ image, trigger, basePath = './frontend-
   let variant = readLogoVariant()
 
   function render() {
+    // Rendering the logo also applies the brand token axis so the visual identity and accent color
+    // cannot drift apart.
     image.src = getLogoAssetPath(variant, basePath)
     image.dataset.logoVariant = variant
     applyBrandVariant(getBrandVariantForLogoVariant(variant))

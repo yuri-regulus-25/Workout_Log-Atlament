@@ -38,6 +38,8 @@ export function writeStoredTheme(theme, storage) {
 }
 
 export function applyTheme(theme, root = document.documentElement) {
+  // Light mode is represented by the absence of data-theme so existing light CSS remains the
+  // default and old pages do not need a migration class.
   const normalized = normalizeTheme(theme)
   if (normalized === themeNames.dark) {
     root.setAttribute('data-theme', themeNames.dark)
@@ -71,6 +73,8 @@ export function initializeThemeToggle({
   }
 
   function syncState() {
+    // The trigger is shared by desktop and drawer navigation; keeping state derived from the DOM
+    // lets either control update correctly after the other toggles the root attribute.
     const currentTheme = getCurrentTheme(root)
     trigger.setAttribute('aria-pressed', String(currentTheme === themeNames.dark))
     trigger.setAttribute('aria-label', currentTheme === themeNames.dark ? 'Switch to light theme' : 'Switch to dark theme')
@@ -101,6 +105,8 @@ export function initializeStoredTheme({
 } = {}) {
   applyTheme(readStoredTheme(storage), root)
 
+  // Persist external DOM changes too. Later UI affordances can change data-theme directly without
+  // needing to know about storage.
   const observer = new MutationObserver((mutations) => {
     if (mutations.some((mutation) => mutation.attributeName === 'data-theme')) {
       writeStoredTheme(getCurrentTheme(root), storage)

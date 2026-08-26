@@ -75,6 +75,8 @@ const server = createServer((clientRequest, clientResponse) => {
 })
 
 server.on('upgrade', (clientRequest, clientSocket, head) => {
+  // Vite HMR uses WebSocket upgrades. The gateway keeps the browser on one origin while still
+  // forwarding upgrades to the framework-specific dev server.
   const route = resolveRoute(clientRequest.url ?? '/', true)
 
   if (!route) {
@@ -100,6 +102,7 @@ server.listen(port, '127.0.0.1', () => {
 
 function resolveRoute(rawUrl, webSocket = false) {
   const url = new URL(rawUrl, 'http://127.0.0.1')
+  // Order matters: portal owns `/`, so it must remain the final fallback route.
   return routes.find((route) => {
     const prefixes = webSocket
       ? [...(route.webSocketPrefixes ?? []), ...route.prefixes]
