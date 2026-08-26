@@ -6,8 +6,8 @@ export const colors = {
   textStrong: '#111827',
   textMuted: '#64748b',
   border: '#e2e8f0',
-  primary: '#7c3aed',
-  primaryStrong: '#6d28d9',
+  primary: '#10b981',
+  primaryStrong: '#0f766e',
   secondary: '#2563eb',
 } as const
 
@@ -58,10 +58,10 @@ export function getChartTheme(element: Element = document.documentElement): Char
 
 export function observeThemeChanges(callback: () => void, element: Element = document.documentElement): () => void {
   const observer = new MutationObserver((mutations) => {
-    if (mutations.some((mutation) => mutation.attributeName === 'data-theme' || mutation.attributeName === 'class')) {
+    if (mutations.some((mutation) => mutation.attributeName === 'data-theme' || mutation.attributeName === 'data-brand' || mutation.attributeName === 'class')) {
       callback()
     }
   })
-  observer.observe(element, { attributes: true, attributeFilter: ['data-theme', 'class'] })
+  observer.observe(element, { attributes: true, attributeFilter: ['data-theme', 'data-brand', 'class'] })
   return () => observer.disconnect()
 }
