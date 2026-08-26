@@ -70,6 +70,21 @@ dist/
 └─ error.css
 ```
 
+## Version管理
+
+Atlamentの表示・配布用Versionは `src/version.json` をPrimary Sourceとし、Platform固有metadataと同期して管理します。Version値を直接編集せず、Repository直下でVersion CLIを使用してください。
+
+```sh
+npm run version:check
+npm run version:set -- --target frontend --version 1.1.0 --dry-run
+npm run version:set -- --target windows --version 1.1.0
+npm run version:set -- --target android --version 1.1.0 --bump-version-code
+npm run version:set -- --target android --version 1.1.0 --version-code 24
+npm run version:set -- --target all --version 1.1.0 --bump-version-code
+```
+
+Androidを含む更新では `versionName` とは別に `versionCode` の更新が必要です。`--bump-version-code` または `--version-code <integer>` のどちらかを指定してください。
+
 ## Windows単体配布Build
 
 Windows x64向けの自己完結・単一exe配布物を作成します。

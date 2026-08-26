@@ -38,11 +38,6 @@ const statusLabels: Record<string, string> = {
   unavailable: '利用不可',
   unknown: '不明',
 }
-const requiredActionLabels: Record<string, string> = {
-  CONFIGURATION_REQUIRED: '設定が必要',
-  CREDENTIAL_REQUIRED: '資格情報が必要',
-  RUNTIME_DATA_REQUIRED: '同期済みデータが必要',
-}
 const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   WORKOUT: 'WORKOUT / ワークアウト情報',
   EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
@@ -277,7 +272,7 @@ function App() {
       </Show>
 
       <section class="settings-grid">
-        <StatusSection status={status()} loading={loading()} />
+        <StatusSection status={status()} credential={credential()} />
 
         <section class="panel">
           <div class="panel-header">
@@ -422,7 +417,9 @@ function App() {
   )
 }
 
-function StatusSection(props: { status: AfStatus | null; loading: boolean }) {
+function StatusSection(props: { status: AfStatus | null; credential: CredentialStatus | null }) {
+  const githubStatus = createMemo(() => resolveGithubStatus(props.status, props.credential))
+
   return (
     <section class="panel wide-panel">
       <div class="panel-header">
@@ -433,28 +430,12 @@ function StatusSection(props: { status: AfStatus | null; loading: boolean }) {
             <h2>アプリケーション状況</h2>
           </div>
         </div>
-        <span class={`status-pill ${props.status?.application.status ?? 'unknown'}`}>
-          {props.loading ? displayStatus('loading') : displayStatus(props.status?.application.status ?? 'unknown')}
-        </span>
       </div>
       <div class="status-grid">
-        <StatusItem label="Version" value={props.status?.version ?? '-'} />
-        <StatusItem label="Application" value={displayStatus(props.status?.application.status)} />
-        <StatusItem label="Runtime Data" value={displayStatus(props.status?.components.runtimeData)} />
-        <StatusItem label="GitHub" value={displayStatus(props.status?.components.github)} />
-        <StatusItem label="Credential" value={displayStatus(props.status?.components.credential)} />
-        <StatusItem label="Configuration" value={displayStatus(props.status?.components.configuration)} />
+        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? props.status?.version ?? '-'} />
+        <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
+        <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
-      <div class="subsection-grid">
-        <StatusGroup title="Operations" entries={props.status?.operations} />
-        <StatusGroup title="Hosting" entries={props.status?.components.hosting} />
-      </div>
-      <Show when={(props.status?.requiredActions.length ?? 0) > 0}>
-        <div class="required-actions">
-          <p class="eyebrow">Required Actions</p>
-          <For each={props.status?.requiredActions ?? []}>{(action) => <span>{displayRequiredAction(action)}</span>}</For>
-        </div>
-      </Show>
     </section>
   )
 }
@@ -464,22 +445,6 @@ function StatusItem(props: { label: string; value: string }) {
     <div class="status-item">
       <span>{props.label}</span>
       <strong>{props.value}</strong>
-    </div>
-  )
-}
-
-function StatusGroup(props: { title: string; entries?: Record<string, string> }) {
-  return (
-    <div class="status-group">
-      <p class="eyebrow">{props.title}</p>
-      <For each={Object.entries(props.entries ?? {})}>
-        {([key, value]) => (
-          <div>
-            <span>{splitCamel(key)}</span>
-            <strong>{displayStatus(value)}</strong>
-          </div>
-        )}
-      </For>
     </div>
   )
 }
@@ -514,17 +479,21 @@ function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): 
   }
 }
 
-function splitCamel(value: string) {
-  return value.replace(/[A-Z]/g, (match) => ` ${match}`).trim()
-}
-
 function displayStatus(value?: string) {
   if (!value) return '-'
   return statusLabels[value] ?? value
 }
 
-function displayRequiredAction(value: string) {
-  return `${value} / ${requiredActionLabels[value] ?? '対応が必要'}`
+function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {
+  if (!credential) return { label: '-' }
+  if (!credential.configured || credential.state === 'missing') return { label: '未設定' }
+  if (credential.state === 'expired') return { label: 'Token期限切れ' }
+  if (credential.state !== 'available') return { label: '利用不可' }
+
+  const github = status?.components.github
+  if (github === 'available') return { label: '利用可能' }
+  if (github === 'degraded' || github === 'unavailable' || github === 'failed') return { label: '利用不可' }
+  return { label: displayStatus(github) }
 }
 
 function scrollToTop() {

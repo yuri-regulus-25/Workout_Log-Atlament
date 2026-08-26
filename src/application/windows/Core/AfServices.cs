@@ -1108,6 +1108,11 @@ public sealed class OperationGate
 
 public sealed class AtlamentApplication
 {
+    private static readonly string ApplicationFrameworkVersion =
+        typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(AtlamentApplication).Assembly.GetName().Version?.ToString()
+        ?? "unknown";
+
     private readonly ConfigurationStore _configurationStore;
     private readonly CredentialStore _credentialStore;
     private readonly RuntimeDataStore _runtimeDataStore;
@@ -1168,7 +1173,8 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        "1.0.0",
+        ApplicationFrameworkVersion,
+        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion()),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1178,6 +1184,22 @@ public sealed class AtlamentApplication
             _runtimeStatus.ToString(),
             _hosting.GetStatus()),
         _requiredActions.ToArray()));
+
+    private string GetFrontendFrameworkVersion()
+    {
+        try
+        {
+            var versionFile = _hosting.TryResolveFile("/version.json", out _);
+            if (versionFile is null) return "unknown";
+            using var stream = _hosting.OpenRead(versionFile);
+            var document = JsonNode.Parse(stream);
+            return document?["frontend"]?.GetValue<string>() ?? "unknown";
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
 
     public AfResponse<RuntimeWorkoutData> GetRuntimeWorkouts()
     {

@@ -4,9 +4,10 @@
     <AssemblyName>Atlament</AssemblyName>
     <Product>Atlament</Product>
     <Company>Atlament</Company>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>1.0.1</Version>
+    <FileVersion>1.0.1.0</FileVersion>
+    <InformationalVersion>1.0.1</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Description>Workout Log Atlament Windows Application Framework</Description>
     <Authors>yuri-regulus-25</Authors>
     <ApplicationIcon>Assets\Atlament.ico</ApplicationIcon>

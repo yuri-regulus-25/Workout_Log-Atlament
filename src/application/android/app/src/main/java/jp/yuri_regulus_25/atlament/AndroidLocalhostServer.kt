@@ -233,7 +233,11 @@ class AndroidLocalhostServer(
           "success": true,
           "errors": [],
           "data": {
-            "version": "0.1.0-android-phase-c",
+            "version": "${BuildConfig.VERSION_NAME}",
+            "versions": {
+              "applicationFramework": "${BuildConfig.VERSION_NAME}",
+              "frontendFramework": "${frontendFrameworkVersion()}"
+            },
             "application": {
               "status": "${applicationStatus()}",
               "degraded": ${applicationStatus() == "degraded"},
@@ -259,6 +263,11 @@ class AndroidLocalhostServer(
     """.trimIndent()
 
 
+    private fun frontendFrameworkVersion(): String = runCatching {
+        context.assets.open("frontend/version.json").use { stream ->
+            JSONObject(stream.bufferedReader(StandardCharsets.UTF_8).readText()).optString("frontend", "unknown")
+        }
+    }.getOrDefault("unknown")
 
     private fun hostingStatusJson(): String = """
         {

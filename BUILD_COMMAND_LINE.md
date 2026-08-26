@@ -139,6 +139,46 @@ dist-windows/
 
 ## Frontend Preview / Validation
 
+### npm run version:check
+
+`src/version.json`、Windows metadata、Android metadata、Status APIのVersion取得方式、Frontend version artifact生成設定の整合性をread-onlyで検証します。
+
+用途:
+
+- Version情報の直接編集やMerge conflictによる不整合を検出する
+- Build前にStatus API表示VersionとPlatform metadataのずれを検出する
+
+注意:
+
+- ファイルは書き換えません。
+- 不整合がある場合はnon-zero exitします。
+
+### npm run version:set
+
+AtlamentのVersion情報を更新します。Version値は直接編集せず、このコマンドを使用してください。
+
+例:
+
+```sh
+npm run version:set -- --target frontend --version 1.1.0
+npm run version:set -- --target windows --version 1.1.0
+npm run version:set -- --target android --version 1.1.0 --bump-version-code
+npm run version:set -- --target android --version 1.1.0 --version-code 24
+npm run version:set -- --target all --version 1.1.0 --bump-version-code
+npm run version:set -- --target frontend --version 1.1.0 --dry-run
+```
+
+target:
+
+- `frontend`
+- `windows`
+- `android`
+- `all`
+
+Androidを含む更新では、`versionName` とは別にAndroid更新判定用の `versionCode` が必要です。`--bump-version-code` または `--version-code <integer>` のどちらかを指定してください。
+
+dry-runでは実際に書き換えず、現在Version、新Version、更新予定ファイル、更新予定field、warning、整合性check結果を表示します。
+
 ### npm run preview:mpa
 
 Build済みの `dist/` を静的配信します。
@@ -211,9 +251,10 @@ Analytics Frontendのcheck scriptを実行します。
 
 内部で行うこと:
 
-1. `npm run check:analytics`
-2. `npm run check:data`
-3. `npm run check:mpa`
+1. `npm run version:check`
+2. `npm run check:analytics`
+3. `npm run check:data`
+4. `npm run check:mpa`
 
 用途:
 
