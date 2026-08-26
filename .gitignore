@@ -2,6 +2,7 @@ node_modules
 dist
 dist-ssr
 dist-windows
+src/application/android/app/src/main/assets/frontend/
 .angular
 *.local
 *.log
