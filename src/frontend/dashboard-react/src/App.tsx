@@ -1,9 +1,8 @@
 import ReactApexChart from 'react-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useEffect, useRef, useState } from 'react'
-import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
+import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
@@ -22,20 +21,17 @@ import './App.css'
 
 const currentYear = 2026
 const currentMonth = 8
-const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
-  const logoImageRef = useRef<HTMLImageElement | null>(null)
-  const logoTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const shellRef = useRef<HTMLElement | null>(null)
   const characterTriggerRef = useRef<HTMLParagraphElement | null>(null)
 
   useEffect(() => {
-    const brandingLogo = initializeBrandingLogo({
-      image: logoImageRef.current,
-      trigger: logoTriggerRef.current,
-      basePath: '/frontend-common/branding/assets/',
+    const navigation = initializeAppNavigation({
+      currentRouteId: 'dashboard',
+      shell: shellRef.current,
     })
     const characterEasterEgg = initializeCharacterEasterEgg({
       trigger: characterTriggerRef.current,
@@ -44,7 +40,7 @@ function App() {
     })
 
     return () => {
-      brandingLogo.dispose()
+      navigation.dispose()
       characterEasterEgg.dispose()
     }
   }, [])
@@ -188,23 +184,12 @@ function App() {
   ]
 
   return (
-    <main className={`app-shell ${pageTransitionClassName}`}>
+    <main ref={shellRef} className={`app-shell ${pageTransitionClassName}`}>
       <header className="page-hero">
         <div className="hero-top">
           <div className="atl-brand-row" aria-label="Atlament Dashboard">
-            <button ref={logoTriggerRef} className="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-              <img ref={logoImageRef} className="atl-logo" src={logoSourcePath} alt="" />
-            </button>
             <p ref={characterTriggerRef} className="eyebrow atl-character-trigger">Atlament / Dashboard</p>
           </div>
-          <nav className="global-nav" aria-label="Global navigation">
-            <a href={applicationRoutes.portal}>Portal</a>
-            <a className="active" href={applicationRoutes.dashboard}>Dashboard</a>
-            <a href={applicationRoutes.workouts}>Workouts</a>
-            <a href={applicationRoutes.exercises}>Performance</a>
-            <a href={applicationRoutes.analytics}>Analytics</a>
-            <a href={applicationRoutes.settings}>Settings</a>
-          </nav>
         </div>
         <h1>Dashboard</h1>
         <p className="lead">
@@ -231,9 +216,12 @@ function App() {
       <section className="dashboard-grid">
         <article className="panel wide">
           <div className="panel-header">
-            <div>
-              <p className="eyebrow">Volume Trends</p>
-              <h2>ボリューム推移</h2>
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-chart-areaspline" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Volume Trends</p>
+                <h2>ボリューム推移</h2>
+              </div>
             </div>
             <a href={applicationRoutes.analytics} className="text-link">
               View Analytics
@@ -254,9 +242,12 @@ function App() {
 
         <article className="panel">
           <div className="panel-header">
-            <div>
-              <p className="eyebrow">Latest Workout</p>
-              <h2>{latestWorkout ? formatDisplayDate(latestWorkout.date) : 'No workout'}</h2>
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Latest Workout</p>
+                <h2>{latestWorkout ? formatDisplayDate(latestWorkout.date) : 'No workout'}</h2>
+              </div>
             </div>
           </div>
           {latestWorkout ? (
@@ -280,9 +271,12 @@ function App() {
       <section className="dashboard-grid">
         <article className="panel">
           <div className="panel-header">
-            <div>
-              <p className="eyebrow">Set Count Trends</p>
-              <h2>セット数推移</h2>
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-chart-bar" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Set Count Trends</p>
+                <h2>セット数推移</h2>
+              </div>
             </div>
           </div>
           <ReactApexChart
@@ -295,9 +289,12 @@ function App() {
 
         <article className="panel">
           <div className="panel-header">
-            <div>
-              <p className="eyebrow">Training Balance</p>
-              <h2>トレーニングバランス</h2>
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-scale-balance" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Training Balance</p>
+                <h2>トレーニングバランス</h2>
+              </div>
             </div>
           </div>
           <ReactApexChart
@@ -311,29 +308,32 @@ function App() {
 
       <section className="panel">
         <div className="panel-header">
-          <div>
-            <p className="eyebrow">Recent Workouts</p>
-            <h2>最近のワークアウト</h2>
+          <div className="card-heading">
+            <div className="card-heading__icon"><i className="mdi mdi-history" aria-hidden="true"></i></div>
+            <div className="card-heading__text">
+              <p className="eyebrow">Recent Workouts</p>
+              <h2>最近のワークアウト</h2>
+            </div>
           </div>
           <a href={applicationRoutes.workouts} className="text-link">
             View Workout Domain
           </a>
         </div>
-        <div className="recent-table">
+        <div className="recent-table dashboard-recent-table">
           <div className="recent-row header">
-            <span>Date</span>
-            <span>Gym</span>
-            <span>Machines</span>
-            <span>Sets</span>
-            <span>Volume</span>
+            <span className="date-cell">Date</span>
+            <span className="gym-cell">Gym</span>
+            <span className="machines-cell">Machines</span>
+            <span className="sets-cell">Sets</span>
+            <span className="volume-cell">Volume</span>
           </div>
           {recentRows.map((row) => (
             <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
-              <span>{formatDisplayDate(row.date)}</span>
-              <span>{row.gym}</span>
-              <span>{row.exercises}</span>
-              <span>{row.totalSets}</span>
-              <span>{row.totalVolume.toLocaleString()} kg</span>
+              <span className="date-cell">{formatDisplayDate(row.date)}</span>
+              <span className="gym-cell">{row.gym}</span>
+              <span className="machines-cell">{row.exerciseCount}</span>
+              <span className="sets-cell">{row.totalSets}</span>
+              <span className="volume-cell">{row.totalVolume.toLocaleString()} kg</span>
             </a>
           ))}
         </div>

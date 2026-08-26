@@ -1,19 +1,9 @@
-<main class="app-shell {{ pageTransitionClassName }}">
+<main #shell class="app-shell {{ pageTransitionClassName }}">
   <header class="page-hero">
     <div class="hero-top">
       <div class="atl-brand-row" aria-label="Atlament Exercises">
-        <button #logoTrigger class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-          <img #logoImage class="atl-logo" [src]="logoSourcePath" alt="" />
-        </button>
         <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
       </div>
-      <nav class="global-nav" aria-label="Global navigation">
-        <a [href]="applicationRoutes.dashboard">Dashboard</a>
-        <a [href]="applicationRoutes.workouts">Workouts</a>
-        <a [href]="applicationRoutes.exercises" class="active">Performance</a>
-        <a [href]="applicationRoutes.analytics">Analytics</a>
-        <a [href]="applicationRoutes.settings">Settings</a>
-      </nav>
     </div>
     <div class="hero-grid">
       <div>
@@ -90,9 +80,12 @@
   <section class="dashboard-grid">
     <article class="panel wide">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">{{ selectedMachineTitle() }} progress - Best Weight</p>
-          <h2>{{ selectedMachineJapaneseName() }} 進捗 - 最大荷重</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-line" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">{{ selectedMachineTitle() }} progress - Best Weight</p>
+            <h2>{{ selectedMachineJapaneseName() }} 進捗 - 最大荷重</h2>
+          </div>
         </div>
       </div>
       <apx-chart
@@ -108,9 +101,12 @@
 
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Summary</p>
-          <h2>詳細</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-clipboard-text-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Summary</p>
+            <h2>詳細</h2>
+          </div>
         </div>
       </div>
       <p class="muted">Parts</p>
@@ -127,30 +123,33 @@
 
   <section class="panel">
     <div class="panel-header">
-      <div>
-        <p class="eyebrow">Workout History</p>
-        <h2>ワークアウト履歴</h2>
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Workout History</p>
+          <h2>ワークアウト履歴</h2>
+        </div>
       </div>
     </div>
 
     <div class="history-table">
       <div class="history-row header">
-        <span>Date</span>
-        <span>Gym</span>
-        <span>Sets</span>
-        <span>Best Weight</span>
-        <span>Best Reps</span>
-        <span>Volume</span>
+        <span class="date-cell">Date</span>
+        <span class="gym-cell">Gym</span>
+        <span class="sets-cell">Sets</span>
+        <span class="best-weight-cell"><span class="wide-label">Best Weight</span><span class="compact-label">Best WT.</span></span>
+        <span class="best-reps-cell"><span class="wide-label">Best Reps</span><span class="compact-label">Reps</span></span>
+        <span class="volume-cell">Volume</span>
       </div>
 
       @for (row of history(); track row.date + row.exerciseId) {
         <div class="history-row">
-          <span>{{ formatDate(row.date) }}</span>
-          <span>{{ row.gym }}</span>
-          <span>{{ row.sets }}</span>
-          <span>{{ row.bestWeight }} kg</span>
-          <span>{{ row.bestReps }}</span>
-          <span>{{ row.volume.toLocaleString() }} kg</span>
+          <span class="date-cell">{{ formatDate(row.date) }}</span>
+          <span class="gym-cell">{{ row.gym }}</span>
+          <span class="sets-cell">{{ row.sets }}</span>
+          <span class="best-weight-cell">{{ row.bestWeight }} kg</span>
+          <span class="best-reps-cell">{{ row.bestReps }}</span>
+          <span class="volume-cell">{{ row.volume.toLocaleString() }} kg</span>
         </div>
       } @empty {
         <p class="empty">No machine history found.</p>

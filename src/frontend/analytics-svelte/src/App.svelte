@@ -2,9 +2,8 @@
   import ApexCharts from 'apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { onDestroy, onMount } from 'svelte'
-  import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
+  import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-  import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
@@ -34,20 +33,17 @@
 
   let trendChartElement: HTMLDivElement
   let bodyPartChartElement: HTMLDivElement
-  let logoImageElement: HTMLImageElement
-  let logoTriggerElement: HTMLButtonElement
+  let shellElement: HTMLElement
   let characterTriggerElement: HTMLParagraphElement
   let trendChart: ApexCharts | null = null
   let bodyPartChart: ApexCharts | null = null
-  let brandingLogo: { dispose: () => void } | null = null
+  let navigation: { dispose: () => void } | null = null
   let characterEasterEgg: { dispose: () => void } | null = null
-  const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 
   onMount(async () => {
-    brandingLogo = initializeBrandingLogo({
-      image: logoImageElement,
-      trigger: logoTriggerElement,
-      basePath: '/frontend-common/branding/assets/',
+    navigation = initializeAppNavigation({
+      currentRouteId: 'analytics',
+      shell: shellElement,
     })
     characterEasterEgg = initializeCharacterEasterEgg({
       trigger: characterTriggerElement,
@@ -74,7 +70,7 @@
   })
 
   onDestroy(() => {
-    brandingLogo?.dispose()
+    navigation?.dispose()
     characterEasterEgg?.dispose()
     trendChart?.destroy()
     bodyPartChart?.destroy()
@@ -149,22 +145,12 @@
   }
 </script>
 
-<main class={`app-shell ${pageTransitionClassName}`}>
+<main bind:this={shellElement} class={`app-shell ${pageTransitionClassName}`}>
   <header class="page-hero">
     <div class="hero-top">
       <div class="atl-brand-row" aria-label="Atlament Analytics">
-        <button bind:this={logoTriggerElement} class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-          <img bind:this={logoImageElement} class="atl-logo" src={logoSourcePath} alt="" />
-        </button>
         <p bind:this={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Analytics</p>
       </div>
-      <nav class="global-nav" aria-label="Global navigation">
-        <a href={applicationRoutes.dashboard}>Dashboard</a>
-        <a href={applicationRoutes.workouts}>Workouts</a>
-        <a href={applicationRoutes.exercises}>Performance</a>
-        <a class="active" href={applicationRoutes.analytics}>Analytics</a>
-        <a href={applicationRoutes.settings}>Settings</a>
-      </nav>
     </div>
     <h1>Analytics</h1>
     <p class="lead">
@@ -203,9 +189,12 @@
   <section class="analytics-chart-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Workout Trend</p>
-          <h2>ボリューム推移</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-bell-curve" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Workout Trend</p>
+            <h2>ボリューム推移</h2>
+          </div>
         </div>
       </div>
       <div bind:this={trendChartElement}></div>
@@ -213,9 +202,12 @@
 
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Body Part Balance</p>
-          <h2>部位別セット数</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-bar" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Balance</p>
+            <h2>部位別セット数</h2>
+          </div>
         </div>
       </div>
       <div bind:this={bodyPartChartElement}></div>
@@ -225,9 +217,12 @@
   <section class="analytics-single-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Training Frequency</p>
-          <h2>トレーニング頻度</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-calendar-sync-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Training Frequency</p>
+            <h2>トレーニング頻度</h2>
+          </div>
         </div>
       </div>
       <p class="large-number">{trainingFrequencyPerWeek.toFixed(1)} / week</p>
@@ -241,9 +236,12 @@
   <section class="dashboard-grid analytics-table-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Machine Variety</p>
-          <h2>部位別実施マシン数</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-format-list-numbered-rtl" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Machine Variety</p>
+            <h2>部位別実施マシン数</h2>
+          </div>
         </div>
       </div>
       <div class="summary-table machine-variety-table">
@@ -264,12 +262,15 @@
 
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Body Part Volume</p>
-          <h2>部位別ボリューム</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Volume</p>
+            <h2>部位別ボリューム</h2>
+          </div>
         </div>
       </div>
-      <div class="summary-table">
+      <div class="summary-table body-part-volume-table">
         <div class="summary-row header">
           <span>Body Part</span>
           <span>Sets</span>
