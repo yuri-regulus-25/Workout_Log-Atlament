@@ -260,27 +260,9 @@ emptyAllowed
 
 ```json
 [
-  {
-    "type": "WORKOUT",
-    "path": "workouts/",
-    "resourceKind": "directory",
-    "required": true,
-    "emptyAllowed": false
-  },
-  {
-    "type": "EXERCISE_MASTER",
-    "path": "master/exercises.json",
-    "resourceKind": "file",
-    "required": true,
-    "emptyAllowed": false
-  },
-  {
-    "type": "GYM_MASTER",
-    "path": "master/gyms.json",
-    "resourceKind": "file",
-    "required": true,
-    "emptyAllowed": false
-  }
+  { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory", "required": true, "emptyAllowed": false },
+  { "type": "EXERCISE_MASTER", "path": "master/exercises.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
+  { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file", "required": true, "emptyAllowed": false }
 ]
 ```
 
@@ -410,8 +392,6 @@ Technical Validation
 ↓
 Master Resolve
 ↓
-Session Reject適用
-↓
 Normalized WorkoutSession[]
 ```
 
@@ -434,11 +414,11 @@ Master 未登録はTechnical Invalidではなく、Master Resolve Failureとす�
 
 Master 未登録時に値を捏造しない。
 
-Master Resolve FailureとなったWorkoutSessionはSession Rejectとし、Normalized WorkoutSessionを生成しない。
-
 `name:null` / `body_part:null`、またはGymの`name:null` / `short_name:null`等の未解決Master属性を持つWorkoutSessionを生成してはならない。
 
-Master Resolve Failureのみを理由としてSync Set全体をRejectしない。他の正常なWorkoutSessionは処理を継続し、Runtime Dataへ載せる。
+Master Resolve Failureが1件でも発生した場合、今回のSync SetからRuntime Dataを確定してはならない。正常にResolveできたWorkoutSessionだけを部分採用することも禁止する。
+
+Master Resolve FailureはSync Set全体のRemote Runtime確定失敗として扱う。ただしAF自体のFatal Errorとはしない。利用可能な既存Local Runtime Dataが存在する場合は、そのcurrentを更新せず継続利用する。
 
 ---
 
@@ -448,13 +428,16 @@ Master Resolve Failureのみを理由としてSync Set全体をRejectしない�
 
 Runtime として利用可能、異常情報なし。
 
-### 利用可能 + Error情報あり
+### Master Resolve Failure
 
-例:
+Master Resolve Failureは今回のRemote Runtime Dataを確定できない状態とする。
 
-- Master Resolve Failure / Session Reject
-
-Runtime は利用可能で Local 更新も可能。Master Resolve FailureとなったWorkoutSessionはRuntime Dataから除外し、API では `success:true` かつ `errors` 非空で返却可能。
+- Sync Operationは失敗
+- `success:false`
+- 今回取得したRemote Dataで`current`を更新しない
+- 正常SessionのみのPartial Updateは禁止
+- 利用可能な既存Local Runtime DataがあればFallbackして継続利用
+- Master Resolve FailureのError Codeを`errors`へ格納
 
 ### Technical Invalid
 
@@ -468,6 +451,8 @@ Runtime は利用可能で Local 更新も可能。Master Resolve Failureとな�
 - Runtime として復元不能
 
 Sync Set 全体を Reject する。Partial Updateは禁止。
+
+`success:true + errors非空` のResponse Contract自体は他のOperation / 継続可能異常のために許容するが、Master Resolve Failureをこの部分成功Contractで扱ってはならない。
 
 ---
 
@@ -493,9 +478,11 @@ Temporary へ保存
 current を安全に置換
 ```
 
-1件でもTechnical Invalidまたは必須 Resource 取得失敗があれば Sync Set 全体を Rejectし、current を更新せず既存 current を維持する。
+1件でもTechnical Invalid、Master Resolve Failure、または必須 Resource 取得失敗があれば Sync Set 全体を Rejectし、current を更新せず既存 current を維持する。
 
-Master Resolve Failure / Session Reject等、利用可能な Error のみの場合は更新可能。currentへ保存するRuntime Dataは、Master未登録Sessionを除外した正常なWorkoutSession集合とする。
+Master Resolve Failure時に正常Sessionのみを抽出してcurrentへ保存するPartial Updateは禁止する。
+
+既存currentが利用可能な場合はLocal Runtime DataへFallbackし、今回のRemote Sync Operationは失敗として返す。
 
 ---
 
@@ -520,9 +507,9 @@ GitHub の論理 Directory 構造を基準とする。Platform ごとの物理 R
 - Runtime Contract 正常
 - Technical Invalid がない
 
-`current`はMaster Resolve済みかつSession Reject適用済みのRuntime Dataである。
+`current`は過去のRemote SyncでTechnical ValidationおよびMaster Resolveがすべて正常終了し、Sync Set全体として確定されたRuntime Dataである。
 
-Local Validationは、既に生成・保存済みの`runtime/current`に対するValidationとする。Local ValidationでMaster Resolveを再実行し、Session Rejectを再判定する責務は持たせない。
+Local Validationは、既に生成・保存済みの`runtime/current`に対するValidationとする。Local ValidationでMaster Resolveを再実行する責務は持たせない。
 
 ---
 
@@ -637,7 +624,7 @@ Secondary 45194
 - `errors`: Operation 中に検出されたユーザー通知対象の異常情報
 - `data`: 正常に提供可能な結果
 
-`success:true` かつ `errors` 非空かつ `data` 利用可能、を許容する。
+`success:true` かつ `errors` 非空かつ `data` 利用可能、を許容する。ただしMaster Resolve Failureにより今回のRemote Runtime Dataを確定できない場合はSync Operation失敗であり、`success:false` とする。
 
 Error:
 
@@ -664,7 +651,7 @@ Error:
 503 一時的利用不能
 ```
 
-Local Fallback 成立等、要求された機能が成立している場合は `200 + success:true` を許容する。
+HTTP Request自体が成立し、Remote Sync Failure後にLocal Fallback結果を返却できる場合はHTTP 200を使用してよい。この場合でもSync Operationが失敗していればEnvelopeは `success:false` とする。
 
 ---
 
@@ -711,31 +698,14 @@ Version省略 Alias `/api/common/...` も同一機能を提供する。
   "errors": [],
   "data": {
     "version": "1.0.0",
-    "application": {
-      "status": "ready",
-      "degraded": false,
-      "acceptingRequests": true
-    },
-    "operations": {
-      "startup": "completed",
-      "manualSync": "idle",
-      "configurationUpdate": "idle",
-      "credentialUpdate": "idle",
-      "shutdown": "idle"
-    },
+    "application": { "status": "ready", "degraded": false, "acceptingRequests": true },
+    "operations": { "startup": "completed", "manualSync": "idle", "configurationUpdate": "idle", "credentialUpdate": "idle", "shutdown": "idle" },
     "components": {
       "configuration": "available",
       "credential": "available",
       "github": "available",
       "runtimeData": "available",
-      "hosting": {
-        "portal": "available",
-        "dashboard": "available",
-        "workouts": "available",
-        "exercises": "available",
-        "analytics": "available",
-        "settings": "available"
-      }
+      "hosting": { "portal": "available", "dashboard": "available", "workouts": "available", "exercises": "available", "analytics": "available", "settings": "available" }
     },
     "requiredActions": []
   }
@@ -778,13 +748,11 @@ RUNTIME_DATA_REQUIRED
 {
   "success": true,
   "errors": [],
-  "data": {
-    "sessions": []
-  }
+  "data": { "sessions": [] }
 }
 ```
 
-Master Resolve Failure / Session Reject等が存在する場合も `success:true` とし、利用可能なSessionのみを`data.sessions`へ返し、Master未登録情報を`errors`に格納する。画面向け集計済み Data は返さない。
+このAPIが返すRuntime Dataは、過去の正常なSync Setとして確定済みの`current`である。今回のRemote SyncでMaster Resolve Failureが発生した場合、そのRemote Dataから正常Sessionのみを部分採用したRuntime Dataを生成・返却してはならない。既存Local Runtime Dataが利用可能なら、その確定済みcurrentを継続提供する。
 
 ---
 
@@ -800,11 +768,7 @@ Request Body なし。
 {
   "success": true,
   "errors": [],
-  "data": {
-    "source": "remote",
-    "updated": true,
-    "degraded": false
-  }
+  "data": { "source": "remote", "updated": true, "degraded": false }
 }
 ```
 
@@ -812,21 +776,15 @@ Remote失敗 + Local利用:
 
 ```json
 {
-  "success": true,
+  "success": false,
   "errors": [
-    {
-      "code": "GITHUB_TIMEOUT",
-      "message": "GitHub access timed out.",
-      "recoverable": true
-    }
+    { "code": "MASTER_GYM_NOT_FOUND", "message": "Master resolve failed.", "recoverable": true }
   ],
-  "data": {
-    "source": "local",
-    "updated": false,
-    "degraded": true
-  }
+  "data": { "source": "local", "updated": false, "degraded": true }
 }
 ```
+
+GitHub Access Failure、Technical Invalid、Master Resolve Failure等により今回のRemote Syncが成立しなかった場合、利用可能な既存Local Runtime DataへFallbackしてもSync Operation自体は `success:false` とする。
 
 同一 Sync 実行中は HTTP 409 / `success:false` / `OPERATION_ALREADY_RUNNING`。
 
@@ -862,11 +820,7 @@ Token 値は返さない。
 {
   "success": true,
   "errors": [],
-  "data": {
-    "configured": true,
-    "state": "available",
-    "limitDate": "2026-12-31"
-  }
+  "data": { "configured": true, "state": "available", "limitDate": "2026-12-31" }
 }
 ```
 
@@ -895,10 +849,7 @@ Shutdown開始を受理した時点で Response を返す。
 {
   "success": true,
   "errors": [],
-  "data": {
-    "accepted": true,
-    "alreadyShuttingDown": false
-  }
+  "data": { "accepted": true, "alreadyShuttingDown": false }
 }
 ```
 
@@ -963,7 +914,7 @@ Self Health Check 自身は修復を行わない。
 ## 34. Local Fallback
 
 ```text
-Remote取得不能
+Remote取得またはRemote Runtime確定失敗
 ↓
 Local current確認
 ↓
@@ -971,6 +922,8 @@ Local Runtime Data Validation
 ├─ Valid → Local利用
 └─ Technical Invalid → Runtime Data unavailable
 ```
+
+Remote Runtime確定失敗にはGitHub Access Failure、Technical Invalid、Master Resolve Failureを含む。
 
 Local なし + Remote 失敗でも AF 自体は Fatal にしない。Runtime Data unavailable / AF degraded とし、Settings / Portal / HTTP Server は継続する。
 
@@ -1147,8 +1100,9 @@ SHUTDOWN_FAILED
 - Runtime Data 変更を理由に Frontend Rebuild する。
 - Runtime で npm / Node / Frontend Framework CLI を実行する。
 - Runtime Data をソースコードへ固定化する。
-- Technical Invalid Data で current を上書きする。
+- Technical Invalid Data またはMaster Resolve Failureを含む今回Remote Dataで current を上書きする。
 - Remote Sync を Partial Update する。
+- Master Resolve Failure時に正常Sessionのみを部分採用する。
 - 恒久 Backup / 手動 Rollback を追加する。
 - Temporary を Fallback / Recovery に使用する。
 - GitHub Write / Commit / Push / Delete を行う。
