@@ -142,7 +142,9 @@ errors.length > 0
 data != null
 ```
 
-したがって共通JSは `success:true` だから `errors` を無視してはならない。
+ただし、Master Resolve Failure により今回の Remote Runtime Data を確定できない場合は Sync Operation 失敗であり、このContractには該当しない。その場合は AF が `success:false` とし、利用可能な既存 Local Runtime Data がある場合は `source:local` / `updated:false` / `degraded:true` として返す。
+
+したがって共通JSは `success:true` だから `errors` を無視してはならず、`success:false` でも `data` にFallback結果が存在する可能性を独自判断で破棄してはならない。
 
 ---
 
@@ -292,7 +294,9 @@ type WorkoutRuntimeData = {
 }
 ```
 
-`sessions` は、Master Resolve済みかつSession Reject適用済みのWorkoutSessionのみを含む。Master未登録等の通知対象異常はトップレベル `errors` に格納される。
+`sessions` は、正常なRemote SyncでMaster Resolveまで完了して確定されたRuntime Data、または過去に正常確定済みのLocal Runtime Dataに含まれるWorkoutSessionのみを含む。
+
+Master Resolve Failure が今回のRemote Sync中に発生した場合、そのSync Setから一部Sessionだけを採用した新しいRuntime Dataは生成しない。AFは今回のRemote Runtime Dataを確定せず、利用可能な既存Local Runtime Dataがあればそれを維持する。Master Resolve FailureはSync APIの `success:false` と `errors` で通知する。
 
 共通JSはWorkout SessionのMaster ResolveやParseを再実行しない。
 
@@ -382,11 +386,13 @@ errors.length > 0
 
 ```text
 success:false
-→ Operation失敗
+→ Operation失敗。Local Fallback等の利用可能なdataが返る場合がある
 
 success:true + errorsあり
 → Operation成立、ただし通知対象異常あり
 ```
+
+Master Resolve Failureで今回のRemote Runtime Dataを確定できない場合は前者とし、`success:true + errorsあり` の部分成功として扱わない。
 
 共通JS自身がUI通知を描画してはならない。
 
@@ -443,6 +449,8 @@ type SyncResult = {
   degraded: boolean
 }
 ```
+
+Remote SyncがMaster Resolve Failure等により成立せず、既存Local Runtime DataへFallbackした場合は、AFの `success:false` / `source:'local'` / `updated:false` / `degraded:true` とError情報をそのままFrontendへ返す。
 
 Operation競合による `OPERATION_ALREADY_RUNNING` はAF Application Errorとして受領する。
 

@@ -75,7 +75,7 @@ exercise_id   → exercise_id / name / body_part
 
 Raw側で参照された`gym_id` / `exercise_id`に対応するMaster Entryが存在しない場合は、Technical Invalid ではなく Master Resolve Failure とする。
 
-Master Resolve Failure となった WorkoutSession は Session Reject とし、Normalized Runtime Model を生成しない。他の正常な WorkoutSession は処理を継続し、Runtime Dataへ載せる。
+Master Resolve Failureを1件でも検出したRemote Sync Setは全体を不採用とし、今回取得したデータからNormalized Runtime Modelを確定しない。Master Resolve可能なWorkoutSessionのみを部分採用してRuntime Dataへ載せることも禁止する。
 
 Master由来属性を推測・捏造してRuntimeを生成してはならない。
 
@@ -101,9 +101,9 @@ Temporary
 currentを安全に置換
 ```
 
-Technical Invalidが1件でも存在する、required Resource取得に失敗した、またはMaster自体が破損している場合はSync Set全体をRejectし、currentを更新しない。
+Technical Invalidが1件でも存在する、required Resource取得に失敗した、Master自体が破損している、またはMaster Resolve Failureを1件でも検出した場合はSync Set全体をRejectし、currentを更新しない。
 
-Master Resolve Failureのみの場合はSync Set全体をRejectしない。Master未登録の`gym_id` / `exercise_id`を含むWorkoutSessionのみSession Rejectし、除外後の正常なRuntime Dataでcurrentを更新可能とする。
+Master Resolve Failure時は今回Remote Dataを部分採用せず、既存のValidな`runtime/current`が存在する場合はそれをLocal Runtimeとして継続利用する。既存`current`がInvalidまたは存在しない場合はRuntime unavailableとする。
 
 ## 6. Local Runtime Data
 
@@ -120,7 +120,7 @@ runtime/
 - Partial Update禁止
 - 起動時にtemporaryを無条件Clear
 
-Local Fallback時のValidationは、既に生成・保存済みの`runtime/current`に対するValidationとする。`current`はMaster Resolve済みかつSession Reject適用済みのRuntime Dataであり、Local ValidationでMaster Resolveを再実行してSession Rejectを再判定しない。
+Local Fallback時のValidationは、既に生成・保存済みの`runtime/current`に対するValidationとする。`current`は過去にMaster Resolveを含むSync Set全体の検証を完了して確定済みのRuntime Dataであり、Local ValidationでMaster Resolveを再実行しない。
 
 ## 7. Required / Nullable / Optional
 

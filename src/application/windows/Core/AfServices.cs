@@ -180,6 +180,13 @@ public sealed class ConfigurationStore
             errors.Add(new AfError(AfErrorCodes.ConfigInvalid, "Unsupported configuration schemaVersion.", true));
         }
 
+        if (string.IsNullOrWhiteSpace(configuration.Repository.Owner) ||
+            string.IsNullOrWhiteSpace(configuration.Repository.Repository) ||
+            string.IsNullOrWhiteSpace(configuration.Repository.Ref))
+        {
+            errors.Add(new AfError(AfErrorCodes.ConfigInvalid, "Repository configuration is invalid.", true));
+        }
+
         foreach (var resource in configuration.Resources)
         {
             if (!ResourceTypes.Contains(resource.Type) || !ResourceKinds.Contains(resource.ResourceKind) || string.IsNullOrWhiteSpace(resource.Path))
@@ -990,7 +997,7 @@ public sealed class HostingStatusService
             return resolved;
         }
 
-        if (app != "portal" && Path.GetExtension(sanitized).Length == 0)
+        if (app != "portal" && IsDefinedMpaRoute(app, sanitized))
         {
             return ResolveIndex(app);
         }
@@ -1004,6 +1011,17 @@ public sealed class HostingStatusService
     }
 
     private FrontendArtifactFile? ResolveIndex(string app) => ResolveExact(app, "index.html");
+
+    private static bool IsDefinedMpaRoute(string app, string relative)
+    {
+        var route = relative.Trim('/');
+        return app switch
+        {
+            "workouts" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^\d{4}-\d{2}-\d{2}$"),
+            "exercises" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^[A-Za-z0-9][A-Za-z0-9_-]*$"),
+            _ => false
+        };
+    }
 
     private FrontendArtifactFile? ResolveExact(string app, string relative)
     {
@@ -1194,6 +1212,7 @@ public sealed class AtlamentApplication
             var remoteChanged = update.Repository is not null || update.Resources is not null;
             _configuration = next;
             _configurationStatus = ComponentStatus.available;
+            _requiredActions.RemoveAll(action => action == "CONFIGURATION_REQUIRED");
             var responseErrors = new List<AfError>();
             if (remoteChanged)
             {
@@ -1201,6 +1220,7 @@ public sealed class AtlamentApplication
                 _githubStatus = responseErrors.Count == 0 ? ComponentStatus.available : ComponentStatus.degraded;
             }
 
+            _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("configurationUpdate", true);
             return (200, AfResponses.Ok(new ConfigurationUpdateResult(true, remoteChanged), responseErrors));
         }
@@ -1224,6 +1244,7 @@ public sealed class AtlamentApplication
         {
             var result = _credentialStore.Save(update);
             LoadCredential();
+            _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("credentialUpdate", result.State != CredentialState.invalid.ToString());
             return result.State == CredentialState.invalid.ToString()
                 ? (400, AfResponses.Fail<CredentialUpdateResult>(new AfError(AfErrorCodes.CredentialInvalid, "Credential is invalid.", true)))

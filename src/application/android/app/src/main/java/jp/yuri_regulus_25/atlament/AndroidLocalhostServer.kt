@@ -34,14 +34,25 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
-class AndroidLocalhostServer(private val context: Context) : Closeable {
+class AndroidLocalhostServer(
+    private val context: Context,
+    private val onShutdown: () -> Unit = {}
+) : Closeable {
     private data class RuntimeSourceFile(val path: String, val content: String)
-    private data class SyncResponse(val status: Int, val body: String)
+    private data class SyncResponse(val status: Int, val body: String, val success: Boolean)
     private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray)
+    private data class RuntimeFetchedResources(
+        val workoutFiles: List<RuntimeSourceFile>,
+        val exerciseMaster: RuntimeSourceFile?,
+        val gymMaster: RuntimeSourceFile?
+    )
     private data class ExerciseMasterItem(val id: String, val name: String, val bodyPart: String)
     private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
+    private class AfException(val code: String, override val message: String) : Exception(message)
     private val appNames = setOf("dashboard", "workouts", "exercises", "analytics", "settings")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
+    private val resourceTypes = setOf("WORKOUT", "EXERCISE_MASTER", "GYM_MASTER")
+    private val resourceKinds = setOf("file", "directory")
     private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
     private val credentialPreferences: SharedPreferences = context.getSharedPreferences("atlament_secure_credential", Context.MODE_PRIVATE)
     private val credentialKeyAlias = "atlament_github_token"
@@ -53,8 +64,12 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private val operationLock = Object()
     @Volatile private var startupSyncStatus = "idle"
     @Volatile private var manualSyncStatus = "idle"
+    @Volatile private var configurationUpdateStatus = "idle"
+    @Volatile private var credentialUpdateStatus = "idle"
+    @Volatile private var shutdownStatus = "idle"
     @Volatile private var githubComponentStatus = "unknown"
     private val running = AtomicBoolean(false)
+    private val shutdownRequested = AtomicBoolean(false)
     private val acceptExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val requestExecutor: ExecutorService = Executors.newCachedThreadPool()
     private var serverSocket: ServerSocket? = null
@@ -147,10 +162,10 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
             method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
             method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
-            method == "POST" && route == "/configuration" -> sendJson(output, 200, okJson(saveConfigurationJson(body)))
-            method == "POST" && route == "/credential" -> sendJson(output, 200, okJson(credentialUpdateResultJson(body)))
+            method == "POST" && route == "/configuration" -> sendConfigurationUpdate(output, body)
+            method == "POST" && route == "/credential" -> sendCredentialUpdate(output, body)
             method == "POST" && route == "/sync" -> sendManualSync(output)
-            method == "POST" && route == "/shutdown" -> sendJson(output, 200, okJson("{ \"accepted\": true, \"alreadyShuttingDown\": false }"))
+            method == "POST" && route == "/shutdown" -> sendShutdown(output)
             else -> sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
         }
     }
@@ -198,9 +213,18 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             normalized.startsWith("android/") -> normalized
             normalized.startsWith("frontend/") -> normalized
             normalized in appNames -> "frontend/$normalized/index.html"
-            root in appNames && !normalized.contains('.') -> "frontend/$root/index.html"
+            root in appNames && isDefinedMpaRoute(root, normalized.removePrefix("$root/")) -> "frontend/$root/index.html"
             normalized.contains('.') -> "frontend/$normalized"
             else -> null
+        }
+    }
+
+    private fun isDefinedMpaRoute(app: String, route: String): Boolean {
+        val normalized = route.trim('/')
+        return when (app) {
+            "workouts" -> normalized.matches(Regex("""\d{4}-\d{2}-\d{2}"""))
+            "exercises" -> normalized.matches(Regex("""[A-Za-z0-9][A-Za-z0-9_-]*"""))
+            else -> false
         }
     }
 
@@ -218,9 +242,9 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             "operations": {
               "startup": "$startupSyncStatus",
               "manualSync": "${manualSyncStatus}",
-              "configurationUpdate": "idle",
-              "credentialUpdate": "idle",
-              "shutdown": "idle"
+              "configurationUpdate": "$configurationUpdateStatus",
+              "credentialUpdate": "$credentialUpdateStatus",
+              "shutdown": "$shutdownStatus"
             },
             "components": {
               "configuration": "${configurationStatus()}",
@@ -252,7 +276,12 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun assetExists(assetPath: String): Boolean = runCatching {
         context.assets.open(assetPath).use { true }
     }.getOrDefault(false)
-    private fun configurationStatus(): String = if (configurationFile.exists()) "available" else "unavailable"
+    private fun configurationStatus(): String {
+        if (!configurationFile.exists()) return "unavailable"
+        return runCatching {
+            if (validateConfiguration(JSONObject(configurationFile.readText(StandardCharsets.UTF_8))).length() == 0) "available" else "unavailable"
+        }.getOrDefault("unavailable")
+    }
 
     private fun applicationStatus(): String =
         if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
@@ -264,7 +293,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
         if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
         if (credentialState() != "available") actions.add(0, "CREDENTIAL_REQUIRED")
-        if (!configurationFile.exists()) actions.add(0, "CONFIGURATION_REQUIRED")
+        if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
         return actions
     }
 
@@ -274,15 +303,123 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         defaultConfigurationJson()
     }
 
-    private fun saveConfigurationJson(updateJson: String): String {
-        configurationFile.parentFile?.mkdirs()
-        configurationFile.writeText(mergeConfigurationJson(updateJson), StandardCharsets.UTF_8)
-        return """
-            {
-              "saved": true,
-              "remoteChecked": false
+    private fun sendConfigurationUpdate(output: OutputStream, updateJson: String) {
+        val response = configurationUpdateResponse(updateJson)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun configurationUpdateResponse(updateJson: String): SyncResponse {
+        if (!tryStartOperation("configurationUpdate")) {
+            return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Configuration update is already running."), false)
+        }
+
+        var success = false
+        return try {
+            val update = if (updateJson.isBlank()) JSONObject() else JSONObject(updateJson)
+            val merged = JSONObject(mergeConfigurationJson(update.toString()))
+            val validationErrors = validateConfiguration(merged)
+            if (validationErrors.length() > 0) {
+                return SyncResponse(400, responseJson(false, "null", validationErrors), false)
             }
-        """.trimIndent()
+
+            val saveErrors = saveConfigurationAtomically(merged.toString(2))
+            if (saveErrors.length() > 0) {
+                return SyncResponse(500, responseJson(false, "null", saveErrors), false)
+            }
+
+            val remoteChanged = update.has("repository") || update.has("resources")
+            val remoteErrors = if (remoteChanged) checkRemoteConfiguration(merged) else JSONArray()
+            githubComponentStatus = if (!remoteChanged) githubComponentStatus else if (remoteErrors.length() == 0) "available" else "degraded"
+            success = true
+            SyncResponse(200, okJson("""
+                {
+                  "saved": true,
+                  "remoteChecked": $remoteChanged
+                }
+            """.trimIndent(), remoteErrors.toString()), true)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Configuration update failed."), false)
+        } finally {
+            completeOperation("configurationUpdate", success)
+        }
+    }
+
+    private fun validateConfiguration(configuration: JSONObject): JSONArray {
+        val errors = JSONArray()
+        if (configuration.optInt("schemaVersion", Int.MIN_VALUE) != 1) {
+            errors.put(errorJson("CONFIG_INVALID", "Unsupported configuration schemaVersion."))
+        }
+
+        val repository = configuration.optJSONObject("repository")
+        if (repository == null ||
+            repository.optString("owner").trim().isBlank() ||
+            repository.optString("repository").trim().isBlank() ||
+            repository.optString("ref", "main").trim().isBlank()
+        ) {
+            errors.put(errorJson("CONFIG_INVALID", "Repository configuration is invalid."))
+        }
+
+        val resources = configuration.optJSONArray("resources")
+        if (resources == null || resources.length() == 0) {
+            errors.put(errorJson("CONFIG_INVALID", "Resource configuration is required."))
+        } else {
+            for (index in 0 until resources.length()) {
+                val resource = resources.optJSONObject(index)
+                if (resource == null ||
+                    resource.optString("type") !in resourceTypes ||
+                    resource.optString("resourceKind") !in resourceKinds ||
+                    resource.optString("path").trim().isBlank() ||
+                    !resource.has("required") ||
+                    !resource.has("emptyAllowed")
+                ) {
+                    errors.put(errorJson("CONFIG_INVALID", "Resource configuration is invalid."))
+                    break
+                }
+            }
+        }
+
+        val timeouts = configuration.optJSONObject("timeouts")
+        if (timeouts == null) {
+            errors.put(errorJson("CONFIG_INVALID", "Timeout configuration is required."))
+        } else {
+            validateRange(timeouts.optInt("githubRequestTimeoutSec", Int.MIN_VALUE), 1, 120, "githubRequestTimeoutSec", errors)
+            validateRange(timeouts.optInt("syncOperationTimeoutSec", Int.MIN_VALUE), 5, 600, "syncOperationTimeoutSec", errors)
+            validateRange(timeouts.optInt("generalApiTimeoutSec", Int.MIN_VALUE), 1, 120, "generalApiTimeoutSec", errors)
+            validateRange(timeouts.optInt("shutdownTimeoutSec", Int.MIN_VALUE), 1, 60, "shutdownTimeoutSec", errors)
+        }
+        return errors
+    }
+
+    private fun validateRange(value: Int, min: Int, max: Int, name: String, errors: JSONArray) {
+        if (value < min || value > max) errors.put(errorJson("CONFIG_INVALID", "$name is out of range."))
+    }
+
+    private fun saveConfigurationAtomically(json: String): JSONArray {
+        return try {
+            configurationFile.parentFile?.mkdirs()
+            val temporary = File(configurationFile.parentFile, configurationFile.name + ".tmp")
+            temporary.writeText(json, StandardCharsets.UTF_8)
+            if (configurationFile.exists() && !configurationFile.delete()) {
+                throw IllegalStateException("Existing configuration could not be replaced.")
+            }
+            if (!temporary.renameTo(configurationFile)) {
+                throw IllegalStateException("Temporary configuration could not be moved.")
+            }
+            JSONArray()
+        } catch (_: Exception) {
+            errorsArray("CONFIG_SAVE_FAILED", "Configuration could not be saved.")
+        }
+    }
+
+    private fun checkRemoteConfiguration(configuration: JSONObject): JSONArray {
+        return try {
+            fetchConfiguredResources(configuration)
+            JSONArray()
+        } catch (ex: AfException) {
+            errorsArray(ex.code, ex.message)
+        } catch (ex: Exception) {
+            errorsArray("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub configuration check failed.")
+        }
     }
     private fun okJson(dataJson: String, errorsJson: String = "[]"): String = """
         {
@@ -358,6 +495,33 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
         writeCredentialToken(token, limitDate)
         return credentialStatusJsonFor(credentialState(), configured = true, limitDate = limitDate)
+    }
+
+    private fun sendCredentialUpdate(output: OutputStream, updateJson: String) {
+        val response = credentialUpdateResponse(updateJson)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun credentialUpdateResponse(updateJson: String): SyncResponse {
+        if (!tryStartOperation("credentialUpdate")) {
+            return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Credential update is already running."), false)
+        }
+
+        var success = false
+        return try {
+            val data = credentialUpdateResultJson(updateJson)
+            val state = JSONObject(data).optString("state")
+            success = state != "invalid"
+            if (success) {
+                SyncResponse(200, okJson(data), true)
+            } else {
+                SyncResponse(400, failJson("CREDENTIAL_INVALID", "Credential is invalid."), false)
+            }
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("CREDENTIAL_SAVE_FAILED", "Credential could not be saved."), false)
+        } finally {
+            completeOperation("credentialUpdate", success)
+        }
     }
 
     private fun credentialStatusJsonFor(
@@ -446,17 +610,17 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
     private fun manualSyncResponse(): SyncResponse {
         if (!tryStartOperation("manualSync")) {
-            return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Sync is already running."))
+            return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Sync is already running."), false)
         }
 
         var success = false
         return try {
             val response = syncRuntimeData()
-            success = response.status in 200..299
+            success = response.success
             response
         } catch (ex: Exception) {
             writeLog("ERROR", "Manual sync failed: ${ex.message.orEmpty()}")
-            SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Sync failed."))
+            SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Sync failed."), false)
         } finally {
             completeOperation("manualSync", success)
         }
@@ -473,7 +637,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
                 }
 
                 val response = syncRuntimeData()
-                val success = response.status in 200..299
+                val success = response.success
                 if (!success) writeLog("WARN", "Startup sync completed without remote runtime update.")
                 completeOperation("startup", success)
             } catch (ex: Exception) {
@@ -499,7 +663,11 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
                   "updated": true,
                   "degraded": false
                 }
-            """.trimIndent()))
+            """.trimIndent()), true)
+        } catch (ex: AfException) {
+            githubComponentStatus = "degraded"
+            writeLog("WARN", "Remote sync failed: ${ex.message}")
+            failedSync(errorsArray(ex.code, ex.message))
         } catch (ex: Exception) {
             githubComponentStatus = "degraded"
             val message = ex.message ?: "GitHub sync failed."
@@ -517,15 +685,19 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
                   "updated": false,
                   "degraded": true
                 }
-            """.trimIndent(), errors))
+            """.trimIndent(), errors), false)
         } else {
-            SyncResponse(503, responseJson(false, "null", errors))
+            SyncResponse(503, responseJson(false, "null", errors), false)
         }
     }
 
     private fun tryStartOperation(name: String): Boolean = synchronized(operationLock) {
-        if (name == "manualSync" && startupSyncStatus == "running") return@synchronized false
-        if (name == "startup" && manualSyncStatus == "running") return@synchronized false
+        if (shutdownStatus == "running" && name != "shutdown") return@synchronized false
+        if (name in setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate")) {
+            if (startupSyncStatus == "running" || manualSyncStatus == "running" || configurationUpdateStatus == "running" || credentialUpdateStatus == "running") {
+                return@synchronized false
+            }
+        }
         when (name) {
             "startup" -> {
                 if (startupSyncStatus == "running") return@synchronized false
@@ -534,6 +706,18 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             "manualSync" -> {
                 if (manualSyncStatus == "running") return@synchronized false
                 manualSyncStatus = "running"
+            }
+            "configurationUpdate" -> {
+                if (configurationUpdateStatus == "running") return@synchronized false
+                configurationUpdateStatus = "running"
+            }
+            "credentialUpdate" -> {
+                if (credentialUpdateStatus == "running") return@synchronized false
+                credentialUpdateStatus = "running"
+            }
+            "shutdown" -> {
+                if (shutdownStatus == "running") return@synchronized false
+                shutdownStatus = "running"
             }
             else -> return@synchronized false
         }
@@ -545,6 +729,9 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         when (name) {
             "startup" -> startupSyncStatus = status
             "manualSync" -> manualSyncStatus = status
+            "configurationUpdate" -> configurationUpdateStatus = status
+            "credentialUpdate" -> credentialUpdateStatus = status
+            "shutdown" -> shutdownStatus = status
         }
     }
 
@@ -554,13 +741,49 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
     private fun fetchRuntimeWorkoutData(): RuntimeBuildResult {
         val configuration = JSONObject(loadConfigurationJson())
+        val fetched = fetchConfiguredResources(configuration)
+        val workoutFiles = fetched.workoutFiles
+        val exerciseMaster = fetched.exerciseMaster
+        val gymMaster = fetched.gymMaster
+
+        val errors = JSONArray()
+        val exercises = exerciseMaster?.let { parseExerciseMaster(it, errors) }
+        val gyms = gymMaster?.let { parseGymMaster(it, errors) }
+        if (exerciseMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required exercise master resource is missing."))
+        if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
+        if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
+        if (errors.length() > 0 || exercises == null || gyms == null) return RuntimeBuildResult(null, errors)
+
+        val sessions = JSONArray()
+        workoutFiles.sortedBy { it.path }.forEach { file ->
+            if (file.path.endsWith(".jsonl", ignoreCase = true)) {
+                file.content.split("\r\n", "\n").forEachIndexed { index, line ->
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, exercises, gyms, errors)?.let(sessions::put)
+                }
+            } else if (file.path.endsWith(".json", ignoreCase = true)) {
+                buildSession(file.path, null, file.content, exercises, gyms, errors)?.let(sessions::put)
+            }
+        }
+
+        if (errors.length() > 0) return RuntimeBuildResult(null, errors)
+
+        val payload = JSONObject()
+            .put("success", true)
+            .put("errors", JSONArray())
+            .put("data", JSONObject().put("sessions", sessions))
+            .toString(2)
+        return RuntimeBuildResult(payload, errors)
+    }
+
+    private fun fetchConfiguredResources(configuration: JSONObject): RuntimeFetchedResources {
+        val configurationErrors = validateConfiguration(configuration)
+        if (configurationErrors.length() > 0) {
+            throw AfException("CONFIG_INVALID", configurationErrors.getJSONObject(0).optString("message", "Configuration is invalid."))
+        }
         val repository = configuration.getJSONObject("repository")
         val owner = repository.optString("owner").trim()
         val repo = repository.optString("repository").trim()
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-        if (owner.isBlank() || repo.isBlank()) {
-            throw IllegalStateException("Repository configuration is required.")
-        }
 
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val token = readCredentialToken()
@@ -596,33 +819,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             }
         }
 
-        val errors = JSONArray()
-        val exercises = exerciseMaster?.let { parseExerciseMaster(it, errors) }
-        val gyms = gymMaster?.let { parseGymMaster(it, errors) }
-        if (exerciseMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required exercise master resource is missing."))
-        if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
-        if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0 || exercises == null || gyms == null) return RuntimeBuildResult(null, errors)
-
-        val sessions = JSONArray()
-        workoutFiles.sortedBy { it.path }.forEach { file ->
-            if (file.path.endsWith(".jsonl", ignoreCase = true)) {
-                file.content.split("\r\n", "\n").forEachIndexed { index, line ->
-                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, exercises, gyms, errors)?.let(sessions::put)
-                }
-            } else if (file.path.endsWith(".json", ignoreCase = true)) {
-                buildSession(file.path, null, file.content, exercises, gyms, errors)?.let(sessions::put)
-            }
-        }
-
-        if (errors.length() > 0) return RuntimeBuildResult(null, errors)
-
-        val payload = JSONObject()
-            .put("success", true)
-            .put("errors", JSONArray())
-            .put("data", JSONObject().put("sessions", sessions))
-            .toString(2)
-        return RuntimeBuildResult(payload, errors)
+        return RuntimeFetchedResources(workoutFiles, exerciseMaster, gymMaster)
     }
 
     private fun parseExerciseMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, ExerciseMasterItem> {
@@ -858,7 +1055,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
         return try {
             val status = connection.responseCode
-            if (status !in 200..299) throw IllegalStateException(mapGithubError(status, pathForError))
+            if (status !in 200..299) throw mapGithubError(status, pathForError)
             connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
@@ -879,12 +1076,28 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
     private fun isJsonRuntimePath(path: String): Boolean =
         path.endsWith(".json", ignoreCase = true) || path.endsWith(".jsonl", ignoreCase = true)
 
-    private fun mapGithubError(status: Int, path: String): String = when (status) {
-        401 -> "GitHub token is unauthorized."
-        403 -> "GitHub access is forbidden."
-        404 -> "GitHub resource not found: $path."
-        429 -> "GitHub rate limit reached."
-        else -> "GitHub server error: HTTP $status."
+    private fun mapGithubError(status: Int, path: String): AfException = when (status) {
+        401 -> AfException("GITHUB_UNAUTHORIZED", "GitHub token is unauthorized.")
+        403 -> AfException("GITHUB_FORBIDDEN", "GitHub access is forbidden.")
+        404 -> AfException("GITHUB_RESOURCE_NOT_FOUND", "GitHub resource not found: $path.")
+        429 -> AfException("GITHUB_RATE_LIMITED", "GitHub rate limit reached.")
+        else -> AfException("GITHUB_CONNECTION_FAILED", "GitHub server error: HTTP $status.")
+    }
+
+    private fun sendShutdown(output: OutputStream) {
+        val already = shutdownRequested.getAndSet(true)
+        if (!already) {
+            tryStartOperation("shutdown")
+            completeOperation("shutdown", true)
+        }
+        sendJson(output, 200, okJson("{ \"accepted\": true, \"alreadyShuttingDown\": $already }"))
+        if (!already) {
+            Thread {
+                runCatching { Thread.sleep(150) }
+                close()
+                onShutdown()
+            }.start()
+        }
     }
     private fun failJson(code: String, message: String): String = """
         {
@@ -958,6 +1171,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         503 -> "Service Unavailable"
         400 -> "Bad Request"
         405 -> "Method Not Allowed"
+        409 -> "Conflict"
         501 -> "Not Implemented"
         else -> "Error"
     }

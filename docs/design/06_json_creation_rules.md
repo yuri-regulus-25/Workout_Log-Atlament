@@ -89,7 +89,11 @@ ExerciseSet:
 
 元資料に新しいGym / Machineが存在しMaster未登録の場合は、勝手にIDを作らずMaster追加候補として報告する。
 
-なお、既にSoTへ存在するMaster未登録参照をAFが読み込む場合のRuntime挙動は`05_data_validation_policy.md` / `07_af_detailed_design.md`を正とする。AFはMaster未登録の`gym_id` / `exercise_id`を含むWorkoutSessionをSession Rejectし、Master由来属性をnullとして持つWorkoutSessionは生成しない。他の正常なWorkoutSessionは通知付きで継続可能とする。
+なお、既にSoTへ存在するMaster未登録参照をAFが読み込む場合のRuntime挙動は`05_data_validation_policy.md` / `07_af_detailed_design.md`を正とする。
+
+AFがMaster未登録の`gym_id` / `exercise_id`を1件でも検出した場合はMaster Resolve Failureとし、今回のRemote Sync Set全体を不採用とする。Master Resolve可能な他のWorkoutSessionだけを部分採用してRuntime Dataを更新してはならない。
+
+Master由来属性をnullや推測値で補ったWorkoutSessionも生成しない。既存のValidなLocal Runtime Dataが存在する場合は、その最後に正常確定したRuntimeをFallbackとして継続利用する。
 
 ## 8. session_id / date
 
@@ -117,7 +121,7 @@ ExerciseSet:
 - 不明値を捏造していない
 - Master未登録候補を報告している
 
-アプリRuntime側の最終Technical ValidationはAFが担当する。
+アプリRuntime側の最終Technical Validation / Master Resolve / Sync Set確定判定はAFが担当する。
 
 ## 11. LLM依頼時の必須指示
 

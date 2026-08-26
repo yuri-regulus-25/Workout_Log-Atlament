@@ -13,7 +13,12 @@ const pages = [
   '/settings/',
 ]
 
-const notFoundPage = '/unknown'
+const notFoundPages = [
+  '/unknown',
+  '/dashboard/2026-08-14',
+  '/analytics/detail',
+  '/settings/repository',
+]
 
 const server = spawn(process.execPath, ['tools/dev-runtime/preview-mpa.mjs'], {
   env: {
@@ -46,10 +51,12 @@ try {
     console.log(`OK ${page}`)
   }
 
-  await fetchStatus(`${origin}${notFoundPage}`, 404, 'text/html')
-  console.log(`OK ${notFoundPage} 404`)
+  for (const notFoundPage of notFoundPages) {
+    await fetchStatus(`${origin}${notFoundPage}`, 404, 'text/html')
+    console.log(`OK ${notFoundPage} 404`)
+  }
 
-  console.log(`MPA smoke check passed: ${pages.length} pages + 404`)
+  console.log(`MPA smoke check passed: ${pages.length} pages + ${notFoundPages.length} 404s`)
 } finally {
   server.kill()
 }

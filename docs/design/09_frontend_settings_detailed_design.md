@@ -74,6 +74,8 @@ AF導入後は内部取得元のみ共通JS / AF APIへ変更する。
 
 AFに画面用集計APIを要求しない。
 
+Master Resolve Failure等により今回のRemote Syncが失敗した場合、Frontendは今回取得分から独自に正常Sessionだけを抽出して部分表示してはならない。AFが維持・提供する最後の正常Local Runtime Dataが利用可能なら、そのRuntime Dataを継続表示する。
+
 ---
 
 ## 4. Dashboard / React
@@ -141,9 +143,11 @@ AFからは正規化済み `WorkoutSession[]` を取得し、現行集計ロジ�
 - Exercise Notes
 - Session Notes
 
-Master未登録を含むWorkoutSessionはAFでSession Rejectされるため、Frontendは未解決Master属性を持つWorkoutSessionを前提にしない。
+Frontendは未解決Master属性を持つWorkoutSessionを前提にしない。
 
-AFの `errors` をユーザーへ通知し、Runtime Dataへ載った正常なWorkoutSessionのみ表示継続してよい。
+今回のRemote Sync中にMaster Resolve Failureが発生した場合、そのSync SetはRuntime Dataとして確定されない。Frontendは不正Sessionのみを除外して今回のRemote Dataを部分採用してはならず、AFが提供する最後の正常Local Runtime Dataが利用可能ならそれを継続表示する。
+
+Master Resolve FailureはSync Operation失敗として `success:false` と `errors` で通知される。FrontendはFallback済みRuntime Dataの表示可否と、直前のSync Operation成否を別概念として扱う。
 
 ---
 
@@ -189,7 +193,7 @@ AFから画面用計算結果を取得しない。
 
 ```text
 success:false
-→ Operation失敗
+→ Operation失敗。Fallback済みの利用可能なdataが返る場合がある
 
 success:true
 → Operation成立
@@ -206,6 +210,8 @@ Frontendは `errors.length > 0` を一律の通知判定として利用可能。
 2026-08-24 の new-machine が対応する情報がマスターにありません。
 追加してください。
 ```
+
+Master Resolve Failureにより今回のRemote Runtime Dataを確定できない場合は `success:false` とする。最後の正常Local Runtime DataへのFallbackが成立していても、直前のRemote Sync Operation自体を成功扱いに変更しない。
 
 通知の見た目・配置は各Frontend責務。
 
@@ -531,20 +537,22 @@ Settings画面でAPI処理を実行している間は、画面全体にOverlay�
 Sync completed.
 ```
 
-通知対象異常あり:
+Operation成立 + 通知対象異常ありの例:
 
 ```text
-Sync completed with errors.
-2026-08-24 の new-machine が対応する情報がマスターにありません。
-追加してください。
+Sync completed with warnings.
 ```
 
-Remote失敗 / Local利用例:
+Master Resolve Failure等によりRemote Syncが成立せず、最後の正常Local Runtime Dataを継続利用する例:
 
 ```text
-GitHub access timed out.
-Existing local data is still being used.
+Sync failed.
+The last successfully synchronized local data is still being used.
 ```
+
+この場合、Sync Resultは `success:false` / `source:local` / `updated:false` / `degraded:true` とし、具体的なError Code / messageを併せて通知する。Fallback成立を理由にSync成功として表示してはならない。
+
+Remote通信失敗 / Local利用についても同様に、直前のRemote Operation成否とLocal Runtime Dataの継続利用可否を分離して表示する。
 
 ---
 
@@ -689,6 +697,7 @@ Settingsへの誘導
 - Token値をAFから取得して再表示しない。
 - Master未登録値をFrontendで捏造補完しない。
 - `name:null` / `body_part:null`等の未解決Master属性を持つWorkoutSessionを前提にしない。
+- Master Resolve Failure時に今回のRemote Sync結果から正常Sessionのみを独自に部分採用しない。
 - `errors.length > 0` を無視しない。
 - Error message文字列を制御分岐キーにしない。
 - Runtime Data unavailableでApplication全体をクラッシュさせない。
