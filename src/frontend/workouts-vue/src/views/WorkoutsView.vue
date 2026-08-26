@@ -14,7 +14,7 @@
 
     <section v-if="loadError" class="panel" style="margin-bottom: 16px">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>ワークアウトデータを確認してください</h2>
+      <h2>データが正常ではありません。</h2>
       <p class="muted">{{ loadError }}</p>
     </section>
 

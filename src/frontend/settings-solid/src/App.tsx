@@ -313,7 +313,7 @@ function App() {
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-database-outline" aria-hidden="true" /></div>
               <div class="card-heading__text">
-                <p class="eyebrow">RESOURCE DATA</p>
+                <p class="eyebrow">Resource Data</p>
                 <h2>リソース情報</h2>
               </div>
             </div>
@@ -361,7 +361,7 @@ function App() {
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-timer-outline" aria-hidden="true" /></div>
               <div class="card-heading__text">
-                <p class="eyebrow">TIMEOUT LIMITS</p>
+                <p class="eyebrow">Timeout Limits</p>
                 <h2>タイムアウト設定</h2>
               </div>
             </div>
@@ -380,7 +380,7 @@ function App() {
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-key-outline" aria-hidden="true" /></div>
               <div class="card-heading__text">
-                <p class="eyebrow">CREDENTIAL - GITHUB TOKEN</p>
+                <p class="eyebrow">Credential - GitHub Token</p>
                 <h2>資格情報 - GitHub Token</h2>
               </div>
             </div>
@@ -407,7 +407,7 @@ function App() {
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-cloud-sync-outline" aria-hidden="true" /></div>
               <div class="card-heading__text">
-                <p class="eyebrow">OPERATIONS - REMOTE DATA SYNC</p>
+                <p class="eyebrow">Operations - Remote Data Sync</p>
                 <h2>リモートデータ同期</h2>
               </div>
             </div>
