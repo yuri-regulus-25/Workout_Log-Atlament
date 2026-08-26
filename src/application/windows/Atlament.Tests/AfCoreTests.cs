@@ -46,7 +46,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public void MasterResolveFailureRejectsOnlyAffectedSession()
+    public void MasterResolveFailureRejectsRuntimeBuild()
     {
         var builder = new RuntimeDataBuilder();
         var files = new[]
@@ -59,15 +59,13 @@ public sealed class AfCoreTests
         var result = builder.Build(files, ExerciseMaster, GymMaster);
 
         Assert.False(result.TechnicalInvalid);
-        var session = Assert.Single(result.Sessions);
-        Assert.Equal("valid", session.SessionId);
+        Assert.Empty(result.Sessions);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterExerciseNotFound);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterGymNotFound);
-        Assert.DoesNotContain(result.Sessions, item => item.Exercises.Any(exercise => exercise.Name is null));
     }
 
     [Fact]
-    public void CurrentRuntimeDataIsStoredAfterSessionRejectApplied()
+    public void CurrentRuntimeDataCanStoreCleanBuildOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
         try
@@ -86,16 +84,15 @@ public sealed class AfCoreTests
                     new WorkoutExercise("known-exercise", "Known Exercise", "chest", new[] { new ExerciseSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
-            var errors = new[] { new AfError(AfErrorCodes.MasterExerciseNotFound, "Exercise master is not found: missing-exercise.", true) };
 
-            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, errors, false));
+            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false));
             var (loaded, loadErrors) = store.LoadCurrent();
 
             Assert.Empty(saveErrors);
             Assert.Empty(loadErrors);
             Assert.NotNull(loaded);
             Assert.Equal("valid", Assert.Single(loaded!.Sessions).SessionId);
-            Assert.Equal(AfErrorCodes.MasterExerciseNotFound, Assert.Single(loaded.Errors).Code);
+            Assert.Empty(loaded.Errors);
         }
         finally
         {

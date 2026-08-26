@@ -383,7 +383,9 @@ public sealed class RuntimeDataBuilder
             }
         }
 
-        return new RuntimeBuildResult(sessions, errors, false);
+        return errors.Count > 0
+            ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, false)
+            : new RuntimeBuildResult(sessions, errors, false);
     }
 
     public (WorkoutSession? Session, bool TechnicalInvalid) BuildSingleSessionForTest(string json, string path = "test.json")
@@ -1298,7 +1300,7 @@ public sealed class AtlamentApplication
             ValidateLocalRuntime();
             if (_runtimeStatus == ComponentStatus.available)
             {
-                return (200, AfResponses.Ok(new SyncResult("local", false, true), remote.Errors));
+                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult("local", false, true)));
             }
 
             return (503, new AfResponse<SyncResult>(false, remote.Errors, null));
@@ -1311,14 +1313,13 @@ public sealed class AtlamentApplication
         if (exerciseMaster is null || gymMaster is null)
         {
             var error = new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true);
-            return (503, AfResponses.Fail<SyncResult>(error));
+            return RuntimeBuildFailure(new[] { error });
         }
 
         var build = _runtimeDataBuilder.Build(workoutFiles, exerciseMaster, gymMaster);
-        if (build.TechnicalInvalid)
+        if (build.TechnicalInvalid || build.Errors.Count > 0)
         {
-            _runtimeStatus = ComponentStatus.unavailable;
-            return (200, new AfResponse<SyncResult>(false, build.Errors, null));
+            return RuntimeBuildFailure(build.Errors);
         }
 
         var saveErrors = _runtimeDataStore.SaveCurrent(build);
@@ -1332,6 +1333,19 @@ public sealed class AtlamentApplication
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
         return (200, AfResponses.Ok(new SyncResult("remote", true, build.Errors.Count > 0), build.Errors));
+    }
+
+    private (int StatusCode, AfResponse<SyncResult> Response) RuntimeBuildFailure(IReadOnlyList<AfError> errors)
+    {
+        _githubStatus = ComponentStatus.degraded;
+        ValidateLocalRuntime();
+        _applicationStatus = DetermineApplicationStatus();
+        if (_runtimeStatus == ComponentStatus.available)
+        {
+            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult("local", false, true)));
+        }
+
+        return (503, new AfResponse<SyncResult>(false, errors, null));
     }
 
     private void LoadConfiguration()

@@ -37,7 +37,11 @@ import org.json.JSONObject
 class AndroidLocalhostServer(private val context: Context) : Closeable {
     private data class RuntimeSourceFile(val path: String, val content: String)
     private data class SyncResponse(val status: Int, val body: String)
+    private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray)
+    private data class ExerciseMasterItem(val id: String, val name: String, val bodyPart: String)
+    private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
     private val appNames = setOf("dashboard", "workouts", "exercises", "analytics", "settings")
+    private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
     private val credentialPreferences: SharedPreferences = context.getSharedPreferences("atlament_secure_credential", Context.MODE_PRIVATE)
     private val credentialKeyAlias = "atlament_github_token"
@@ -481,9 +485,12 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
     private fun syncRuntimeData(): SyncResponse {
         return try {
-            val payload = fetchRuntimeWorkoutPayload()
+            val build = fetchRuntimeWorkoutData()
+            if (build.errors.length() > 0 || build.payload == null) {
+                return failedSync(build.errors)
+            }
             runtimeDataFile.parentFile?.mkdirs()
-            runtimeDataFile.writeText(payload, StandardCharsets.UTF_8)
+            runtimeDataFile.writeText(build.payload, StandardCharsets.UTF_8)
             githubComponentStatus = "available"
             writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
@@ -497,20 +504,22 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             githubComponentStatus = "degraded"
             val message = ex.message ?: "GitHub sync failed."
             writeLog("WARN", "Remote sync failed: $message")
-            if (runtimeDataFile.exists()) {
-                SyncResponse(200, okJson(
-                    """
-                    {
-                      "source": "local",
-                      "updated": false,
-                      "degraded": true
-                    }
-                    """.trimIndent(),
-                    errorsJson("GITHUB_CONNECTION_FAILED", message)
-                ))
-            } else {
-                SyncResponse(503, failJson("GITHUB_CONNECTION_FAILED", message))
-            }
+            failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
+        }
+    }
+
+    private fun failedSync(errors: JSONArray): SyncResponse {
+        githubComponentStatus = "degraded"
+        return if (runtimeDataFile.exists()) {
+            SyncResponse(200, responseJson(false, """
+                {
+                  "source": "local",
+                  "updated": false,
+                  "degraded": true
+                }
+            """.trimIndent(), errors))
+        } else {
+            SyncResponse(503, responseJson(false, "null", errors))
         }
     }
 
@@ -543,7 +552,7 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
 
     private fun githubStatus(): String = githubComponentStatus
 
-    private fun fetchRuntimeWorkoutPayload(): String {
+    private fun fetchRuntimeWorkoutData(): RuntimeBuildResult {
         val configuration = JSONObject(loadConfigurationJson())
         val repository = configuration.getJSONObject("repository")
         val owner = repository.optString("owner").trim()
@@ -556,8 +565,8 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val token = readCredentialToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
-        var exerciseMaster: JSONObject? = null
-        var gymMaster: JSONObject? = null
+        var exerciseMaster: RuntimeSourceFile? = null
+        var gymMaster: RuntimeSourceFile? = null
         val resources = configuration.getJSONArray("resources")
 
         for (index in 0 until resources.length()) {
@@ -580,25 +589,223 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
             }
 
             when (type) {
-                "EXERCISE_MASTER" -> exerciseMaster = JSONObject(fetched.firstOrNull()?.content ?: "{}")
-                "GYM_MASTER" -> gymMaster = JSONObject(fetched.firstOrNull()?.content ?: "{}")
+                "EXERCISE_MASTER" -> exerciseMaster = fetched.firstOrNull()
+                "GYM_MASTER" -> gymMaster = fetched.firstOrNull()
                 "WORKOUT" -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
                 else -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) && it.path.contains("workouts/", ignoreCase = true) })
             }
         }
 
-        val exercises = exerciseMaster ?: throw IllegalStateException("Required exercise master resource is missing.")
-        val gyms = gymMaster ?: throw IllegalStateException("Required gym master resource is missing.")
-        val filesJson = JSONArray()
-        workoutFiles.forEach { file ->
-            filesJson.put(JSONObject().put("path", file.path).put("content", file.content))
+        val errors = JSONArray()
+        val exercises = exerciseMaster?.let { parseExerciseMaster(it, errors) }
+        val gyms = gymMaster?.let { parseGymMaster(it, errors) }
+        if (exerciseMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required exercise master resource is missing."))
+        if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
+        if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
+        if (errors.length() > 0 || exercises == null || gyms == null) return RuntimeBuildResult(null, errors)
+
+        val sessions = JSONArray()
+        workoutFiles.sortedBy { it.path }.forEach { file ->
+            if (file.path.endsWith(".jsonl", ignoreCase = true)) {
+                file.content.split("\r\n", "\n").forEachIndexed { index, line ->
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, exercises, gyms, errors)?.let(sessions::put)
+                }
+            } else if (file.path.endsWith(".json", ignoreCase = true)) {
+                buildSession(file.path, null, file.content, exercises, gyms, errors)?.let(sessions::put)
+            }
+        }
+
+        if (errors.length() > 0) return RuntimeBuildResult(null, errors)
+
+        val payload = JSONObject()
+            .put("success", true)
+            .put("errors", JSONArray())
+            .put("data", JSONObject().put("sessions", sessions))
+            .toString(2)
+        return RuntimeBuildResult(payload, errors)
+    }
+
+    private fun parseExerciseMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, ExerciseMasterItem> {
+        return try {
+            val root = JSONObject(file.content)
+            val items = root.optJSONArray("exercises")
+            if (!root.has("schema_version") || items == null) {
+                errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master contract is invalid."))
+                return emptyMap()
+            }
+
+            val result = linkedMapOf<String, ExerciseMasterItem>()
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index)
+                val id = item?.optString("exercise_id").orEmpty().trim()
+                val name = item?.optString("name").orEmpty().trim()
+                val bodyPart = item?.optString("body_part").orEmpty().trim()
+                val hasActive = item?.has("active") == true
+                if (id.isBlank() || name.isBlank() || bodyPart !in bodyParts || !hasActive) {
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master item is invalid."))
+                    return emptyMap()
+                }
+                if (result.containsKey(id)) {
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate exercise_id: $id."))
+                    return emptyMap()
+                }
+                result[id] = ExerciseMasterItem(id, name, bodyPart)
+            }
+            result
+        } catch (_: Exception) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master JSON is invalid."))
+            emptyMap()
+        }
+    }
+
+    private fun parseGymMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, GymMasterItem> {
+        return try {
+            val root = JSONObject(file.content)
+            val items = root.optJSONArray("gyms")
+            if (!root.has("schema_version") || items == null) {
+                errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master contract is invalid."))
+                return emptyMap()
+            }
+
+            val result = linkedMapOf<String, GymMasterItem>()
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index)
+                val id = item?.optString("gym_id").orEmpty().trim()
+                val name = item?.optString("name").orEmpty().trim()
+                val hasActive = item?.has("active") == true
+                if (id.isBlank() || name.isBlank() || !hasActive) {
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master item is invalid."))
+                    return emptyMap()
+                }
+                if (result.containsKey(id)) {
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate gym_id: $id."))
+                    return emptyMap()
+                }
+                val shortName = item?.optString("short_name")?.takeIf { it.isNotBlank() }
+                result[id] = GymMasterItem(id, name, shortName)
+            }
+            result
+        } catch (_: Exception) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master JSON is invalid."))
+            emptyMap()
+        }
+    }
+
+    private fun buildSession(
+        filePath: String,
+        line: Int?,
+        content: String,
+        exercises: Map<String, ExerciseMasterItem>,
+        gyms: Map<String, GymMasterItem>,
+        errors: JSONArray
+    ): JSONObject? {
+        val root = try {
+            JSONObject(content)
+        } catch (_: Exception) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Workout JSON is invalid."))
+            return null
+        }
+
+        val schemaVersion = root.optInt("schema_version", Int.MIN_VALUE)
+        val sessionId = root.optString("session_id").trim()
+        val date = root.optString("date").trim()
+        val status = root.optString("status").trim()
+        val gymId = root.optString("gym_id").trim()
+        val exerciseItems = root.optJSONArray("exercises")
+        val parsedDate = runCatching { LocalDate.parse(date) }.getOrNull()
+        if (schemaVersion == Int.MIN_VALUE || sessionId.isBlank() || parsedDate == null || status !in setOf("complete", "partial") || gymId.isBlank() || exerciseItems == null) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Workout required fields are invalid."))
+            return null
+        }
+        if (status == "complete" && exerciseItems.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires exercises."))
+            return null
+        }
+
+        val gym = gyms[gymId]
+        if (gym == null) {
+            errors.put(errorJson("MASTER_GYM_NOT_FOUND", location(filePath, line) + "Gym master is not found: $gymId."))
+            return null
+        }
+
+        val normalizedExercises = JSONArray()
+        for (index in 0 until exerciseItems.length()) {
+            val normalized = buildExercise(filePath, line, exerciseItems.optJSONObject(index), exercises, errors) ?: return null
+            normalizedExercises.put(normalized)
+        }
+        if (status == "complete" && normalizedExercises.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires valid exercises."))
+            return null
         }
 
         return JSONObject()
-            .put("files", filesJson)
-            .put("masterData", JSONObject().put("exercises", exercises).put("gyms", gyms))
-            .toString(2)
+            .put("schema_version", schemaVersion)
+            .put("session_id", sessionId)
+            .put("date", date)
+            .put("status", status)
+            .put("gym", JSONObject().put("id", gym.id).put("name", gym.name).put("short_name", gym.shortName ?: JSONObject.NULL))
+            .put("condition", root.optJSONObject("condition") ?: JSONObject.NULL)
+            .put("exercises", normalizedExercises)
+            .put("notes", readStringArray(root.optJSONArray("notes")))
     }
+
+    private fun buildExercise(
+        filePath: String,
+        line: Int?,
+        item: JSONObject?,
+        masters: Map<String, ExerciseMasterItem>,
+        errors: JSONArray
+    ): JSONObject? {
+        val exerciseId = item?.optString("exercise_id").orEmpty().trim()
+        val setItems = item?.optJSONArray("sets")
+        if (item == null || exerciseId.isBlank() || setItems == null || setItems.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Exercise required fields are invalid."))
+            return null
+        }
+
+        val master = masters[exerciseId]
+        if (master == null) {
+            errors.put(errorJson("MASTER_EXERCISE_NOT_FOUND", location(filePath, line) + "Exercise master is not found: $exerciseId."))
+            return null
+        }
+
+        val sets = JSONArray()
+        for (index in 0 until setItems.length()) {
+            val set = setItems.optJSONObject(index)
+            if (set == null || !set.has("set") || !set.has("weight_kg") || !set.has("reps")) {
+                errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Set in exercise $exerciseId is invalid."))
+                return null
+            }
+            sets.put(JSONObject()
+                .put("set", set.optInt("set"))
+                .put("weight_kg", set.optDouble("weight_kg"))
+                .put("reps", set.optInt("reps"))
+                .put("rir", if (set.has("rir") && !set.isNull("rir")) set.optDouble("rir") else JSONObject.NULL)
+                .put("failure", if (set.has("failure") && !set.isNull("failure")) set.optBoolean("failure") else JSONObject.NULL)
+                .put("warmup", if (set.has("warmup") && !set.isNull("warmup")) set.optBoolean("warmup") else JSONObject.NULL)
+                .put("note", set.optString("note").takeIf { it.isNotBlank() } ?: JSONObject.NULL))
+        }
+
+        return JSONObject()
+            .put("exercise_id", exerciseId)
+            .put("name", master.name)
+            .put("body_part", master.bodyPart)
+            .put("sets", sets)
+            .put("notes", readStringArray(item.optJSONArray("notes")))
+    }
+
+    private fun readStringArray(array: JSONArray?): JSONArray {
+        val result = JSONArray()
+        if (array == null) return result
+        for (index in 0 until array.length()) {
+            val value = array.optString(index)
+            if (value.isNotBlank()) result.put(value)
+        }
+        return result
+    }
+
+    private fun location(filePath: String, line: Int?): String =
+        if (line == null) "$filePath: " else "$filePath:$line: "
 
     private fun fetchDirectoryFiles(
         owner: String,
@@ -687,15 +894,25 @@ class AndroidLocalhostServer(private val context: Context) : Closeable {
         }
     """.trimIndent()
 
+    private fun responseJson(success: Boolean, dataJson: String, errors: JSONArray): String = """
+        {
+          "success": $success,
+          "errors": ${errors.toString()},
+          "data": $dataJson
+        }
+    """.trimIndent()
+
     private fun errorsJson(code: String, message: String): String =
-        JSONArray()
-            .put(
-                JSONObject()
-                    .put("code", code)
-                    .put("message", message)
-                    .put("recoverable", true)
-            )
-            .toString()
+        errorsArray(code, message).toString()
+
+    private fun errorsArray(code: String, message: String): JSONArray =
+        JSONArray().put(errorJson(code, message))
+
+    private fun errorJson(code: String, message: String): JSONObject =
+        JSONObject()
+            .put("code", code)
+            .put("message", message)
+            .put("recoverable", true)
     private fun sendErrorPage(output: OutputStream, status: Int) {
         val assetPath = when (status) {
             404 -> "frontend/404.html"
