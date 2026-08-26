@@ -122,7 +122,7 @@ Windows x64向けの自己完結・単一exe配布物を作成します。
 
 ```text
 dist-windows/
-└─ Atlament-v1.0.0-win-x64/
+└─ Atlament-v<version>-win-x64/
    └─ Atlament.exe
 ```
 
@@ -141,12 +141,12 @@ dist-windows/
 
 ### npm run version:check
 
-`src/version.json`、Windows metadata、Android metadata、Status APIのVersion取得方式、Frontend version artifact生成設定の整合性をread-onlyで検証します。
+`src/version.json`、Windows metadata、Android metadata、Frontend version artifact生成設定の整合性をread-onlyで検証します。
 
 用途:
 
 - Version情報の直接編集やMerge conflictによる不整合を検出する
-- Build前にStatus API表示VersionとPlatform metadataのずれを検出する
+- Build前にVersion Primary SourceとPlatform metadataのずれを検出する
 
 注意:
 
