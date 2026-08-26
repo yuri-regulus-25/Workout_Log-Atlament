@@ -17,6 +17,8 @@ const runtimeIdentifier = 'win-x64';
 const distributionRoot = path.join(repositoryRoot, 'dist-windows');
 const publishRoot = path.join(distributionRoot, `Atlament-v${version}-${runtimeIdentifier}`);
 
+// Windows distribution is intentionally built from the project metadata version, not package.json,
+// because that is the version embedded into the executable and reported by the AF Status API.
 function run(command, args) {
   const isWindowsCommandScript = process.platform === 'win32' && command.endsWith('.cmd');
   const actualCommand = isWindowsCommandScript ? process.env.ComSpec ?? 'cmd.exe' : command;
@@ -53,6 +55,7 @@ function removeMatching(root, predicate) {
 rmSync(distributionRoot, { recursive: true, force: true });
 mkdirSync(publishRoot, { recursive: true });
 
+// Build frontend first so the publish target can embed the exact static assets that will ship.
 run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build']);
 run('dotnet', [
   'publish',

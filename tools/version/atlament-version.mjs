@@ -20,6 +20,8 @@ const paths = {
 const targets = new Set(['frontend', 'windows', 'android', 'all'])
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
+// This CLI is the single write path for version metadata. The extra read-only files in
+// `paths` are contract sentinels: their presence keeps checks honest when platform code moves.
 main().catch(error => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exit(1)
@@ -87,6 +89,8 @@ async function setVersion(options) {
     throw new Error('Current version state is inconsistent. Fix it before running version:set.')
   }
 
+  // Keep validation before calculation so a stale branch cannot silently rewrite one platform
+  // from another platform's already-inconsistent metadata.
   const nextVersionCode = resolveNextVersionCode(target, options, state)
   const changes = calculateChanges({ target, version, nextVersionCode, state })
   const warnings = []
@@ -111,6 +115,8 @@ async function setVersion(options) {
 function resolveNextVersionCode(target, options, state) {
   if (target !== 'android' && target !== 'all') return null
 
+  // Android update ordering depends on versionCode, not versionName. Require an explicit policy
+  // for every Android touch so release builds cannot accidentally reuse a Play-incompatible code.
   const hasExplicit = options['version-code'] !== undefined
   const hasBump = Boolean(options['bump-version-code'])
   if (hasExplicit === hasBump) {
@@ -129,6 +135,8 @@ function resolveNextVersionCode(target, options, state) {
 }
 
 async function readState() {
+  // Read all files up front. Later phases operate on this snapshot, which makes dry-run output
+  // and write validation describe the same source state.
   for (const [name, filePath] of Object.entries(paths)) {
     if (!existsSync(filePath)) {
       throw new Error(`Required file is missing: ${relative(filePath)} (${name})`)
@@ -205,6 +213,8 @@ function validateState(state) {
 }
 
 function calculateChanges({ target, version, nextVersionCode, state }) {
+  // Every target updates src/version.json first because it is the primary source shown to humans
+  // and used by validation; platform-specific files are synchronization outputs.
   const nextVersionJson = structuredClone(state.versionJson)
   if (target === 'frontend' || target === 'all') nextVersionJson.frontend = version
   if (target === 'windows' || target === 'all') nextVersionJson.windows = version
@@ -260,6 +270,8 @@ async function writeAndValidateAtomically(changes) {
   const backups = []
 
   try {
+    // Backups are created before the first write so a failed rename, formatter issue, or
+    // post-validation error can restore the repository to the previous consistent state.
     for (const change of changes) {
       const backupPath = path.join(backupDir, encodeURIComponent(path.relative(root, change.filePath)))
       await copyFile(change.filePath, backupPath)

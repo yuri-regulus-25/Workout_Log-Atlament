@@ -39,6 +39,8 @@ public sealed class AfHttpHost : IAsyncDisposable
             }
             catch (IOException)
             {
+                // A previous instance or Android emulator bridge can own the primary port. Try the
+                // secondary port before failing startup so the shell remains usable.
                 _webApplication = null;
             }
             catch (InvalidOperationException)
@@ -78,6 +80,8 @@ public sealed class AfHttpHost : IAsyncDisposable
 
     private void MapApi(WebApplication app, string prefix)
     {
+        // Keep v1 and legacy prefixes mapped to the same handlers. Frontend can migrate routes
+        // without duplicating AF behavior.
         app.MapGet($"{prefix}/status", () => Results.Json(_application.GetStatus(), AfJson.Options));
         app.MapGet($"{prefix}/runtime/workouts", () =>
         {
@@ -121,6 +125,8 @@ public sealed class AfHttpHost : IAsyncDisposable
     {
         if (context.Request.Path.StartsWithSegments("/api"))
         {
+            // Unknown API routes should not fall through to index.html; clients rely on HTTP
+            // status to distinguish routing mistakes from missing Frontend assets.
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
@@ -128,6 +134,8 @@ public sealed class AfHttpHost : IAsyncDisposable
         var file = _hosting.TryResolveFile(context.Request.Path.Value ?? "/", out var artifactUnavailable);
         if (artifactUnavailable)
         {
+            // 503 means the application is alive but its static Frontend artifact is not available.
+            // This is distinct from a user navigating to an unknown route.
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await context.Response.WriteAsJsonAsync(AfResponses.Fail<object>(
                 new AfError(AfErrorCodes.HostingArtifactNotFound, "Frontend artifact is unavailable.", true)), AfJson.Options);
