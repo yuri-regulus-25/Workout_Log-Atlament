@@ -195,7 +195,7 @@
   {#if loadError}
     <section class="panel">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>ワークアウトデータを確認してください</h2>
+      <h2>データが正常ではありません。</h2>
       <p class="muted">{loadError}</p>
     </section>
   {/if}

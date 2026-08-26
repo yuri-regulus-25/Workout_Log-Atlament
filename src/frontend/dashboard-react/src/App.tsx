@@ -223,7 +223,7 @@ function App() {
       {loadError ? (
         <section className="panel">
           <p className="eyebrow">Data Load Warning</p>
-          <h2>ワークアウトデータを確認してください</h2>
+          <h2>データが正常ではありません。</h2>
           <p className="muted">{loadError}</p>
         </section>
       ) : null}
