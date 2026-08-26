@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal — Atlament</title>
     <link rel="icon" type="image/svg+xml" href="./frontend-common/branding/assets/logo_svg_primary.svg" />
+    <link rel="stylesheet" href="./mdi/css/materialdesignicons.min.css" />
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./frontend-common/easter-egg/styles.css" />
     <script type="module" src="./main.js"></script>
@@ -24,7 +25,8 @@
       </p>
       <section id="sync-notice" class="sync-notice" aria-live="polite">
         <span class="sync-loader" aria-hidden="true"></span>
-        <span id="sync-notice-text">同期データを取得しています。</span>
+        <i id="sync-notice-icon" class="sync-icon mdi" aria-hidden="true"></i>
+        <span id="sync-notice-text">GitHubからデータを取得しています。</span>
       </section>
       <section class="app-grid" aria-label="Applications">
         <a class="app-card" href="/dashboard/">
@@ -41,7 +43,7 @@
         </a>
         <a class="app-card" href="/workouts/">
           <span class="app-category">History</span>
-          <strong class="app-title">Workout History</strong>
+          <strong class="app-title">Workout Domain</strong>
           <span class="app-pointer">これまでの記録を辿る</span>
           <small class="framework-badge">
             <span class="framework-label">Built with</span>

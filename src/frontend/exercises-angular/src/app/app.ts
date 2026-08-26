@@ -7,9 +7,8 @@ import type {
   ApexStroke,
   ApexXAxis,
 } from 'ng-apexcharts';
-import { applicationRoutes } from '@workout-lab/frontend-common/navigation';
+import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation';
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition';
-import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding';
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
 import type { WorkoutSession } from '@workout-lab/workout-types';
@@ -34,14 +33,12 @@ import {
   styleUrl: './app.css',
 })
 export class App implements AfterViewInit, OnDestroy {
-  @ViewChild('logoImage') private readonly logoImageRef?: ElementRef<HTMLImageElement>;
-  @ViewChild('logoTrigger') private readonly logoTriggerRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('shell') private readonly shellRef?: ElementRef<HTMLElement>;
   @ViewChild('characterTrigger') private readonly characterTriggerRef?: ElementRef<HTMLParagraphElement>;
 
   protected readonly applicationRoutes = applicationRoutes;
   protected readonly pageTransitionClassName = pageTransitionClassName;
-  protected readonly logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg';
-  private brandingLogo: { dispose(): void } | null = null;
+  private navigation: { dispose(): void } | null = null;
   private characterEasterEgg: { dispose(): void } | null = null;
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly loadError = signal<string | null>(null);
@@ -53,10 +50,9 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly selectedExerciseId = signal<string>('abdominal');
 
   ngAfterViewInit(): void {
-    this.brandingLogo = initializeBrandingLogo({
-      image: this.logoImageRef?.nativeElement,
-      trigger: this.logoTriggerRef?.nativeElement,
-      basePath: '/frontend-common/branding/assets/',
+    this.navigation = initializeAppNavigation({
+      currentRouteId: 'exercises',
+      shell: this.shellRef?.nativeElement,
     });
     this.characterEasterEgg = initializeCharacterEasterEgg({
       trigger: this.characterTriggerRef?.nativeElement,
@@ -66,7 +62,7 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.brandingLogo?.dispose();
+    this.navigation?.dispose();
     this.characterEasterEgg?.dispose();
   }
 
