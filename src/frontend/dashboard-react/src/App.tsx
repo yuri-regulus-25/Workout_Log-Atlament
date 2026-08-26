@@ -319,21 +319,21 @@ function App() {
             View Workout Domain
           </a>
         </div>
-        <div className="recent-table">
+        <div className="recent-table dashboard-recent-table">
           <div className="recent-row header">
-            <span>Date</span>
-            <span>Gym</span>
-            <span>Machines</span>
-            <span>Sets</span>
-            <span>Volume</span>
+            <span className="date-cell">Date</span>
+            <span className="gym-cell">Gym</span>
+            <span className="machines-cell">Machines</span>
+            <span className="sets-cell">Sets</span>
+            <span className="volume-cell">Volume</span>
           </div>
           {recentRows.map((row) => (
             <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
-              <span>{formatDisplayDate(row.date)}</span>
-              <span>{row.gym}</span>
-              <span>{row.exercises}</span>
-              <span>{row.totalSets}</span>
-              <span>{row.totalVolume.toLocaleString()} kg</span>
+              <span className="date-cell">{formatDisplayDate(row.date)}</span>
+              <span className="gym-cell">{row.gym}</span>
+              <span className="machines-cell">{row.exerciseCount}</span>
+              <span className="sets-cell">{row.totalSets}</span>
+              <span className="volume-cell">{row.totalVolume.toLocaleString()} kg</span>
             </a>
           ))}
         </div>
