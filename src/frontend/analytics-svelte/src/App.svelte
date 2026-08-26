@@ -270,7 +270,7 @@
           </div>
         </div>
       </div>
-      <div class="summary-table">
+      <div class="summary-table body-part-volume-table">
         <div class="summary-row header">
           <span>Body Part</span>
           <span>Sets</span>

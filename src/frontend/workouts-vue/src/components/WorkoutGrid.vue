@@ -70,9 +70,7 @@ function fullGymName(row: WorkoutRow): string {
 }
 
 function displayGymName(row: WorkoutRow): string {
-  const gym = props.sessions.find((item) => item.session_id === row.sessionId)?.gym
-
-  return gym?.short_name ?? gym?.name ?? row.gym
+  return fullGymName(row)
 }
 function goToPage(page: number) {
   currentPage.value = Math.min(Math.max(page, 1), pageCount.value)
@@ -93,12 +91,12 @@ function sortMark(key: SortKey): string {
     <table class="workout-table">
       <thead>
         <tr>
-          <th><button type="button" @click="setSort('date')">Date {{ sortMark('date') }}</button></th>
-          <th><button type="button" @click="setSort('gym')">Gym {{ sortMark('gym') }}</button></th>
-          <th><button type="button" @click="setSort('exerciseCount')">Machines {{ sortMark('exerciseCount') }}</button></th>
-          <th><button type="button" @click="setSort('totalSets')">Sets {{ sortMark('totalSets') }}</button></th>
-          <th><button type="button" @click="setSort('totalVolume')">Volume {{ sortMark('totalVolume') }}</button></th>
-          <th>Machine names</th>
+          <th class="date-cell"><button type="button" @click="setSort('date')">Date {{ sortMark('date') }}</button></th>
+          <th class="gym-cell"><button type="button" @click="setSort('gym')">Gym {{ sortMark('gym') }}</button></th>
+          <th class="machines-cell"><button type="button" @click="setSort('exerciseCount')">Machines {{ sortMark('exerciseCount') }}</button></th>
+          <th class="sets-cell"><button type="button" @click="setSort('totalSets')">Sets {{ sortMark('totalSets') }}</button></th>
+          <th class="volume-cell"><button type="button" @click="setSort('totalVolume')">Volume {{ sortMark('totalVolume') }}</button></th>
+          <th class="machine-names-cell">Machine names</th>
         </tr>
       </thead>
       <tbody>
@@ -107,12 +105,12 @@ function sortMark(key: SortKey): string {
           :key="row.sessionId"
           @click="selectRow(row)"
         >
-          <td>{{ formatDisplayDate(row.date) }}</td>
+          <td class="date-cell">{{ formatDisplayDate(row.date) }}</td>
           <td class="gym-cell" :title="fullGymName(row)">{{ displayGymName(row) }}</td>
-          <td>{{ row.exerciseCount }}</td>
-          <td>{{ row.totalSets }}</td>
-          <td>{{ row.totalVolume.toLocaleString() }} kg</td>
-          <td>{{ row.exercises }}</td>
+          <td class="machines-cell">{{ row.exerciseCount }}</td>
+          <td class="sets-cell">{{ row.totalSets }}</td>
+          <td class="volume-cell">{{ row.totalVolume.toLocaleString() }} kg</td>
+          <td class="machine-names-cell" :title="row.exercises">{{ row.exercises }}</td>
         </tr>
       </tbody>
     </table>

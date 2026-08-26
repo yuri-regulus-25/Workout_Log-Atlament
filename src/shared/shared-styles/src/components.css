@@ -282,6 +282,11 @@
   text-decoration: none;
 }
 
+.recent-row > span,
+.summary-row > span {
+  min-width: 0;
+}
+
 .recent-row:first-child,
 .summary-row:first-child {
   border-top: 0;
@@ -296,12 +301,31 @@
   text-transform: uppercase;
 }
 
-.recent-row {
-  grid-template-columns: 1fr 1fr 2fr 0.7fr 1fr;
+.recent-row,
+.dashboard-recent-table .recent-row {
+  grid-template-columns: 108px minmax(0, 1.5fr) minmax(96px, 1fr) 64px 112px;
 }
 
 .summary-row {
   grid-template-columns: 1fr 1fr 1fr;
+}
+
+.date-cell,
+.sets-cell,
+.volume-cell,
+.machines-cell,
+.best-weight-cell,
+.best-reps-cell {
+  white-space: nowrap;
+}
+
+.gym-cell {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.dashboard-recent-table .machines-cell {
+  min-width: 0;
 }
 
 @media (max-width: 900px) {
@@ -396,8 +420,22 @@
     flex-direction: column;
   }
 
-  .recent-row,
+}
+
+@container (max-width: 560px) {
+  .dashboard-recent-table .recent-row {
+    gap: 8px;
+    grid-template-columns: 92px minmax(0, 1fr) 48px;
+    padding: 10px 12px;
+  }
+
+  .dashboard-recent-table .machines-cell,
+  .dashboard-recent-table .volume-cell {
+    display: none;
+  }
+
   .summary-row {
-    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
   }
 }

@@ -134,22 +134,22 @@
 
     <div class="history-table">
       <div class="history-row header">
-        <span>Date</span>
-        <span>Gym</span>
-        <span>Sets</span>
-        <span>Best Weight</span>
-        <span>Best Reps</span>
-        <span>Volume</span>
+        <span class="date-cell">Date</span>
+        <span class="gym-cell">Gym</span>
+        <span class="sets-cell">Sets</span>
+        <span class="best-weight-cell"><span class="wide-label">Best Weight</span><span class="compact-label">Best WT.</span></span>
+        <span class="best-reps-cell"><span class="wide-label">Best Reps</span><span class="compact-label">Reps</span></span>
+        <span class="volume-cell">Volume</span>
       </div>
 
       @for (row of history(); track row.date + row.exerciseId) {
         <div class="history-row">
-          <span>{{ formatDate(row.date) }}</span>
-          <span>{{ row.gym }}</span>
-          <span>{{ row.sets }}</span>
-          <span>{{ row.bestWeight }} kg</span>
-          <span>{{ row.bestReps }}</span>
-          <span>{{ row.volume.toLocaleString() }} kg</span>
+          <span class="date-cell">{{ formatDate(row.date) }}</span>
+          <span class="gym-cell">{{ row.gym }}</span>
+          <span class="sets-cell">{{ row.sets }}</span>
+          <span class="best-weight-cell">{{ row.bestWeight }} kg</span>
+          <span class="best-reps-cell">{{ row.bestReps }}</span>
+          <span class="volume-cell">{{ row.volume.toLocaleString() }} kg</span>
         </div>
       } @empty {
         <p class="empty">No machine history found.</p>
