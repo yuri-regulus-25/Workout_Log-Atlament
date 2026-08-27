@@ -6,7 +6,8 @@ Repository再編完了後、Production Build / Preview / Development Watch / Nod
 
 ## 参照
 
-- `work/10_repository_build_runtime_design.md`
+- `docs/design/02_detailed-design/repository/build-runtime.md`
+- `docs/design/02_detailed-design/io/http-api.md`
 
 ## Production
 

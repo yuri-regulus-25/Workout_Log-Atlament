@@ -6,10 +6,11 @@ Repository再編およびBuild Runtime整備後、Frontend共通機能とFramewo
 
 ## 参照
 
-- `work/09_frontend_settings_detailed_design.md`
-- `work/10_repository_build_runtime_design.md`
+- `docs/design/02_detailed-design/frontend-framework/application-settings.md`
+- `docs/design/02_detailed-design/frontend-framework/common-js.md`
+- `docs/design/02_detailed-design/repository/build-runtime.md`
 
-Easter Eggを含む実装仕様は `10_repository_build_runtime_design.md` を正とする。
+Easter Eggを含む現行仕様は `docs/design/02_detailed-design/frontend-framework/common-js.md` を正とする。
 
 ## 実装対象
 

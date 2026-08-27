@@ -6,21 +6,27 @@
 
 正式な設計ドキュメントを管理します。実装判断に迷った場合は、まず `docs/design/` の最新内容を確認します。
 
-特に重要な設計書は以下です。
+`docs/design/README.md` が現行As-Is仕様書のIndexです。
 
-- `07_af_detailed_design.md`  
-  Windows AF / AF Core / API Contractの詳細設計です。
+特に重要な入口は以下です。
 
-- `08_common_js_detailed_design.md`  
-  Frontend共通JS / Runtime API接続の詳細設計です。
+- `docs/design/01_basic-design/system-overview.md`
+  System全体の現行仕様です。
 
-- `09_frontend_settings_detailed_design.md`  
-  Settings Frontendの詳細設計です。
+- `docs/design/02_detailed-design/application-framework/api-contract.md`
+  AF HTTP API Contractの詳細設計です。
 
-- `10_repository_build_runtime_design.md`  
-  Repository構成、Build、Packaging、Runtime配置の詳細設計です。
+- `docs/design/02_detailed-design/application-framework/windows/current-spec.md`
+  Windows AFの詳細設計です。
 
-- `11_v1_1_0_current_source_spec.md`: v1.1.0時点の現行Source Codeからリバース整理した横断仕様スナップショットです。
+- `docs/design/02_detailed-design/application-framework/android/current-spec.md`
+  Android AFの詳細設計です。
+
+- `docs/design/02_detailed-design/frontend-framework/`
+  Frontend共通基盤と各Applicationの詳細設計です。
+
+- `docs/design/02_detailed-design/data/`
+  Master Data / Workout Dataの現行Schemaです。
 
 ## instructions
 
