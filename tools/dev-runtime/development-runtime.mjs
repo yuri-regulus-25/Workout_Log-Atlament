@@ -9,6 +9,7 @@ import {
 const repoRoot = process.cwd()
 const masterDirectory = join(repoRoot, 'data', 'master')
 const workoutsDirectory = join(repoRoot, 'data', 'workouts')
+const versionFile = join(repoRoot, 'src', 'version.json')
 const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 
 const apiRoutes = new Set([
@@ -58,10 +59,12 @@ createServer(async (request, response) => {
 
 async function respondStatus(response) {
   const runtime = await loadRuntimeWorkoutData()
+  const versions = await loadVersions()
   const runtimeAvailable = runtime.success
 
   writeJson(response, 200, ok({
-    version: 'development',
+    version: versions.applicationFramework,
+    versions,
     application: {
       status: runtimeAvailable ? 'ready' : 'degraded',
       degraded: !runtimeAvailable,
@@ -90,6 +93,14 @@ async function respondStatus(response) {
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
   }, runtime.errors))
+}
+
+async function loadVersions() {
+  const version = JSON.parse(await readFile(versionFile, 'utf8'))
+  return {
+    applicationFramework: 'development',
+    frontendFramework: version.frontend,
+  }
 }
 
 async function respondRuntimeWorkouts(response) {

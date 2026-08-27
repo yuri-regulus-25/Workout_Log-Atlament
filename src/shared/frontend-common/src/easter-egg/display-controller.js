@@ -58,9 +58,9 @@ export function createEasterEggDisplayController({ host, assetBasePath = './fron
 }
 
 function createCard({ asset, voice }, assetBasePath) {
-  const card = document.createElement('section')
-  card.className = 'atl-easter-egg-card'
-  card.setAttribute('aria-live', 'polite')
+  const snackbar = document.createElement('section')
+  snackbar.className = 'atl-easter-egg-snackbar'
+  snackbar.setAttribute('aria-live', 'polite')
 
   const dialog = document.createElement('div')
   dialog.className = 'atl-easter-egg-dialog'
@@ -72,8 +72,8 @@ function createCard({ asset, voice }, assetBasePath) {
   image.alt = ''
   image.decoding = 'async'
 
-  card.append(dialog, image)
-  return card
+  snackbar.append(dialog, image)
+  return snackbar
 }
 
 function nextFrame() {

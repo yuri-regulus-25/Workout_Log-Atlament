@@ -1,15 +1,127 @@
 :root {
+  color-scheme: light;
   --wl-bg: #f4f6fb;
   --wl-surface: #ffffff;
+  --wl-surface-raised: #ffffff;
   --wl-surface-muted: #f8fafc;
+  --wl-surface-translucent: rgba(255, 255, 255, 0.92);
+  --wl-surface-nav: rgba(255, 255, 255, 0.94);
   --wl-text: #172033;
   --wl-text-strong: #111827;
   --wl-text-muted: #64748b;
   --wl-border: #e2e8f0;
-  --wl-primary: #7c3aed;
-  --wl-primary-strong: #6d28d9;
+  --wl-border-strong: #cbd5e1;
+  --wl-primary: #10b981;
+  --wl-primary-strong: #0f766e;
+  --wl-primary-soft: #ccfbf1;
+  --wl-accent: var(--wl-primary);
+  --wl-accent-strong: var(--wl-primary-strong);
   --wl-secondary: #2563eb;
+  --wl-secondary-strong: #1d4ed8;
+  --wl-brand: #12b8a6;
+  --wl-input-bg: #ffffff;
+  --wl-input-border: #cbd5e1;
+  --wl-hover: #f8fafc;
+  --wl-focus-ring: rgba(16, 185, 129, 0.16);
+  --wl-disabled-opacity: 0.45;
+  --wl-shadow-card: 0 20px 60px rgba(15, 23, 42, 0.08);
+  --wl-shadow-card-hover: 0 28px 70px rgba(15, 23, 42, 0.14);
+  --wl-shadow-nav: 12px 0 34px rgba(15, 23, 42, 0.06);
+  --wl-shadow-mobile-nav: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --wl-overlay: rgba(15, 23, 42, 0.38);
+  --wl-chart-axis: #475569;
+  --wl-chart-grid: #e2e8f0;
+  --wl-chart-tooltip-bg: #ffffff;
+  --wl-chart-tooltip-text: #111827;
+  --wl-info-bg: #eef2ff;
+  --wl-info-text: #3730a3;
+  --wl-success-bg: #ecfdf5;
+  --wl-success-border: #bbf7d0;
+  --wl-success-text: #047857;
+  --wl-warning-bg: #fff7ed;
+  --wl-warning-border: #fed7aa;
+  --wl-warning-text: #9a3412;
+  --wl-error-bg: #fef2f2;
+  --wl-error-border: #fecaca;
+  --wl-error-text: #b91c1c;
+  --wl-danger: #dc2626;
+  --wl-sync-success: #43A047;
+  --wl-sync-error: #ff3838;
   --wl-radius-card: 24px;
   --wl-radius-control: 999px;
   --wl-radius-inner: 18px;
+}
+
+:root[data-brand="violet"] {
+  --wl-primary: #7c3aed;
+  --wl-primary-strong: #6d28d9;
+  --wl-primary-soft: #ddd6fe;
+  --wl-accent: var(--wl-primary);
+  --wl-accent-strong: var(--wl-primary-strong);
+  --wl-brand: #7c3aed;
+  --wl-focus-ring: rgba(124, 58, 237, 0.14);
+}
+
+:root[data-theme="dark"],
+.atl-theme-dark {
+  color-scheme: dark;
+  --wl-bg: #111722;
+  --wl-surface: #182131;
+  --wl-surface-raised: #202b3d;
+  --wl-surface-muted: #121b29;
+  --wl-surface-translucent: rgba(24, 33, 49, 0.94);
+  --wl-surface-nav: rgba(17, 24, 39, 0.96);
+  --wl-text: #d7deea;
+  --wl-text-strong: #f4f7fb;
+  --wl-text-muted: #9aa8bc;
+  --wl-border: rgba(148, 163, 184, 0.22);
+  --wl-border-strong: rgba(148, 163, 184, 0.36);
+  --wl-primary: #2dd4bf;
+  --wl-primary-strong: #5eead4;
+  --wl-primary-soft: rgba(45, 212, 191, 0.24);
+  --wl-accent: var(--wl-primary);
+  --wl-accent-strong: var(--wl-primary-strong);
+  --wl-secondary: #60a5fa;
+  --wl-secondary-strong: #93c5fd;
+  --wl-brand: #2dd4bf;
+  --wl-input-bg: #101827;
+  --wl-input-border: rgba(148, 163, 184, 0.38);
+  --wl-hover: rgba(45, 212, 191, 0.12);
+  --wl-focus-ring: rgba(45, 212, 191, 0.24);
+  --wl-disabled-opacity: 0.5;
+  --wl-shadow-card: 0 22px 68px rgba(0, 0, 0, 0.34);
+  --wl-shadow-card-hover: 0 30px 76px rgba(0, 0, 0, 0.44);
+  --wl-shadow-nav: 12px 0 36px rgba(0, 0, 0, 0.24);
+  --wl-shadow-mobile-nav: 0 10px 30px rgba(0, 0, 0, 0.34);
+  --wl-overlay: rgba(0, 0, 0, 0.58);
+  --wl-chart-axis: #b6c2d3;
+  --wl-chart-grid: rgba(148, 163, 184, 0.22);
+  --wl-chart-tooltip-bg: #202b3d;
+  --wl-chart-tooltip-text: #f4f7fb;
+  --wl-info-bg: rgba(99, 102, 241, 0.18);
+  --wl-info-text: #c4b5fd;
+  --wl-success-bg: rgba(34, 197, 94, 0.14);
+  --wl-success-border: rgba(74, 222, 128, 0.28);
+  --wl-success-text: #86efac;
+  --wl-warning-bg: rgba(245, 158, 11, 0.14);
+  --wl-warning-border: rgba(251, 191, 36, 0.3);
+  --wl-warning-text: #facc15;
+  --wl-error-bg: rgba(239, 68, 68, 0.14);
+  --wl-error-border: rgba(248, 113, 113, 0.3);
+  --wl-error-text: #fca5a5;
+  --wl-danger: #f87171;
+  --wl-sync-success: #66bb6a;
+  --wl-sync-error: #ff6b6b;
+}
+
+:root[data-theme="dark"][data-brand="violet"],
+.atl-theme-dark[data-brand="violet"] {
+  --wl-primary: #a78bfa;
+  --wl-primary-strong: #c4b5fd;
+  --wl-primary-soft: rgba(167, 139, 250, 0.26);
+  --wl-accent: var(--wl-primary);
+  --wl-accent-strong: var(--wl-primary-strong);
+  --wl-brand: #a78bfa;
+  --wl-hover: rgba(167, 139, 250, 0.12);
+  --wl-focus-ring: rgba(167, 139, 250, 0.24);
 }

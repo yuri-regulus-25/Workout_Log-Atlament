@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import {
-  applicationRoutes,
+  initializeAppNavigation,
   pageTransitionClassName,
   getAfStatus,
   getConfiguration,
@@ -16,7 +16,6 @@ import {
   type ResourceConfiguration,
   type TimeoutConfiguration,
 } from '@workout-lab/frontend-common'
-import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
 
@@ -39,18 +38,11 @@ const statusLabels: Record<string, string> = {
   unavailable: '利用不可',
   unknown: '不明',
 }
-const requiredActionLabels: Record<string, string> = {
-  CONFIGURATION_REQUIRED: '設定が必要',
-  CREDENTIAL_REQUIRED: '資格情報が必要',
-  RUNTIME_DATA_REQUIRED: '同期済みデータが必要',
-}
 const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   WORKOUT: 'WORKOUT / ワークアウト情報',
   EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
   GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
-const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
-
 type Message = {
   tone: 'success' | 'warning' | 'error'
   text: string
@@ -77,17 +69,15 @@ function App() {
   const [loading, setLoading] = createSignal(true)
   const [busy, setBusy] = createSignal<string | null>(null)
   const [message, setMessage] = createSignal<Message | null>(null)
-  let logoImageElement: HTMLImageElement | undefined
-  let logoTriggerElement: HTMLButtonElement | undefined
+  let shellElement: HTMLElement | undefined
   let characterTriggerElement: HTMLParagraphElement | undefined
 
   const canOperate = createMemo(() => !loading() && busy() === null)
 
   onMount(() => {
-    const brandingLogo = initializeBrandingLogo({
-      image: logoImageElement,
-      trigger: logoTriggerElement,
-      basePath: '/frontend-common/branding/assets/',
+    const navigation = initializeAppNavigation({
+      currentRouteId: 'settings',
+      shell: shellElement,
     })
     const characterEasterEgg = initializeCharacterEasterEgg({
       trigger: characterTriggerElement,
@@ -95,7 +85,7 @@ function App() {
       assetBasePath: '/frontend-common/easter-egg/assets/',
     })
     onCleanup(() => {
-      brandingLogo.dispose()
+      navigation.dispose()
       characterEasterEgg.dispose()
     })
 
@@ -258,7 +248,7 @@ function App() {
   }
 
   return (
-    <main class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
+    <main ref={shellElement} class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
         <Portal>
           <div class="operation-overlay" role="status" aria-live="polite" aria-label="処理中">
@@ -270,18 +260,8 @@ function App() {
       <header class="page-hero">
         <div class="hero-top">
           <div class="atl-brand-row" aria-label="Atlament Settings">
-            <button ref={logoTriggerElement} class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-              <img ref={logoImageElement} class="atl-logo" src={logoSourcePath} alt="" />
-            </button>
             <p ref={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Application Settings</p>
           </div>
-          <nav class="global-nav" aria-label="Global navigation">
-            <a href={applicationRoutes.dashboard}>Dashboard</a>
-            <a href={applicationRoutes.workouts}>Workouts</a>
-            <a href={applicationRoutes.exercises}>Performance</a>
-            <a href={applicationRoutes.analytics}>Analytics</a>
-            <a class="active" href={applicationRoutes.settings}>Settings</a>
-          </nav>
         </div>
         <h1>Application Settings</h1>
         <p class="lead">外の世界との繋がりを定める<br />この世界も、様々な世界と繋がっている</p>
@@ -292,13 +272,16 @@ function App() {
       </Show>
 
       <section class="settings-grid">
-        <StatusSection status={status()} loading={loading()} />
+        <StatusSection status={status()} credential={credential()} />
 
         <section class="panel">
           <div class="panel-header">
-            <div>
-              <p class="eyebrow">GitHub Repository Source</p>
-              <h2>リポジトリ接続情報</h2>
+            <div class="card-heading">
+              <div class="card-heading__icon"><i class="mdi mdi-source-repository" aria-hidden="true" /></div>
+              <div class="card-heading__text">
+                <p class="eyebrow">GitHub Repository Source</p>
+                <h2>リポジトリ接続情報</h2>
+              </div>
             </div>
             <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveRepository}>
               Save
@@ -322,9 +305,12 @@ function App() {
 
         <section class="panel wide-panel">
           <div class="panel-header">
-            <div>
-              <p class="eyebrow">RESOURCE DATA</p>
-              <h2>リソース情報</h2>
+            <div class="card-heading">
+              <div class="card-heading__icon"><i class="mdi mdi-database-outline" aria-hidden="true" /></div>
+              <div class="card-heading__text">
+                <p class="eyebrow">Resource Data</p>
+                <h2>リソース情報</h2>
+              </div>
             </div>
             <div class="button-row">
               <button class="secondary-action" type="button" disabled={!canOperate()} onClick={addResource}>Add</button>
@@ -367,9 +353,12 @@ function App() {
 
         <section class="panel">
           <div class="panel-header">
-            <div>
-              <p class="eyebrow">TIMEOUT LIMITS</p>
-              <h2>タイムアウト設定</h2>
+            <div class="card-heading">
+              <div class="card-heading__icon"><i class="mdi mdi-timer-outline" aria-hidden="true" /></div>
+              <div class="card-heading__text">
+                <p class="eyebrow">Timeout Limits</p>
+                <h2>タイムアウト設定</h2>
+              </div>
             </div>
             <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveTimeouts}>Save</button>
           </div>
@@ -383,9 +372,12 @@ function App() {
 
         <section class="panel">
           <div class="panel-header">
-            <div>
-              <p class="eyebrow">CREDENTIAL - GITHUB TOKEN</p>
-              <h2>資格情報 - GitHub Token</h2>
+            <div class="card-heading">
+              <div class="card-heading__icon"><i class="mdi mdi-key-outline" aria-hidden="true" /></div>
+              <div class="card-heading__text">
+                <p class="eyebrow">Credential - GitHub Token</p>
+                <h2>資格情報 - GitHub Token</h2>
+              </div>
             </div>
             <span class={`status-pill ${credential()?.state ?? 'unknown'}`}>{displayStatus(credential()?.state ?? 'unknown')}</span>
           </div>
@@ -407,9 +399,12 @@ function App() {
 
         <section class="panel operations-panel">
           <div class="panel-header">
-            <div>
-              <p class="eyebrow">OPERATIONS - REMOTE DATA SYNC</p>
-              <h2>リモートデータ同期</h2>
+            <div class="card-heading">
+              <div class="card-heading__icon"><i class="mdi mdi-cloud-sync-outline" aria-hidden="true" /></div>
+              <div class="card-heading__text">
+                <p class="eyebrow">Operations - Remote Data Sync</p>
+                <h2>リモートデータ同期</h2>
+              </div>
             </div>
             <button class="primary-action" type="button" disabled={!canOperate() || busy() === 'sync'} onClick={syncNow}>
               Sync immediately
@@ -422,36 +417,25 @@ function App() {
   )
 }
 
-function StatusSection(props: { status: AfStatus | null; loading: boolean }) {
+function StatusSection(props: { status: AfStatus | null; credential: CredentialStatus | null }) {
+  const githubStatus = createMemo(() => resolveGithubStatus(props.status, props.credential))
+
   return (
     <section class="panel wide-panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Application Framework Status</p>
-          <h2>アプリケーション状況</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-information-outline" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Application Framework Status</p>
+            <h2>アプリケーション状況</h2>
+          </div>
         </div>
-        <span class={`status-pill ${props.status?.application.status ?? 'unknown'}`}>
-          {props.loading ? displayStatus('loading') : displayStatus(props.status?.application.status ?? 'unknown')}
-        </span>
       </div>
       <div class="status-grid">
-        <StatusItem label="Version" value={props.status?.version ?? '-'} />
-        <StatusItem label="Application" value={displayStatus(props.status?.application.status)} />
-        <StatusItem label="Runtime Data" value={displayStatus(props.status?.components.runtimeData)} />
-        <StatusItem label="GitHub" value={displayStatus(props.status?.components.github)} />
-        <StatusItem label="Credential" value={displayStatus(props.status?.components.credential)} />
-        <StatusItem label="Configuration" value={displayStatus(props.status?.components.configuration)} />
+        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? props.status?.version ?? '-'} />
+        <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
+        <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
-      <div class="subsection-grid">
-        <StatusGroup title="Operations" entries={props.status?.operations} />
-        <StatusGroup title="Hosting" entries={props.status?.components.hosting} />
-      </div>
-      <Show when={(props.status?.requiredActions.length ?? 0) > 0}>
-        <div class="required-actions">
-          <p class="eyebrow">Required Actions</p>
-          <For each={props.status?.requiredActions ?? []}>{(action) => <span>{displayRequiredAction(action)}</span>}</For>
-        </div>
-      </Show>
     </section>
   )
 }
@@ -461,22 +445,6 @@ function StatusItem(props: { label: string; value: string }) {
     <div class="status-item">
       <span>{props.label}</span>
       <strong>{props.value}</strong>
-    </div>
-  )
-}
-
-function StatusGroup(props: { title: string; entries?: Record<string, string> }) {
-  return (
-    <div class="status-group">
-      <p class="eyebrow">{props.title}</p>
-      <For each={Object.entries(props.entries ?? {})}>
-        {([key, value]) => (
-          <div>
-            <span>{splitCamel(key)}</span>
-            <strong>{displayStatus(value)}</strong>
-          </div>
-        )}
-      </For>
     </div>
   )
 }
@@ -511,17 +479,21 @@ function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): 
   }
 }
 
-function splitCamel(value: string) {
-  return value.replace(/[A-Z]/g, (match) => ` ${match}`).trim()
-}
-
 function displayStatus(value?: string) {
   if (!value) return '-'
   return statusLabels[value] ?? value
 }
 
-function displayRequiredAction(value: string) {
-  return `${value} / ${requiredActionLabels[value] ?? '対応が必要'}`
+function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {
+  if (!credential) return { label: '-' }
+  if (!credential.configured || credential.state === 'missing') return { label: '未設定' }
+  if (credential.state === 'expired') return { label: 'Token期限切れ' }
+  if (credential.state !== 'available') return { label: '利用不可' }
+
+  const github = status?.components.github
+  if (github === 'available') return { label: '利用可能' }
+  if (github === 'degraded' || github === 'unavailable' || github === 'failed') return { label: '利用不可' }
+  return { label: displayStatus(github) }
 }
 
 function scrollToTop() {

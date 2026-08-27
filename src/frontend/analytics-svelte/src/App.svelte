@@ -2,10 +2,10 @@
   import ApexCharts from 'apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { onDestroy, onMount } from 'svelte'
-  import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
+  import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-  import { initializeBrandingLogo } from '@workout-lab/frontend-common/branding'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
+  import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
   import {
@@ -34,25 +34,31 @@
 
   let trendChartElement: HTMLDivElement
   let bodyPartChartElement: HTMLDivElement
-  let logoImageElement: HTMLImageElement
-  let logoTriggerElement: HTMLButtonElement
+  let shellElement: HTMLElement
   let characterTriggerElement: HTMLParagraphElement
   let trendChart: ApexCharts | null = null
   let bodyPartChart: ApexCharts | null = null
-  let brandingLogo: { dispose: () => void } | null = null
+  let navigation: { dispose: () => void } | null = null
   let characterEasterEgg: { dispose: () => void } | null = null
-  const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
+  let disposeThemeObserver: (() => void) | null = null
 
   onMount(async () => {
-    brandingLogo = initializeBrandingLogo({
-      image: logoImageElement,
-      trigger: logoTriggerElement,
-      basePath: '/frontend-common/branding/assets/',
+    navigation = initializeAppNavigation({
+      currentRouteId: 'analytics',
+      shell: shellElement,
     })
     characterEasterEgg = initializeCharacterEasterEgg({
       trigger: characterTriggerElement,
       host: document.body,
       assetBasePath: '/frontend-common/easter-egg/assets/',
+    })
+    disposeThemeObserver = observeThemeChanges(() => {
+      trendChart?.updateOptions(createTrendOptions(sessions), false, true)
+      bodyPartChart?.updateOptions(
+        createBodyPartOptions(orderByBodyPartDisplayOrder(getBodyPartSummary(sessions))),
+        false,
+        true,
+      )
     })
 
     try {
@@ -74,23 +80,37 @@
   })
 
   onDestroy(() => {
-    brandingLogo?.dispose()
+    navigation?.dispose()
     characterEasterEgg?.dispose()
+    disposeThemeObserver?.()
     trendChart?.destroy()
     bodyPartChart?.destroy()
   })
 
   function createTrendOptions(sourceSessions: WorkoutSession[]): ApexOptions {
+    const chartTheme = getChartTheme()
+
     return {
       chart: {
         type: 'area',
         height: 320,
+        background: 'transparent',
+        foreColor: chartTheme.textMuted,
         toolbar: { show: false },
         zoom: { enabled: false },
       },
-      colors: ['#7c3aed'],
+      colors: [chartTheme.primary],
       dataLabels: { enabled: false },
+      fill: {
+        gradient: {
+          opacityFrom: chartTheme.mode === 'dark' ? 0.34 : 0.28,
+          opacityTo: chartTheme.mode === 'dark' ? 0.04 : 0.02,
+        },
+        type: 'gradient',
+      },
+      grid: { borderColor: chartTheme.grid },
       stroke: { curve: 'smooth', width: 3 },
+      theme: { mode: chartTheme.mode },
       series: [
         {
           name: 'Total Weight',
@@ -99,9 +119,12 @@
       ],
       xaxis: {
         categories: sourceSessions.map((session) => formatDisplayDate(session.date)),
-        labels: { show: false },
+        axisBorder: { color: chartTheme.border },
+        axisTicks: { color: chartTheme.border },
+        labels: { show: false, style: { colors: chartTheme.textMuted } },
       },
       tooltip: {
+        theme: chartTheme.mode,
         y: {
           formatter: (value) => `${value.toLocaleString()} kg`,
         },
@@ -110,14 +133,19 @@
   }
 
   function createBodyPartOptions(sourceSummary: ReturnType<typeof getBodyPartSummary>): ApexOptions {
+    const chartTheme = getChartTheme()
+
     return {
       chart: {
         type: 'bar',
         height: 320,
+        background: 'transparent',
+        foreColor: chartTheme.textMuted,
         toolbar: { show: false },
       },
-      colors: ['#2563eb'],
+      colors: [chartTheme.secondary],
       dataLabels: { enabled: false },
+      grid: { borderColor: chartTheme.grid },
       plotOptions: {
         bar: {
           borderRadius: 8,
@@ -132,7 +160,15 @@
       ],
       xaxis: {
         categories: sourceSummary.map((item) => formatBodyPart(item.bodyPart)),
+        axisBorder: { color: chartTheme.border },
+        axisTicks: { color: chartTheme.border },
+        labels: { style: { colors: chartTheme.textMuted } },
       },
+      yaxis: {
+        labels: { style: { colors: chartTheme.textMuted } },
+      },
+      theme: { mode: chartTheme.mode },
+      tooltip: { theme: chartTheme.mode },
     }
   }
 
@@ -149,22 +185,12 @@
   }
 </script>
 
-<main class={`app-shell ${pageTransitionClassName}`}>
+<main bind:this={shellElement} class={`app-shell ${pageTransitionClassName}`}>
   <header class="page-hero">
     <div class="hero-top">
       <div class="atl-brand-row" aria-label="Atlament Analytics">
-        <button bind:this={logoTriggerElement} class="atl-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-          <img bind:this={logoImageElement} class="atl-logo" src={logoSourcePath} alt="" />
-        </button>
         <p bind:this={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Analytics</p>
       </div>
-      <nav class="global-nav" aria-label="Global navigation">
-        <a href={applicationRoutes.dashboard}>Dashboard</a>
-        <a href={applicationRoutes.workouts}>Workouts</a>
-        <a href={applicationRoutes.exercises}>Performance</a>
-        <a class="active" href={applicationRoutes.analytics}>Analytics</a>
-        <a href={applicationRoutes.settings}>Settings</a>
-      </nav>
     </div>
     <h1>Analytics</h1>
     <p class="lead">
@@ -195,7 +221,7 @@
   {#if loadError}
     <section class="panel">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>ワークアウトデータを確認してください</h2>
+      <h2>データが正常ではありません。</h2>
       <p class="muted">{loadError}</p>
     </section>
   {/if}
@@ -203,9 +229,12 @@
   <section class="analytics-chart-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Workout Trend</p>
-          <h2>ボリューム推移</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-bell-curve" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Workout Trend</p>
+            <h2>ボリューム推移</h2>
+          </div>
         </div>
       </div>
       <div bind:this={trendChartElement}></div>
@@ -213,9 +242,12 @@
 
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Body Part Balance</p>
-          <h2>部位別セット数</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-bar" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Balance</p>
+            <h2>部位別セット数</h2>
+          </div>
         </div>
       </div>
       <div bind:this={bodyPartChartElement}></div>
@@ -225,25 +257,30 @@
   <section class="analytics-single-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Training Frequency</p>
-          <h2>トレーニング頻度</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-calendar-sync-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Training Frequency</p>
+            <h2>トレーニング頻度</h2>
+          </div>
         </div>
       </div>
       <p class="large-number">{trainingFrequencyPerWeek.toFixed(1)} / week</p>
       <p class="muted">
         記録期間全体での週あたり平均セッション数。
       </p>
-      <a class="primary-action" href={applicationRoutes.dashboard}>Back to Dashboard</a>
     </article>
   </section>
 
   <section class="dashboard-grid analytics-table-grid">
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Machine Variety</p>
-          <h2>部位別実施マシン数</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-format-list-numbered-rtl" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Machine Variety</p>
+            <h2>部位別実施マシン数</h2>
+          </div>
         </div>
       </div>
       <div class="summary-table machine-variety-table">
@@ -264,12 +301,15 @@
 
     <article class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Body Part Volume</p>
-          <h2>部位別ボリューム</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Volume</p>
+            <h2>部位別ボリューム</h2>
+          </div>
         </div>
       </div>
-      <div class="summary-table">
+      <div class="summary-table body-part-volume-table">
         <div class="summary-row header">
           <span>Body Part</span>
           <span>Sets</span>

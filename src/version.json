@@ -1,0 +1,8 @@
+{
+  "frontend": "1.1.0",
+  "windows": "1.1.0",
+  "android": {
+    "versionName": "1.1.0",
+    "versionCode": 3
+  }
+}

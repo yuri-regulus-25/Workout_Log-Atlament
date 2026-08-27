@@ -50,7 +50,7 @@ npm run build:windows
 
 ```text
 dist-windows/
-└─ Atlament-v1.0.0-win-x64/
+└─ Atlament-v<version>-win-x64/
    └─ Atlament.exe
 ```
 
@@ -71,7 +71,7 @@ CredentialはWindowsのSecure Storage方針に従い、Token値をFrontendやLog
 
 ## 起動確認
 
-Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-windows/Atlament-v1.0.0-win-x64/Atlament.exe` を起動します。
+Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-windows/Atlament-v<version>-win-x64/Atlament.exe` を起動します。
 
 起動後はPortalがWebView2に表示され、localhost HTTP Serverから以下のrouteを配信します。
 

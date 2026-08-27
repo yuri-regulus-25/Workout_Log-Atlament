@@ -34,6 +34,10 @@ public sealed class WindowsPathProvider
     public string RuntimeDataPath => Path.Combine(CurrentRuntimeRoot, "runtime-data.json");
 }
 
+/// <summary>
+/// Shared JSON contract options for AF API payloads and persisted runtime/configuration files.
+/// Keeping this centralized prevents casing drift between Windows, Android, and Frontend clients.
+/// </summary>
 public sealed class AfJson
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -94,6 +98,8 @@ public sealed class AfLog
 
             if (type is LogType.ERROR or LogType.FATAL)
             {
+                // Text files are intentionally limited to severe failures. SQLite is the primary
+                // operation log, but plain files remain useful when database initialization fails.
                 AppendRotatingText(type == LogType.ERROR ? "error" : "fatal_error", type, detail, endpoint);
             }
         }
@@ -231,6 +237,8 @@ public sealed class CredentialStore
             }
 
             var protectedBytes = File.ReadAllBytes(_paths.CredentialPath);
+            // DPAPI binds credentials to the current Windows user. The token should never be
+            // recoverable from copied application folders or written into Frontend-visible data.
             var json = Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser));
             var credential = JsonSerializer.Deserialize<StoredCredential>(json, AfJson.Options);
             if (credential?.Token is not { Length: > 0 })
@@ -305,6 +313,8 @@ public sealed class RuntimeDataStore
     {
         try
         {
+            // Write through the temporary runtime area so Frontend requests never observe a
+            // partially serialized runtime-data.json during sync.
             Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
             var data = new RuntimeDataFile(1, DateTimeOffset.UtcNow, result.Sessions, result.Errors);
             var tempPath = Path.Combine(_paths.TemporaryRuntimeRoot, "runtime-data.json");
@@ -358,6 +368,8 @@ public sealed class RuntimeDataBuilder
         var gyms = ParseGymMaster(gymsFile, errors);
         if (errors.Any(error => error.Code == AfErrorCodes.RuntimeDataInvalid))
         {
+            // Master data is structural input for every workout. Stop immediately when it is
+            // malformed so downstream errors do not hide the actual contract failure.
             return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
         }
 
@@ -391,6 +403,8 @@ public sealed class RuntimeDataBuilder
         }
 
         return errors.Count > 0
+            // Master lookup misses are reported as user-actionable sync errors, but the current
+            // runtime file is left untouched so local fallback can continue serving old data.
             ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, false)
             : new RuntimeBuildResult(sessions, errors, false);
     }
@@ -1075,6 +1089,8 @@ public sealed class OperationGate
     {
         lock (_syncRoot)
         {
+            // Startup sync and manual sync both update the same runtime file. Allowing them to
+            // overlap would make Status API operation states ambiguous and risk last-writer wins.
             if (_operations["shutdown"] == OperationStatus.running && name != "shutdown") return false;
             if (name == "manualSync" && _operations["startup"] == OperationStatus.running) return false;
             if (name == "startup" && _operations["manualSync"] == OperationStatus.running) return false;
@@ -1108,6 +1124,11 @@ public sealed class OperationGate
 
 public sealed class AtlamentApplication
 {
+    private static readonly string ApplicationFrameworkVersion =
+        typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(AtlamentApplication).Assembly.GetName().Version?.ToString()
+        ?? "unknown";
+
     private readonly ConfigurationStore _configurationStore;
     private readonly CredentialStore _credentialStore;
     private readonly RuntimeDataStore _runtimeDataStore;
@@ -1155,6 +1176,8 @@ public sealed class AtlamentApplication
             LoadCredential();
             ValidateLocalRuntime();
             _applicationStatus = DetermineApplicationStatus();
+            // Startup Sync is background work by design: the shell should open and let Frontend
+            // reflect running/degraded state through Status API instead of blocking first paint.
             _ = Task.Run(() => StartupSyncAsync(), CancellationToken.None);
         }
         catch (Exception ex)
@@ -1168,7 +1191,8 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        "1.0.0",
+        ApplicationFrameworkVersion,
+        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion()),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1178,6 +1202,22 @@ public sealed class AtlamentApplication
             _runtimeStatus.ToString(),
             _hosting.GetStatus()),
         _requiredActions.ToArray()));
+
+    private string GetFrontendFrameworkVersion()
+    {
+        try
+        {
+            var versionFile = _hosting.TryResolveFile("/version.json", out _);
+            if (versionFile is null) return "unknown";
+            using var stream = _hosting.OpenRead(versionFile);
+            var document = JsonNode.Parse(stream);
+            return document?["frontend"]?.GetValue<string>() ?? "unknown";
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
 
     public AfResponse<RuntimeWorkoutData> GetRuntimeWorkouts()
     {
@@ -1321,6 +1361,8 @@ public sealed class AtlamentApplication
             ValidateLocalRuntime();
             if (_runtimeStatus == ComponentStatus.available)
             {
+                // Remote failure is degraded, not fatal, when a previously built runtime file can
+                // still satisfy Frontend data requests.
                 return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult("local", false, true)));
             }
 
@@ -1408,6 +1450,8 @@ public sealed class AtlamentApplication
 
     private static AfConfiguration MergeConfiguration(AfConfiguration current, ConfigurationUpdate update)
     {
+        // Settings posts partial updates. Merge keeps unspecified fields stable so independent
+        // cards on the Settings screen do not accidentally reset each other.
         var repository = update.Repository is null
             ? current.Repository
             : new RepositoryConfiguration(

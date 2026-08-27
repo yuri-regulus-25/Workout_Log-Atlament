@@ -43,7 +43,7 @@ const totalVolume = computed(() =>
 <template>
   <section v-if="loadError" class="panel" style="margin-bottom: 16px">
     <p class="eyebrow">Data Load Warning</p>
-    <h2>ワークアウトデータを確認してください</h2>
+    <h2>データが正常ではありません。</h2>
     <p class="muted">{{ loadError }}</p>
   </section>
 
@@ -71,9 +71,12 @@ const totalVolume = computed(() =>
 
     <section v-for="session in sessions" :key="session.session_id" class="panel">
       <div class="panel-header">
-        <div>
-          <p class="eyebrow">Workout Detail</p>
-          <h2>ワークアウト詳細 - {{ session.gym.name }}</h2>
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-text-box-outline" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Workout Detail</p>
+            <h2>ワークアウト詳細 - {{ session.gym.name }}</h2>
+          </div>
         </div>
       </div>
 
