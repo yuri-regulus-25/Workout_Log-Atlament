@@ -10,6 +10,7 @@ import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
   formatBodyPart,
   formatDisplayDate,
+  getCurrentLocalYearMonth,
   getBodyPartSummary,
   getMonthlySessions,
   getMonthlyVolume,
@@ -19,9 +20,6 @@ import {
   toWorkoutRows,
 } from '@workout-lab/workout-core'
 import './App.css'
-
-const currentYear = 2026
-const currentMonth = 8
 
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
@@ -72,10 +70,11 @@ function App() {
 
   useEffect(() => observeThemeChanges(() => setThemeRevision((revision) => revision + 1)), [])
 
-  const monthlySessions = getMonthlySessions(sessions, currentYear, currentMonth)
+  const currentMonth = getCurrentLocalYearMonth()
+  const monthlySessions = getMonthlySessions(sessions, currentMonth.year, currentMonth.month)
   const latestWorkout = sessions.at(-1)
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
-  const monthlyVolume = getMonthlyVolume(sessions, currentYear, currentMonth)
+  const monthlyVolume = getMonthlyVolume(sessions, currentMonth.year, currentMonth.month)
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
   const bodyBalanceRows = getDashboardBodyBalanceRows(monthlySessions)
   const recent28Sessions = getRecentSessions(sessions, 28)
