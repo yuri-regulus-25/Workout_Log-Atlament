@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../../src/frontend/portal/src/', import.meta.url))
 const frontendCommonRoot = fileURLToPath(new URL('../../src/shared/frontend-common/src/', import.meta.url))
+const mdiFontRoot = fileURLToPath(new URL('../../node_modules/@mdi/font/', import.meta.url))
 const port = 5174
 
 const contentTypes = {
@@ -14,6 +15,10 @@ const contentTypes = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
 }
 
 const server = createServer((request, response) => {
@@ -48,6 +53,13 @@ function resolveFile(pathname) {
     const common = safeJoin(frontendCommonRoot, decodedPathname.replace('/frontend-common/', ''))
     if (common && existsSync(common) && isFileSync(common)) {
       return common
+    }
+  }
+
+  if (decodedPathname.startsWith('/mdi/')) {
+    const iconFont = safeJoin(mdiFontRoot, decodedPathname.replace('/mdi/', ''))
+    if (iconFont && existsSync(iconFont) && isFileSync(iconFont)) {
+      return iconFont
     }
   }
 

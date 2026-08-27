@@ -133,10 +133,15 @@ public sealed record SessionCondition(
 
 public sealed record AfStatus(
     [property: JsonPropertyName("version")] string Version,
+    [property: JsonPropertyName("versions")] StatusVersions Versions,
     [property: JsonPropertyName("application")] ApplicationState Application,
     [property: JsonPropertyName("operations")] OperationStateSnapshot Operations,
     [property: JsonPropertyName("components")] ComponentStateSnapshot Components,
     [property: JsonPropertyName("requiredActions")] IReadOnlyList<string> RequiredActions);
+
+public sealed record StatusVersions(
+    [property: JsonPropertyName("applicationFramework")] string ApplicationFramework,
+    [property: JsonPropertyName("frontendFramework")] string FrontendFramework);
 
 public sealed record ApplicationState(
     [property: JsonPropertyName("status")] string Status,

@@ -10,6 +10,7 @@
   justify-content: center;
   width: 64px;
   height: 64px;
+  margin: 4px 0 0 -4px;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -23,6 +24,45 @@
   object-fit: contain;
 }
 
+.atl-theme-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  margin: 4px 0 0 -4px;
+  border: 1px solid var(--wl-border);
+  border-radius: 999px;
+  background: var(--wl-surface);
+  color: var(--wl-accent);
+  box-shadow: var(--wl-shadow-soft);
+  cursor: pointer;
+  padding: 0;
+}
+
+.atl-theme-trigger.atl-navigation-theme-trigger {
+  bottom: 4px;
+  left: 4px;
+  margin: 0;
+  position: absolute;
+}
+
+.atl-theme-trigger:hover {
+  background: var(--wl-surface-hover);
+  color: var(--wl-accent-strong);
+}
+
+.atl-theme-trigger:focus-visible {
+  outline: 3px solid var(--wl-focus-ring);
+  outline-offset: 3px;
+}
+
+.atl-theme-trigger .mdi {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
 .atl-character-trigger {
   cursor: pointer;
   user-select: none;
@@ -33,5 +73,10 @@
   .atl-logo {
     width: 56px;
     height: 56px;
+  }
+
+  .atl-theme-trigger {
+    width: 36px;
+    height: 36px;
   }
 }

@@ -17,17 +17,17 @@
   display: grid;
   gap: 8px;
   margin-bottom: 8px;
-  border: 1px solid rgba(220, 38, 38, 0.18);
+  border: 1px solid var(--wl-error-border);
   border-radius: var(--wl-radius-card);
-  background-color: #ffddddeb;
-  box-shadow: 0 20px 60px rgba(220, 38, 38, 0.08);
+  background-color: var(--wl-error-bg);
+  box-shadow: var(--wl-shadow-card);
   padding: 20px;
 }
 
 .parameter-error-card .eyebrow,
 .parameter-error-card h2,
 .parameter-error-message {
-  color: #dc2626;
+  color: var(--wl-danger);
 }
 
 .parameter-error-message {
@@ -52,11 +52,32 @@
 
 .history-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 0.6fr 1fr 0.8fr 1fr;
+  grid-template-columns: 106px minmax(0, 1.4fr) 56px 100px 82px 108px;
   gap: 12px;
   border-top: 1px solid var(--wl-border);
   color: var(--wl-text);
   padding: 12px 14px;
+}
+
+.history-row > span {
+  min-width: 0;
+}
+
+.history-row .date-cell,
+.history-row .sets-cell,
+.history-row .best-weight-cell,
+.history-row .best-reps-cell,
+.history-row .volume-cell {
+  white-space: nowrap;
+}
+
+.history-row .gym-cell {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.history-row .compact-label {
+  display: none;
 }
 
 .history-row:first-child {
@@ -73,8 +94,50 @@
 
 @media (max-width: 900px) {
   .hero-grid,
-  .metric-grid,
-  .history-row {
+  .metric-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 980px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 760px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-row {
+    gap: 8px;
+    grid-template-columns: 92px 44px 82px 48px 92px;
+    padding: 10px 12px;
+  }
+
+  .history-row .gym-cell {
+    display: none;
+  }
+
+  .history-row .wide-label {
+    display: none;
+  }
+
+  .history-row .compact-label {
+    display: inline;
+  }
+}
+
+@container (max-width: 560px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-row {
+    font-size: 0.76rem;
+    gap: 6px;
+    grid-template-columns: 76px 34px 68px 34px 80px;
+    padding: 9px 8px;
   }
 }

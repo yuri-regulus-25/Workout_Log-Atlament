@@ -30,8 +30,8 @@ android {
         applicationId = "jp.yuri_regulus_25.atlament"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -49,6 +49,10 @@ android {
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("release")
         }
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {

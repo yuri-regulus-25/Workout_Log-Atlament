@@ -62,6 +62,8 @@ class MainActivity : Activity() {
             server.start()
             localhostServer = server
             if (loadInitialUrl) {
+                // The WebView always talks to packaged assets through localhost so Android and
+                // Windows exercise the same frontend/API contract shape.
                 webView.loadUrl(server.baseUrl)
             }
         } catch (ex: Exception) {
@@ -80,6 +82,8 @@ class MainActivity : Activity() {
                 return false
             }
             if (uri.scheme == "http" || uri.scheme == "https") {
+                // External links leave the app sandbox. The embedded WebView should only own
+                // Atlament's localhost surface.
                 startActivity(Intent(Intent.ACTION_VIEW, uri))
                 return true
             }

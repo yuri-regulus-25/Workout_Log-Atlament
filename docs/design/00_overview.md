@@ -115,3 +115,5 @@ MVP完了条件:
 - `07_af_detailed_design.md`: AF詳細設計
 - `08_common_js_detailed_design.md`: Common JS詳細設計
 - `09_frontend_settings_detailed_design.md`: Frontend / Settings詳細設計
+- `10_repository_build_runtime_design.md`: Repository / Build / Runtime詳細設計
+- `11_v1_1_0_current_source_spec.md`: v1.1.0現行Source仕様スナップショット
