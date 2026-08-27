@@ -222,6 +222,13 @@ export function getMonthlySessions(
   return sessions.filter((session) => session.date.startsWith(prefix))
 }
 
+export function getCurrentLocalYearMonth(referenceDate = new Date()): { year: number; month: number } {
+  return {
+    year: referenceDate.getFullYear(),
+    month: referenceDate.getMonth() + 1,
+  }
+}
+
 export function getMonthlyVolume(sessions: WorkoutSession[], year: number, month: number): number {
   return getMonthlySessions(sessions, year, month).reduce(
     (total, session) => total + getTotalVolume(session),
