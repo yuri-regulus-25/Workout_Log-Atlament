@@ -14,6 +14,7 @@ import {
   getAverageSessionIntervalDays,
   getBodyPartMachineVariety,
   getBodyPartSummary,
+  getCurrentLocalYearMonth,
   getEstimated1RM,
   getExerciseHistory,
   getMonthlySessions,
@@ -93,6 +94,18 @@ describe('workout-core', () => {
   it('summarizes monthly sessions and volume', () => {
     expect(getMonthlySessions(sessions, 2026, 8)).toHaveLength(3)
     expect(getMonthlyVolume(sessions, 2026, 8)).toBeGreaterThan(0)
+  })
+
+  it('uses the runtime local calendar month for current month summaries', () => {
+    expect(getCurrentLocalYearMonth(new Date(2026, 7, 31, 23, 59))).toEqual({ year: 2026, month: 8 })
+    expect(getCurrentLocalYearMonth(new Date(2026, 8, 1, 0, 0))).toEqual({ year: 2026, month: 9 })
+    expect(getCurrentLocalYearMonth(new Date(2026, 11, 31, 23, 59))).toEqual({ year: 2026, month: 12 })
+    expect(getCurrentLocalYearMonth(new Date(2027, 0, 1, 0, 0))).toEqual({ year: 2027, month: 1 })
+  })
+
+  it('returns zero monthly summary values when the runtime month has no workout data', () => {
+    expect(getMonthlySessions(sessions, 2026, 9)).toHaveLength(0)
+    expect(getMonthlyVolume(sessions, 2026, 9)).toBe(0)
   })
 
   it('summarizes body parts', () => {
