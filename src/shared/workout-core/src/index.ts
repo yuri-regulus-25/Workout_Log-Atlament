@@ -303,6 +303,17 @@ export type HistoricalWorkoutReferenceResolution = {
   machines: Array<HistoricalMasterReference<MachineMasterItem> & { index: number }>
 }
 
+export type MainGymScopedMetric<TValue> =
+  | { state: 'available'; mainGym: GymMasterItem; sessions: WorkoutSession[]; value: TValue }
+  | { state: 'unconfigured' }
+  | { state: 'invalid'; reason: 'multiple-main-gyms' | 'inactive-or-deleted-main-gym'; gyms: GymMasterItem[] }
+
+export type MainGymVolumeTrendPoint = {
+  sessionId: string
+  date: string
+  volume: number
+}
+
 const knownBodyParts = new Set<BodyPart>([
   'chest',
   'back',
@@ -791,6 +802,76 @@ export function resolveMainGymContext(master: GymMaster): MainGymContext {
   return { state: 'configured', gym: mainGym }
 }
 
+export function getMainGymSessionsMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<WorkoutSession[]> {
+  return createMainGymMetric(context, sessions, (mainGymSessions) => mainGymSessions)
+}
+
+export function getMainGymTotalVolumeMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => mainGymSessions.reduce((total, session) => total + getTotalVolume(session), 0),
+  )
+}
+
+export function getMainGymMonthlyVolumeMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  year: number,
+  month: number,
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    getMonthlySessions(sessions, year, month),
+    (mainGymSessions) => mainGymSessions.reduce((total, session) => total + getTotalVolume(session), 0),
+  )
+}
+
+export function getMainGymVolumeTrendMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<MainGymVolumeTrendPoint[]> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => mainGymSessions.map((session) => ({
+      sessionId: session.session_id,
+      date: session.date,
+      volume: getTotalVolume(session),
+    })),
+  )
+}
+
+export function getMainGymMaxWeightMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  machineId: string,
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => getMaxWeight(mainGymSessions, machineId),
+  )
+}
+
+export function getMainGymAverageSetWeightMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  machineId: string,
+): MainGymScopedMetric<number | null> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => getAverageSetWeight(mainGymSessions, machineId),
+  )
+}
+
 export function validateWorkoutMasterData(masterData: WorkoutMasterData): MasterValidationResult {
   const issues: MasterValidationIssue[] = [
     ...validateMasterSchemaVersions(masterData),
@@ -1018,6 +1099,29 @@ function validateMainGymContext(master: GymMaster): MasterValidationIssue[] {
 
 function isNewUseMasterRecord(record: { active: boolean; deleted: boolean }): boolean {
   return record.active && !record.deleted
+}
+
+function createMainGymMetric<TValue>(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  compute: (mainGymSessions: WorkoutSession[]) => TValue,
+): MainGymScopedMetric<TValue> {
+  if (context.state === 'unconfigured') {
+    return { state: 'unconfigured' }
+  }
+
+  if (context.state === 'invalid') {
+    return { state: 'invalid', reason: context.reason, gyms: context.gyms }
+  }
+
+  const mainGymSessions = sessions.filter((session) => session.gym.id === context.gym.gym_id)
+
+  return {
+    state: 'available',
+    mainGym: context.gym,
+    sessions: mainGymSessions,
+    value: compute(mainGymSessions),
+  }
 }
 
 function resolveHistoricalMasterReference<TMasterItem extends { active: boolean; deleted: boolean }>(

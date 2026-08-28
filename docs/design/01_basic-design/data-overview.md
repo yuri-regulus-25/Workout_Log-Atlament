@@ -37,4 +37,6 @@ AF と Node development runtime は raw data を `WorkoutSession[]` へ normaliz
 
 Master Data の domain/reference validation は shared core contract として提供する。Historical reference は inactive/deleted record を解決対象として維持し、履歴解決では active、inactive、deleted、missing を区別する。新規 write candidate は `active:true` かつ `deleted:false` の record のみに制限する。
 
+Weight/Volume 系の比較 metric は Main Gym context に依存する。Main Gym が未設定または invalid の場合、Dashboard、Analytics、Machines は Main Gym dependent kg metric を unavailable state として扱う。
+
 Frontend 視点では Runtime Data は read-only である。

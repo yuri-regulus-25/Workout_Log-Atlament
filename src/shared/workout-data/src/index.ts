@@ -235,7 +235,7 @@ export function loadWorkoutSessionsFromFiles(
   files: WorkoutFile[],
   masterData = sampleMasterData,
 ): WorkoutLoadResult {
-  const result: WorkoutLoadResult = { sessions: [], issues: [] }
+  const result: WorkoutLoadResult = { sessions: [], issues: [], masterData }
   const masterLookup = createMasterLookup(masterData, result.issues)
 
   for (const file of files) {

@@ -89,6 +89,8 @@ Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMas
 
 Historical display/resolution では `resolveHistoricalWorkoutReferences` / `resolveHistoricalWorkoutReferenceReport` を使用し、reference を `active`、`inactive`、`deleted`、`missing` に分類する。`inactive` と `deleted` は historical reference として解決済みであり、`missing` だけが unresolved reference である。Workout Log SoT はこの分類のために rewrite しない。
 
+Main Gym dependent weight/volume metrics は `getMainGym*Metric` family を使用する。Main Gym context が configured の場合だけ `available` state として Main Gym sessions に限定した値を返す。Main Gym が未設定の場合は `unconfigured`、constraint 違反の場合は `invalid` を返し、比較可能な kg 値を作らない。
+
 `active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。

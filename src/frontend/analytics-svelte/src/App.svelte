@@ -7,7 +7,7 @@
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
   import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
-  import type { WorkoutSession } from '@workout-lab/workout-types'
+  import type { WorkoutMasterData, WorkoutSession } from '@workout-lab/workout-types'
   import {
     filterSessionsByDateRange,
     formatBodyPart,
@@ -18,27 +18,35 @@
     getLastTrainedDateByBodyPart,
     getMachineFrequencyRanking,
     getBodyPartMachineVariety,
+    getMainGymSessionsMetric,
+    getMainGymTotalVolumeMetric,
+    getMainGymVolumeTrendMetric,
     getRecentSessions,
     getSessionsByGym,
     getSetsByBodyPart,
     getTrainingFrequencyPerWeek,
     getTotalSets,
-    getTotalVolume,
+    resolveMainGymContext,
     resolvePeriodRange,
   } from '@workout-lab/workout-core'
   import type { PeriodPreset } from '@workout-lab/workout-core'
 
   let sessions: WorkoutSession[] = []
+  let masterData: WorkoutMasterData | undefined
   let selectedPeriod: PeriodPreset = '28d'
   let loadError: string | null = null
   $: periodRange = resolvePeriodRange(selectedPeriod, sessions)
   $: filteredSessions = filterSessionsByDateRange(sessions, periodRange)
+  $: mainGymContext = masterData ? resolveMainGymContext(masterData.gyms) : { state: 'unconfigured' as const }
+  $: mainGymFilteredSessions = getMainGymSessionsMetric(mainGymContext, filteredSessions)
+  $: volumeMetricSessions = mainGymFilteredSessions.state === 'available' ? mainGymFilteredSessions.value : []
   $: bodyPartSummary = getBodyPartSummary(filteredSessions)
   $: bodyPartSummaryRows = orderByBodyPartDisplayOrder(bodyPartSummary)
+  $: mainGymBodyPartSummaryRows = orderByBodyPartDisplayOrder(getBodyPartSummary(volumeMetricSessions))
   $: recent28Sessions = getRecentSessions(filteredSessions, 28)
   $: machineVarietyRows = orderByBodyPartDisplayOrder(getBodyPartMachineVariety(recent28Sessions))
   $: totalSets = filteredSessions.reduce((total, session) => total + getTotalSets(session), 0)
-  $: totalVolume = filteredSessions.reduce((total, session) => total + getTotalVolume(session), 0)
+  $: totalVolume = getMainGymTotalVolumeMetric(mainGymContext, filteredSessions)
   $: trainingFrequencyPerWeek = getTrainingFrequencyPerWeek(filteredSessions)
   $: averageIntervalDays = getAverageSessionIntervalDays(filteredSessions)
   $: averageInterval = averageIntervalDays === null ? '—' : `${averageIntervalDays.toFixed(1)} days`
@@ -82,6 +90,7 @@
     try {
       const result = await loadRuntimeWorkoutSessions()
       sessions = result.sessions
+      masterData = result.masterData
       loadError = result.issues.length > 0 ? result.issues.map((issue) => issue.message).join(' / ') : null
     } catch (error) {
       loadError = error instanceof Error ? error.message : 'Workout data could not be loaded.'
@@ -107,6 +116,8 @@
 
   function createTrendOptions(sourceSessions: WorkoutSession[]): ApexOptions {
     const chartTheme = getChartTheme()
+    const trendMetric = getMainGymVolumeTrendMetric(mainGymContext, sourceSessions)
+    const trendPoints = trendMetric.state === 'available' ? trendMetric.value : []
 
     return {
       chart: {
@@ -131,12 +142,12 @@
       theme: { mode: chartTheme.mode },
       series: [
         {
-          name: 'Total Weight',
-          data: sourceSessions.map((session) => getTotalVolume(session)),
+          name: 'Main Gym Total Weight',
+          data: trendPoints.map((point) => point.volume),
         },
       ],
       xaxis: {
-        categories: sourceSessions.map((session) => formatDisplayDate(session.date)),
+        categories: trendPoints.map((point) => formatDisplayDate(point.date)),
         axisBorder: { color: chartTheme.border },
         axisTicks: { color: chartTheme.border },
         labels: { show: false, style: { colors: chartTheme.textMuted } },
@@ -205,6 +216,24 @@
   function formatPercent(value: number): string {
     return `${Math.round(value * 100)}%`
   }
+
+  function formatMainGymMetric(metric: { state: string; value?: number }): string {
+    return metric.state === 'available' && typeof metric.value === 'number'
+      ? `${metric.value.toLocaleString()} kg`
+      : formatMainGymMetricState(metric)
+  }
+
+  function formatMainGymMetricState(metric: { state: string }): string {
+    if (metric.state === 'unconfigured') {
+      return 'Not configured'
+    }
+
+    if (metric.state === 'invalid') {
+      return 'Unavailable'
+    }
+
+    return 'No workout data loaded.'
+  }
 </script>
 
 <main bind:this={shellElement} class={`app-shell ${pageTransitionClassName}`}>
@@ -231,8 +260,8 @@
       <strong>{totalSets} {totalSets > 1 ? "Sets" : "Set"}</strong>
     </article>
     <article class="metric-card">
-      <span>Total weight</span>
-      <strong>{totalVolume.toLocaleString()} kg</strong>
+      <span>Main Gym weight</span>
+      <strong>{formatMainGymMetric(totalVolume)}</strong>
     </article>
     <article class="metric-card">
       <span>Average interval</span>
@@ -277,7 +306,7 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-chart-bell-curve" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">Workout Trend</p>
+            <p class="eyebrow">Main Gym Workout Trend</p>
             <h2>ボリューム推移</h2>
           </div>
         </div>
@@ -349,7 +378,7 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">Body Part Volume</p>
+            <p class="eyebrow">Main Gym Body Part Volume</p>
             <h2>部位別ボリューム</h2>
           </div>
         </div>
@@ -360,12 +389,14 @@
           <span>Sets</span>
           <span>Total Weight</span>
         </div>
-        {#each bodyPartSummaryRows as item}
+        {#each mainGymBodyPartSummaryRows as item}
           <div class="summary-row">
             <span>{formatBodyPart(item.bodyPart)}</span>
             <span>{item.sets}</span>
             <span>{item.volume.toLocaleString()} kg</span>
           </div>
+        {:else}
+          <p class="muted">{formatMainGymMetricState(mainGymFilteredSessions)}</p>
         {/each}
       </div>
     </article>
