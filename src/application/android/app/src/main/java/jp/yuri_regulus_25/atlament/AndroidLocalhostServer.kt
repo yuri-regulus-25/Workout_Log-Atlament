@@ -22,6 +22,7 @@ import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.security.KeyStore
 import java.time.LocalDate
 import java.util.concurrent.ExecutorService
@@ -68,6 +69,8 @@ class AndroidLocalhostServer(
     @Volatile private var credentialUpdateStatus = "idle"
     @Volatile private var shutdownStatus = "idle"
     @Volatile private var githubComponentStatus = "unknown"
+    @Volatile private var latestRemoteRetrieval = "unknown"
+    @Volatile private var latestValidation = "unknown"
     private val running = AtomicBoolean(false)
     private val shutdownRequested = AtomicBoolean(false)
     private val acceptExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -257,6 +260,7 @@ class AndroidLocalhostServer(
               }
             },
             "readiness": ${readinessJson()},
+            "runtimeData": ${runtimeDataFactsJson()},
             "application": {
               "status": "${applicationStatus()}",
               "degraded": ${applicationStatus() == "degraded"},
@@ -287,6 +291,21 @@ class AndroidLocalhostServer(
             JSONObject(stream.bufferedReader(StandardCharsets.UTF_8).readText())
         }
     }.getOrDefault(JSONObject())
+
+    private fun runtimeDataFactsJson(): String {
+        val currentAvailable = runtimeDataStatus() == "available"
+        val generatedAt = if (runtimeDataFile.exists()) "\"${Instant.ofEpochMilli(runtimeDataFile.lastModified())}\"" else "null"
+        val fallbackActive = (latestRemoteRetrieval == "failed" || latestValidation == "failed") && currentAvailable
+        return """
+            {
+              "currentAvailable": $currentAvailable,
+              "currentGeneratedAt": $generatedAt,
+              "latestRemoteRetrieval": "$latestRemoteRetrieval",
+              "latestValidation": "$latestValidation",
+              "fallbackActive": $fallbackActive
+            }
+        """.trimIndent()
+    }
 
     private fun hostingStatusJson(): String = """
         {
@@ -758,6 +777,8 @@ class AndroidLocalhostServer(
             runtimeDataFile.parentFile?.mkdirs()
             runtimeDataFile.writeText(build.payload, StandardCharsets.UTF_8)
             githubComponentStatus = "available"
+            latestRemoteRetrieval = "succeeded"
+            latestValidation = "succeeded"
             writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
@@ -766,10 +787,14 @@ class AndroidLocalhostServer(
             """.trimIndent()), true)
         } catch (ex: AfException) {
             githubComponentStatus = "degraded"
+            latestRemoteRetrieval = "failed"
+            latestValidation = "skipped"
             writeLog("WARN", "Remote sync failed: ${ex.message}")
             failedSync(errorsArray(ex.code, ex.message))
         } catch (ex: Exception) {
             githubComponentStatus = "degraded"
+            latestRemoteRetrieval = "failed"
+            latestValidation = "skipped"
             val message = ex.message ?: "GitHub sync failed."
             writeLog("WARN", "Remote sync failed: $message")
             failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
@@ -778,6 +803,8 @@ class AndroidLocalhostServer(
 
     private fun failedSync(errors: JSONArray): SyncResponse {
         githubComponentStatus = "degraded"
+        if (latestRemoteRetrieval == "unknown") latestRemoteRetrieval = "succeeded"
+        if (latestValidation == "unknown" || latestValidation == "succeeded") latestValidation = "failed"
         return if (runtimeDataFile.exists()) {
             // Preserve offline usability: remote sync failure becomes degraded success from the
             // user's perspective when cached runtime data is still available.

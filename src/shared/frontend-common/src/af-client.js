@@ -38,14 +38,16 @@ export function deriveApplicationReadiness(status) {
   return { state: 'ready', requiredActions, unavailableComponents: [], degradedComponents: [] }
 }
 
-export function deriveApplicationAccessPolicy(readiness) {
+export function deriveApplicationAccessPolicy(readiness, runtimeData) {
   const restrictedComponents = Array.from(new Set([
     ...(readiness?.unavailableComponents ?? []),
     ...(readiness?.degradedComponents ?? []),
   ])).sort()
-  const fallbackActive = readiness?.state === 'degraded' &&
+  const fallbackActive = runtimeData?.fallbackActive ?? (
+    readiness?.state === 'degraded' &&
     (readiness?.degradedComponents ?? []).includes('github') &&
     !(readiness?.unavailableComponents ?? []).includes('runtimeData')
+  )
 
   if (readiness?.state === 'unconfigured') {
     return {

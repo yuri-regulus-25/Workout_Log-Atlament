@@ -472,6 +472,11 @@ public sealed class AfCoreTests
             Assert.Equal("ready", afterSync.Readiness.State);
             Assert.Empty(afterSync.Readiness.RequiredActions);
             Assert.Empty(afterSync.Readiness.UnavailableComponents);
+            Assert.True(afterSync.RuntimeData.CurrentAvailable);
+            Assert.NotNull(afterSync.RuntimeData.CurrentGeneratedAt);
+            Assert.Equal("succeeded", afterSync.RuntimeData.LatestRemoteRetrieval);
+            Assert.Equal("succeeded", afterSync.RuntimeData.LatestValidation);
+            Assert.False(afterSync.RuntimeData.FallbackActive);
 
             var expiredCredential = application.UpdateCredential(new CredentialUpdate("github-token", "2026-01-01"));
             var afterExpiredCredential = application.GetStatus().Data!;
@@ -480,6 +485,91 @@ public sealed class AfCoreTests
             Assert.Equal("degraded", afterExpiredCredential.Readiness.State);
             Assert.Contains("credential", afterExpiredCredential.Readiness.UnavailableComponents);
             Assert.DoesNotContain("runtimeData", afterExpiredCredential.Readiness.UnavailableComponents);
+            Assert.True(afterExpiredCredential.RuntimeData.CurrentAvailable);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RemoteFailureWithCurrentRuntimeDataPublishesFallbackStatus()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var failRemote = false;
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                if (failRemote)
+                {
+                    throw new HttpRequestException("offline");
+                }
+
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse("""
+                        [
+                          { "path": "data/workouts/2026-08-24.json", "type": "file" }
+                        ]
+                        """);
+                }
+
+                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
+                }
+
+                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(MachineMaster.Content);
+                }
+
+                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(GymMaster.Content);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var ready = application.GetStatus().Data!;
+            Assert.Equal("ready", ready.Readiness.State);
+            Assert.False(ready.RuntimeData.FallbackActive);
+
+            failRemote = true;
+            var fallback = await application.ManualSyncAsync(CancellationToken.None);
+            var status = application.GetStatus().Data!;
+
+            Assert.Equal(200, fallback.StatusCode);
+            Assert.False(fallback.Response.Success);
+            Assert.True(fallback.Response.Data!.Degraded);
+            Assert.Equal("degraded", status.Readiness.State);
+            Assert.True(status.RuntimeData.CurrentAvailable);
+            Assert.Equal("failed", status.RuntimeData.LatestRemoteRetrieval);
+            Assert.Equal("skipped", status.RuntimeData.LatestValidation);
+            Assert.True(status.RuntimeData.FallbackActive);
         }
         finally
         {

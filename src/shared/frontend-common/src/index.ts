@@ -32,6 +32,7 @@ export type AfStatus = {
     }
   }
   readiness: ApplicationReadiness
+  runtimeData: RuntimeDataStatusFacts
   application: {
     status: string
     degraded: boolean
@@ -69,6 +70,14 @@ export type ApplicationReadiness = {
   requiredActions: string[]
   unavailableComponents: string[]
   degradedComponents: string[]
+}
+
+export type RuntimeDataStatusFacts = {
+  currentAvailable: boolean
+  currentGeneratedAt: string | null
+  latestRemoteRetrieval: 'unknown' | 'succeeded' | 'failed' | 'skipped'
+  latestValidation: 'unknown' | 'succeeded' | 'failed' | 'skipped'
+  fallbackActive: boolean
 }
 
 export type ApplicationRecoveryAction = 'open-settings' | 'complete-setup' | 'update-credential' | 'retry-sync' | 'reload'
@@ -110,14 +119,19 @@ export function deriveApplicationReadiness(status: Pick<AfStatus, 'application' 
   return { state: 'ready', requiredActions, unavailableComponents: [], degradedComponents: [] }
 }
 
-export function deriveApplicationAccessPolicy(readiness: ApplicationReadiness): ApplicationAccessPolicy {
+export function deriveApplicationAccessPolicy(
+  readiness: ApplicationReadiness,
+  runtimeData?: RuntimeDataStatusFacts,
+): ApplicationAccessPolicy {
   const restrictedComponents = Array.from(new Set([
     ...readiness.unavailableComponents,
     ...readiness.degradedComponents,
   ])).sort()
-  const fallbackActive = readiness.state === 'degraded' &&
+  const fallbackActive = runtimeData?.fallbackActive ?? (
+    readiness.state === 'degraded' &&
     readiness.degradedComponents.includes('github') &&
     !readiness.unavailableComponents.includes('runtimeData')
+  )
 
   if (readiness.state === 'unconfigured') {
     return {
