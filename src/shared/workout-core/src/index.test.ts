@@ -13,8 +13,11 @@ import {
   compareWorkoutSessions,
   getAverageSetWeight,
   getAverageSessionIntervalDays,
+  getBodyPartFrequency,
   getBodyPartMachineVariety,
+  getBodyPartShare,
   getBodyPartSummary,
+  getBodyPartTrend,
   getCalendarMonthAggregates,
   getCurrentLocalYearMonth,
   getDailyAggregates,
@@ -24,9 +27,15 @@ import {
   getMonthlyVolume,
   getMonthlyAggregates,
   getNumericDelta,
+  getLastTrainedDateByBodyPart,
+  getMachineFrequencyRanking,
   getPersonalRecords,
   getRecentSessions,
   getSessionAggregates,
+  getSessionsByGym,
+  getSetsByBodyPart,
+  getMonthlyTrainingDays,
+  getWeekdayDistribution,
   getWeeklyAggregates,
   getWorkoutSummary,
   filterSessionsByDateRange,
@@ -536,6 +545,82 @@ describe('workout-core', () => {
       removedMachines: [{ machineId: 'lat-pulldown', machineName: 'Lat Pulldown' }],
     })
   })
+
+  it('summarizes frequency and consistency distribution facts', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getWeekdayDistribution(distributionSessions)).toEqual([
+      { weekday: 0, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 1, sessionCount: 1, trainingDayCount: 1 },
+      { weekday: 2, sessionCount: 2, trainingDayCount: 1 },
+      { weekday: 3, sessionCount: 1, trainingDayCount: 1 },
+      { weekday: 4, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 5, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 6, sessionCount: 0, trainingDayCount: 0 },
+    ])
+    expect(getMonthlyTrainingDays(distributionSessions)).toEqual([
+      { month: '2026-08', trainingDayCount: 2, sessionCount: 3 },
+      { month: '2026-09', trainingDayCount: 1, sessionCount: 1 },
+    ])
+  })
+
+  it('summarizes body part distribution, share, trend, and last trained dates', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getSetsByBodyPart(distributionSessions)).toEqual([
+      { bodyPart: 'back', setCount: 1 },
+      { bodyPart: 'chest', setCount: 3 },
+      { bodyPart: 'legs', setCount: 1 },
+    ])
+    expect(getBodyPartFrequency(distributionSessions)).toEqual([
+      { bodyPart: 'back', sessionCount: 1 },
+      { bodyPart: 'chest', sessionCount: 3 },
+      { bodyPart: 'legs', sessionCount: 1 },
+    ])
+    expect(getBodyPartShare(distributionSessions)).toEqual([
+      { bodyPart: 'back', setCount: 1, share: 0.2 },
+      { bodyPart: 'chest', setCount: 3, share: 0.6 },
+      { bodyPart: 'legs', setCount: 1, share: 0.2 },
+    ])
+    expect(getBodyPartTrend(distributionSessions)).toEqual([
+      { month: '2026-08', bodyPart: 'back', setCount: 1, sessionCount: 1 },
+      { month: '2026-08', bodyPart: 'chest', setCount: 2, sessionCount: 2 },
+      { month: '2026-09', bodyPart: 'chest', setCount: 1, sessionCount: 1 },
+      { month: '2026-09', bodyPart: 'legs', setCount: 1, sessionCount: 1 },
+    ])
+    expect(getLastTrainedDateByBodyPart(distributionSessions)).toEqual([
+      { bodyPart: 'chest', lastTrainedDate: '2026-09-02' },
+      { bodyPart: 'legs', lastTrainedDate: '2026-09-02' },
+      { bodyPart: 'back', lastTrainedDate: '2026-08-25' },
+    ])
+  })
+
+  it('counts body part trend sessions once when a session has multiple machines for the same body part', () => {
+    const trendSessions = [
+      createSessionWithMachines('2026-09-02-01', '2026-09-02', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 22.5, reps: 10 }] },
+        { machine_id: 'chest-press', name: 'Chest Press', body_part: 'chest', sets: [{ set: 1, weight_kg: 30, reps: 10 }] },
+      ]),
+    ]
+
+    expect(getBodyPartTrend(trendSessions)).toEqual([
+      { month: '2026-09', bodyPart: 'chest', setCount: 2, sessionCount: 1 },
+    ])
+  })
+
+  it('ranks machine frequency and groups sessions by gym without weight semantics', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getMachineFrequencyRanking(distributionSessions)).toEqual([
+      { machineId: 'pec-deck', machineName: 'Pec Deck', bodyPart: 'chest', sessionCount: 3, occurrenceCount: 3 },
+      { machineId: 'lat-pulldown', machineName: 'Lat Pulldown', bodyPart: 'back', sessionCount: 1, occurrenceCount: 1 },
+      { machineId: 'leg-press', machineName: 'Leg Press', bodyPart: 'legs', sessionCount: 1, occurrenceCount: 1 },
+    ])
+    expect(getSessionsByGym(distributionSessions)).toEqual([
+      { gymId: 'example-gym', gymName: 'Example Gym', sessionCount: 3 },
+      { gymId: 'second-gym', gymName: 'Second Gym', sessionCount: 1 },
+    ])
+  })
 })
 
 function createMinimalSession(sessionId: string, date: string): WorkoutSession {
@@ -558,5 +643,25 @@ function createSessionWithMachines(
     ...createMinimalSession(sessionId, date),
     machines,
   }
+}
+
+function createDistributionSessions(): WorkoutSession[] {
+  return [
+    createSessionWithMachines('2026-08-24-01', '2026-08-24', [
+      { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+    ]),
+    {
+      ...createSessionWithMachines('2026-08-25-01', '2026-08-25', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+        { machine_id: 'lat-pulldown', name: 'Lat Pulldown', body_part: 'back', sets: [{ set: 1, weight_kg: 45, reps: 10 }] },
+      ]),
+      gym: { id: 'second-gym', name: 'Second Gym' },
+    },
+    createSessionWithMachines('2026-08-25-02', '2026-08-25', []),
+    createSessionWithMachines('2026-09-02-01', '2026-09-02', [
+      { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 22.5, reps: 10 }] },
+      { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+    ]),
+  ]
 }
 
