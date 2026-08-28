@@ -48,6 +48,7 @@ Load issue は Data Load Warning として表示される。
 - body part sets and total weight table
 
 現行 source は global period selector、custom date range、URL-shared analytics state、PR analytics、data quality management を実装していない。
+Phase 5-D 以降、global period selector は `7d` / `28d` / `month` / `3m` / `6m` / `all` presets を support する。custom date range、URL-shared analytics state、PR analytics、data quality management は実装していない。
 
 ## Core Use
 
@@ -61,6 +62,10 @@ Analytics は `workout-core` を以下に使用する。
 - body part summary
 - body part machine variety
 - date/body part formatting
+- global period filtering
+- body part share and last trained date
+- machine frequency ranking
+- sessions by gym
 
 Phase 5-A 以降、`workout-core` は以下の factual derived logic も提供する。
 

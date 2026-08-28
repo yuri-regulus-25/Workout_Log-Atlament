@@ -12,9 +12,12 @@ import {
   formatDisplayDate,
   getCurrentLocalYearMonth,
   getBodyPartSummary,
+  getNumericDelta,
   getMonthlySessions,
   getMonthlyVolume,
   getRecentSessions,
+  resolvePreviousMonthRange,
+  filterSessionsByDateRange,
   getTotalSets,
   getTotalVolume,
   toWorkoutRows,
@@ -77,6 +80,13 @@ function App() {
   const latestWorkoutRoute = latestWorkout ? getWorkoutDetailRoute(latestWorkout.date) : getWorkoutListRoute()
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
   const monthlyVolume = getMonthlyVolume(sessions, currentMonth.year, currentMonth.month)
+  const previousMonthRange = resolvePreviousMonthRange(currentMonth.year, currentMonth.month)
+  const previousMonthSessions = filterSessionsByDateRange(sessions, previousMonthRange)
+  const monthlyWorkoutDelta = getNumericDelta(monthlySessions.length, previousMonthSessions.length)
+  const monthlySetDelta = getNumericDelta(
+    totalSets,
+    previousMonthSessions.reduce((total, session) => total + getTotalSets(session), 0),
+  )
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
   const bodyBalanceRows = getDashboardBodyBalanceRows(monthlySessions)
   const recent28Sessions = getRecentSessions(sessions, 28)
@@ -253,6 +263,13 @@ function App() {
         <MetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
       </section>
 
+      <section className="metric-grid" aria-label="Previous month comparison">
+        <MetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
+        <MetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
+        <MetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
+        <MetricCard label="Previous month period" value={`${formatDisplayDate(previousMonthRange.startDate)} - ${formatDisplayDate(previousMonthRange.endDate)}`} />
+      </section>
+
       {loadError ? (
         <section className="panel">
           <p className="eyebrow">Data Load Warning</p>
@@ -391,6 +408,11 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </article>
   )
+}
+
+function formatDelta(value: number, unit: string): string {
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toLocaleString()} ${unit}`
 }
 
 const dashboardBodyPartOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs']

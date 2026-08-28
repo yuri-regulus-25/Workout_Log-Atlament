@@ -2,35 +2,57 @@
   import ApexCharts from 'apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { onDestroy, onMount } from 'svelte'
-  import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
+  import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
   import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutSession } from '@workout-lab/workout-types'
   import {
+    filterSessionsByDateRange,
     formatBodyPart,
     formatDisplayDate,
     getAverageSessionIntervalDays,
+    getBodyPartShare,
     getBodyPartSummary,
+    getLastTrainedDateByBodyPart,
+    getMachineFrequencyRanking,
     getBodyPartMachineVariety,
     getRecentSessions,
+    getSessionsByGym,
+    getSetsByBodyPart,
     getTrainingFrequencyPerWeek,
     getTotalSets,
     getTotalVolume,
+    resolvePeriodRange,
   } from '@workout-lab/workout-core'
+  import type { PeriodPreset } from '@workout-lab/workout-core'
 
   let sessions: WorkoutSession[] = []
+  let selectedPeriod: PeriodPreset = '28d'
   let loadError: string | null = null
-  $: bodyPartSummary = getBodyPartSummary(sessions)
+  $: periodRange = resolvePeriodRange(selectedPeriod, sessions)
+  $: filteredSessions = filterSessionsByDateRange(sessions, periodRange)
+  $: bodyPartSummary = getBodyPartSummary(filteredSessions)
   $: bodyPartSummaryRows = orderByBodyPartDisplayOrder(bodyPartSummary)
-  $: recent28Sessions = getRecentSessions(sessions, 28)
+  $: recent28Sessions = getRecentSessions(filteredSessions, 28)
   $: machineVarietyRows = orderByBodyPartDisplayOrder(getBodyPartMachineVariety(recent28Sessions))
-  $: totalSets = sessions.reduce((total, session) => total + getTotalSets(session), 0)
-  $: totalVolume = sessions.reduce((total, session) => total + getTotalVolume(session), 0)
-  $: trainingFrequencyPerWeek = getTrainingFrequencyPerWeek(sessions)
-  $: averageIntervalDays = getAverageSessionIntervalDays(sessions)
+  $: totalSets = filteredSessions.reduce((total, session) => total + getTotalSets(session), 0)
+  $: totalVolume = filteredSessions.reduce((total, session) => total + getTotalVolume(session), 0)
+  $: trainingFrequencyPerWeek = getTrainingFrequencyPerWeek(filteredSessions)
+  $: averageIntervalDays = getAverageSessionIntervalDays(filteredSessions)
   $: averageInterval = averageIntervalDays === null ? '—' : `${averageIntervalDays.toFixed(1)} days`
+  $: bodyPartShareRows = orderByBodyPartDisplayOrder(getBodyPartShare(filteredSessions))
+  $: bodyPartLastTrainedRows = orderByBodyPartDisplayOrder(getLastTrainedDateByBodyPart(filteredSessions))
+  $: machineFrequencyRows = getMachineFrequencyRanking(filteredSessions).slice(0, 8)
+  $: gymRows = getSessionsByGym(filteredSessions)
+  $: bodyPartSetRows = orderByBodyPartDisplayOrder(getSetsByBodyPart(filteredSessions))
+  $: if (trendChart) {
+    trendChart.updateOptions(createTrendOptions(filteredSessions), false, true)
+  }
+  $: if (bodyPartChart) {
+    bodyPartChart.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
+  }
 
   let trendChartElement: HTMLDivElement
   let bodyPartChartElement: HTMLDivElement
@@ -53,12 +75,8 @@
       assetBasePath: '/frontend-common/easter-egg/assets/',
     })
     disposeThemeObserver = observeThemeChanges(() => {
-      trendChart?.updateOptions(createTrendOptions(sessions), false, true)
-      bodyPartChart?.updateOptions(
-        createBodyPartOptions(orderByBodyPartDisplayOrder(getBodyPartSummary(sessions))),
-        false,
-        true,
-      )
+      trendChart?.updateOptions(createTrendOptions(filteredSessions), false, true)
+      bodyPartChart?.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
     })
 
     try {
@@ -69,10 +87,10 @@
       loadError = error instanceof Error ? error.message : 'Workout data could not be loaded.'
     }
 
-    trendChart = new ApexCharts(trendChartElement, createTrendOptions(sessions))
+    trendChart = new ApexCharts(trendChartElement, createTrendOptions(filteredSessions))
     bodyPartChart = new ApexCharts(
       bodyPartChartElement,
-      createBodyPartOptions(orderByBodyPartDisplayOrder(getBodyPartSummary(sessions))),
+      createBodyPartOptions(bodyPartSummaryRows),
     )
 
     trendChart.render()
@@ -183,6 +201,10 @@
         (order.get(b.bodyPart) ?? Number.MAX_SAFE_INTEGER),
     )
   }
+
+  function formatPercent(value: number): string {
+    return `${Math.round(value * 100)}%`
+  }
 </script>
 
 <main bind:this={shellElement} class={`app-shell ${pageTransitionClassName}`}>
@@ -201,8 +223,8 @@
 
   <section class="metric-grid" aria-label="Analytics summary">
     <article class="metric-card">
-      <span>Monthly workouts</span>
-      <strong>{sessions.length} {sessions.length > 1 ? "Sessions" : "Session"}</strong>
+      <span>Period workouts</span>
+      <strong>{filteredSessions.length} {filteredSessions.length > 1 ? "Sessions" : "Session"}</strong>
     </article>
     <article class="metric-card">
       <span>Total sets</span>
@@ -225,6 +247,29 @@
       <p class="muted">{loadError}</p>
     </section>
   {/if}
+
+  <section class="panel analytics-period-panel">
+    <div class="panel-header">
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-calendar-range-outline" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Global Period</p>
+          <h2>{formatDisplayDate(periodRange.startDate)} - {formatDisplayDate(periodRange.endDate)}</h2>
+        </div>
+      </div>
+      <label class="field period-field">
+        <span>Period</span>
+        <select bind:value={selectedPeriod}>
+          <option value="7d">7d</option>
+          <option value="28d">28d</option>
+          <option value="month">Month</option>
+          <option value="3m">3m</option>
+          <option value="6m">6m</option>
+          <option value="all">All</option>
+        </select>
+      </label>
+    </div>
+  </section>
 
   <section class="analytics-chart-grid">
     <article class="panel">
@@ -321,6 +366,118 @@
             <span>{item.sets}</span>
             <span>{item.volume.toLocaleString()} kg</span>
           </div>
+        {/each}
+      </div>
+    </article>
+  </section>
+
+  <section class="dashboard-grid analytics-table-grid">
+    <article class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-chart-donut" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Share</p>
+            <h2>部位別シェア</h2>
+          </div>
+        </div>
+      </div>
+      <div class="summary-table body-part-share-table">
+        <div class="summary-row header">
+          <span>Body Part</span>
+          <span>Sets</span>
+          <span>Share</span>
+          <span>Last</span>
+        </div>
+        {#each bodyPartShareRows as item}
+          <div class="summary-row">
+            <span>{formatBodyPart(item.bodyPart)}</span>
+            <span>{item.setCount}</span>
+            <span>{formatPercent(item.share)}</span>
+            <span>{formatDisplayDate(bodyPartLastTrainedRows.find((row) => row.bodyPart === item.bodyPart)?.lastTrainedDate ?? '-')}</span>
+          </div>
+        {:else}
+          <p class="muted">対象期間の部位別データはありません。</p>
+        {/each}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-podium" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Machine Ranking</p>
+            <h2>実施マシン頻度</h2>
+          </div>
+        </div>
+      </div>
+      <div class="summary-table machine-ranking-table">
+        <div class="summary-row header">
+          <span>Machine</span>
+          <span>Sessions</span>
+        </div>
+        {#each machineFrequencyRows as item}
+          <div class="summary-row">
+            <span>{item.machineName}</span>
+            <span>{item.sessionCount}</span>
+          </div>
+        {:else}
+          <p class="muted">対象期間のマシン実施データはありません。</p>
+        {/each}
+      </div>
+    </article>
+  </section>
+
+  <section class="dashboard-grid analytics-table-grid">
+    <article class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-map-marker-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Gym Sessions</p>
+            <h2>Gym別セッション数</h2>
+          </div>
+        </div>
+      </div>
+      <div class="summary-table gym-session-table">
+        <div class="summary-row header">
+          <span>Gym</span>
+          <span>Sessions</span>
+        </div>
+        {#each gymRows as item}
+          <div class="summary-row">
+            <span>{item.gymName}</span>
+            <span>{item.sessionCount}</span>
+          </div>
+        {:else}
+          <p class="muted">対象期間の Gym データはありません。</p>
+        {/each}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Body Part Sets</p>
+            <h2>部位別セット分布</h2>
+          </div>
+        </div>
+      </div>
+      <div class="summary-table body-part-sets-table">
+        <div class="summary-row header">
+          <span>Body Part</span>
+          <span>Sets</span>
+        </div>
+        {#each bodyPartSetRows as item}
+          <div class="summary-row">
+            <span>{formatBodyPart(item.bodyPart)}</span>
+            <span>{item.setCount}</span>
+          </div>
+        {:else}
+          <p class="muted">対象期間の部位別セットはありません。</p>
         {/each}
       </div>
     </article>
