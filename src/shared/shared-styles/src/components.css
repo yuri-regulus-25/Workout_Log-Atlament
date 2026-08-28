@@ -169,6 +169,21 @@
   padding: 22px;
 }
 
+.latest-workout-panel {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
+.latest-workout-panel:hover {
+  border-color: var(--wl-primary);
+}
+
+.latest-workout-panel:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--wl-focus-ring);
+}
+
 .panel.wide {
   min-width: 0;
 }

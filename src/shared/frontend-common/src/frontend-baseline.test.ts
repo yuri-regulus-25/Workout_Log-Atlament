@@ -173,4 +173,13 @@ describe('cross-frontend test baseline', () => {
       expect(css, `${app.id} stable layout CSS`).toMatch(/grid-template-columns|min-width|max-width|overflow-x/)
     }
   })
+
+  it('keeps Workout Domain route changes focus-restored to the page heading', () => {
+    const source = readSource('src/frontend/workouts-vue/src/App.vue')
+
+    expect(source).toContain('ref="pageHeading"')
+    expect(source).toContain('tabindex="-1"')
+    expect(source).toContain('"$route.fullPath"')
+    expect(source).toContain('this.$refs.pageHeading?.focus()')
+  })
 })
