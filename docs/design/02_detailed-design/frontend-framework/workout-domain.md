@@ -42,9 +42,10 @@ Load issue は Data Load Warning として表示される。
 - loaded session 内の machine display name から machine option を build する
 - `all` または 1 つの selected machine name filter を support する
 - `WorkoutGrid` を render する
+- latest data month の calendar view を render する
 - selected session date の detail route を開く
 
-現行 source は body part filter、gym filter、date range filter、full text search、URL query filter state、calendar view を実装していない。
+現行 source は body part filter、gym filter、date range filter、full text search、calendar view を実装している。URL query filter state は実装していない。
 
 ## Workout Detail
 
@@ -59,6 +60,8 @@ Load issue は Data Load Warning として表示される。
 - RIR が存在する場合は表示する
 - session notes が存在する場合は表示する
 - 各 machine を Performance Detail へ link する
+- date が単一 session に解決できる場合のみ、previous / next workout navigation を表示する
+- previous workout が一意に解決できる場合のみ、machine count、set count、total reps、added/removed machine の session compare を表示する
 - date に session がない場合、simple back link を表示する
 
 ## Core Use
@@ -70,6 +73,22 @@ Workout Domain は `workout-core` を以下に使用する。
 - machine/session volume
 - set count
 - total weight label formatting
+- calendar month aggregation
+- previous / next workout resolution
+- session compare
+
+Phase 5-A 以降、Workout Domain から再利用可能な `workout-core` logic:
+
+- inclusive period filtering
+- session / daily aggregation based on session count, machine count, set count, and rep count
+- calendar month range and daily training marker aggregation
+
+Phase 5-B 以降、Workout Domain から再利用可能な `workout-core` logic:
+
+- previous / next workout resolution by `session_id`
+- date-based workout resolution only when the date maps to exactly one session
+- workout summary based on machine count, set count, and total reps
+- session compare for machine count, set count, total reps, added machines, and removed machines
 
 ## Navigation
 

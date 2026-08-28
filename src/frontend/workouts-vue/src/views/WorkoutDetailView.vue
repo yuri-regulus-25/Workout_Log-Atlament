@@ -4,9 +4,11 @@ import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import {
+  compareWorkoutSessions,
   formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
+  resolveWorkoutNeighborsByDate,
 } from '@workout-lab/workout-core'
 import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
 
@@ -18,6 +20,11 @@ const workoutSessions = ref<WorkoutSession[]>([])
 const loadError = ref<string | null>(null)
 const sessions = computed(() => workoutSessions.value.filter((workout) => workout.date === props.date))
 const collapsedMachines = ref(new Set<string>())
+const workoutNavigation = computed(() => resolveWorkoutNeighborsByDate(workoutSessions.value, props.date))
+const sessionComparison = computed(() => {
+  const navigation = workoutNavigation.value
+  return navigation?.previous ? compareWorkoutSessions(navigation.current, navigation.previous) : null
+})
 
 onMounted(async () => {
   try {
@@ -49,6 +56,14 @@ function toggleMachine(session: WorkoutSession, machineId: string) {
   collapsedMachines.value = next
 }
 
+function formatSigned(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toLocaleString()}`
+}
+
+function machineNames(machines: Array<{ machineName: string }>): string {
+  return machines.length > 0 ? machines.map((machine) => machine.machineName).join(', ') : '-'
+}
+
 </script>
 
 <template>
@@ -64,6 +79,25 @@ function toggleMachine(session: WorkoutSession, machineId: string) {
       <h2>{{ daySummary.gymNames }}</h2>
       <p class="muted">{{ sessions.length }} {{ sessions.length === 1 ? "session" : "sessions" }}</p>
     </div>
+
+    <nav v-if="workoutNavigation" class="detail-navigation" aria-label="Workout navigation">
+      <RouterLink
+        v-if="workoutNavigation.previous"
+        class="text-action"
+        :to="{ name: 'workout-detail', params: { date: workoutNavigation.previous.date } }"
+      >
+        <i class="mdi mdi-chevron-left" aria-hidden="true" />Previous
+      </RouterLink>
+      <span v-else class="muted">Previous</span>
+      <RouterLink
+        v-if="workoutNavigation.next"
+        class="text-action"
+        :to="{ name: 'workout-detail', params: { date: workoutNavigation.next.date } }"
+      >
+        Next<i class="mdi mdi-chevron-right" aria-hidden="true" />
+      </RouterLink>
+      <span v-else class="muted">Next</span>
+    </nav>
 
     <section class="summary-grid">
       <article class="metric-card">
@@ -86,6 +120,42 @@ function toggleMachine(session: WorkoutSession, machineId: string) {
         <span>Sessions</span>
         <strong>{{ sessions.length }} {{ sessions.length === 1 ? "Session": "Sessions" }}</strong>
       </article>
+    </section>
+
+    <section v-if="sessionComparison" class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-compare-horizontal" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Session Compare</p>
+            <h2>前回セッション比較</h2>
+          </div>
+        </div>
+      </div>
+      <div class="compare-grid">
+        <article class="metric-card">
+          <span>Machines</span>
+          <strong>{{ formatSigned(sessionComparison.machineCountDelta.absolute) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Sets</span>
+          <strong>{{ formatSigned(sessionComparison.setCountDelta.absolute) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Total Reps</span>
+          <strong>{{ formatSigned(sessionComparison.totalRepsDelta.absolute) }}</strong>
+        </article>
+      </div>
+      <div class="compare-lists">
+        <div>
+          <p class="eyebrow">Added Machines</p>
+          <p class="muted">{{ machineNames(sessionComparison.addedMachines) }}</p>
+        </div>
+        <div>
+          <p class="eyebrow">Removed Machines</p>
+          <p class="muted">{{ machineNames(sessionComparison.removedMachines) }}</p>
+        </div>
+      </div>
     </section>
 
     <section v-for="session in sessions" :key="session.session_id" class="panel">

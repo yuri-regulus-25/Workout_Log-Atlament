@@ -52,6 +52,45 @@
   padding: 24px 12px 4px;
 }
 
+.workout-calendar-panel {
+  margin-bottom: 16px;
+}
+
+.workout-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.calendar-day {
+  display: grid;
+  min-height: 52px;
+  align-content: space-between;
+  border: 1px solid var(--wl-border);
+  border-radius: var(--wl-radius-inner);
+  background: var(--wl-surface-muted);
+  color: var(--wl-text-muted);
+  padding: 8px;
+}
+
+.calendar-day span,
+.calendar-day strong {
+  line-height: 1;
+}
+
+.calendar-day strong {
+  justify-self: end;
+  color: var(--wl-primary-strong);
+  font-size: 0.8rem;
+}
+
+.calendar-day--trained {
+  border-color: var(--wl-primary-soft);
+  background: var(--wl-success-bg);
+  color: var(--wl-text-strong);
+}
+
 .session-meta {
   margin-top: 6px;
 }
@@ -64,6 +103,26 @@
 .detail-summary-heading h2 {
   margin: 0;
   font-size: 1.5rem;
+}
+
+.detail-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compare-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .back-link {
@@ -320,6 +379,11 @@
 
   .workout-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compare-grid,
+  .compare-lists {
+    grid-template-columns: 1fr;
   }
 
   .workout-table {

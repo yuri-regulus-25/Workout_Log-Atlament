@@ -26,6 +26,14 @@ export function getTotalSets(session: WorkoutSession): number {
   return session.machines.reduce((total, machine) => total + machine.sets.length, 0)
 }
 
+export function getTotalReps(session: WorkoutSession): number {
+  return session.machines.reduce(
+    (sessionTotal, machine) =>
+      sessionTotal + machine.sets.reduce((machineTotal, set) => machineTotal + set.reps, 0),
+    0,
+  )
+}
+
 export const getSessionVolume = getTotalVolume
 export const getSessionSetCount = getTotalSets
 
@@ -95,6 +103,602 @@ export function getRecentSessions(
     const date = toUtcDate(session.date)
     return date >= start && date <= end
   })
+}
+
+export type PeriodPreset = '7d' | '28d' | 'month' | '3m' | '6m' | 'all'
+
+export type DateRange = {
+  startDate: string
+  endDate: string
+}
+
+export type PeriodComparison = {
+  current: DateRange
+  previous: DateRange | null
+}
+
+export type NumericDelta = {
+  current: number
+  previous: number
+  absolute: number
+  percentage: number | null
+}
+
+export type SessionAggregate = {
+  sessionId: string
+  date: string
+  gym: string
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type DateAggregate = {
+  date: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+  sessions: SessionAggregate[]
+}
+
+export type WeekAggregate = {
+  weekStartDate: string
+  weekEndDate: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type MonthAggregate = {
+  month: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type CalendarDayAggregate = {
+  date: string
+  trainingDay: boolean
+  sessionCount: number
+  sessions: SessionAggregate[]
+}
+
+export type WorkoutSummary = {
+  sessionId: string
+  date: string
+  gym: string
+  machineCount: number
+  setCount: number
+  totalReps: number
+}
+
+export type WorkoutNeighborResolution = {
+  current: WorkoutSession
+  previous: WorkoutSession | null
+  next: WorkoutSession | null
+}
+
+export type WorkoutSessionComparison = {
+  current: WorkoutSummary
+  previous: WorkoutSummary
+  machineCountDelta: NumericDelta
+  setCountDelta: NumericDelta
+  totalRepsDelta: NumericDelta
+  addedMachines: Array<{ machineId: string; machineName: string }>
+  removedMachines: Array<{ machineId: string; machineName: string }>
+}
+
+export type WeekdayDistribution = {
+  weekday: number
+  sessionCount: number
+  trainingDayCount: number
+}
+
+export type MonthlyTrainingDays = {
+  month: string
+  trainingDayCount: number
+  sessionCount: number
+}
+
+export type BodyPartSetDistribution = {
+  bodyPart: BodyPart
+  setCount: number
+}
+
+export type BodyPartFrequency = {
+  bodyPart: BodyPart
+  sessionCount: number
+}
+
+export type BodyPartShare = {
+  bodyPart: BodyPart
+  setCount: number
+  share: number
+}
+
+export type BodyPartTrend = {
+  month: string
+  bodyPart: BodyPart
+  setCount: number
+  sessionCount: number
+}
+
+export type BodyPartLastTrained = {
+  bodyPart: BodyPart
+  lastTrainedDate: string
+}
+
+export type MachineFrequencyRanking = {
+  machineId: string
+  machineName: string
+  bodyPart: BodyPart
+  sessionCount: number
+  occurrenceCount: number
+}
+
+export type GymSessionDistribution = {
+  gymId: string
+  gymName: string
+  sessionCount: number
+}
+
+export function resolvePeriodRange(
+  preset: PeriodPreset,
+  sessions: WorkoutSession[],
+  referenceDate = sessions.at(-1)?.date ?? toIsoDate(new Date()),
+): DateRange {
+  if (preset === 'all') {
+    const dates = sessions.map((session) => session.date).sort()
+    return {
+      startDate: dates[0] ?? referenceDate,
+      endDate: dates.at(-1) ?? referenceDate,
+    }
+  }
+
+  const endDate = toUtcDate(referenceDate)
+
+  if (preset === 'month') {
+    return getMonthRange(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1)
+  }
+
+  if (preset === '3m' || preset === '6m') {
+    const monthCount = preset === '3m' ? 3 : 6
+    const startDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - (monthCount - 1), 1))
+    const rangeEnd = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, 0))
+    return {
+      startDate: toIsoDate(startDate),
+      endDate: toIsoDate(rangeEnd),
+    }
+  }
+
+  const days = preset === '7d' ? 7 : 28
+  const startDate = new Date(endDate)
+  startDate.setUTCDate(startDate.getUTCDate() - (days - 1))
+
+  return {
+    startDate: toIsoDate(startDate),
+    endDate: toIsoDate(endDate),
+  }
+}
+
+export function filterSessionsByDateRange(
+  sessions: WorkoutSession[],
+  range: DateRange,
+): WorkoutSession[] {
+  return sortSessions(
+    sessions.filter((session) => session.date >= range.startDate && session.date <= range.endDate),
+  )
+}
+
+export function resolvePreviousPeriod(range: DateRange): DateRange {
+  const startDate = toUtcDate(range.startDate)
+  const endDate = toUtcDate(range.endDate)
+  const inclusiveDays = getInclusiveDayCount(range)
+  const previousEnd = new Date(startDate)
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1)
+  const previousStart = new Date(previousEnd)
+  previousStart.setUTCDate(previousStart.getUTCDate() - (inclusiveDays - 1))
+
+  if (endDate < startDate) {
+    return { startDate: range.startDate, endDate: range.startDate }
+  }
+
+  return {
+    startDate: toIsoDate(previousStart),
+    endDate: toIsoDate(previousEnd),
+  }
+}
+
+export function resolvePreviousMonthRange(year: number, month: number): DateRange {
+  const date = new Date(Date.UTC(year, month - 2, 1))
+  return getMonthRange(date.getUTCFullYear(), date.getUTCMonth() + 1)
+}
+
+export function resolvePeriodComparison(
+  preset: PeriodPreset,
+  sessions: WorkoutSession[],
+  referenceDate?: string,
+): PeriodComparison {
+  const current = resolvePeriodRange(preset, sessions, referenceDate)
+  return {
+    current,
+    previous: preset === 'all' ? null : resolvePreviousPeriod(current),
+  }
+}
+
+export function getNumericDelta(current: number, previous: number): NumericDelta {
+  return {
+    current,
+    previous,
+    absolute: current - previous,
+    percentage: previous === 0 ? null : ((current - previous) / previous) * 100,
+  }
+}
+
+export function getSessionAggregates(sessions: WorkoutSession[]): SessionAggregate[] {
+  return sortSessions(sessions).map((session) => ({
+    sessionId: session.session_id,
+    date: session.date,
+    gym: session.gym.name,
+    machineCount: session.machines.length,
+    setCount: getTotalSets(session),
+    repCount: getTotalReps(session),
+  }))
+}
+
+export function getDailyAggregates(sessions: WorkoutSession[]): DateAggregate[] {
+  const byDate = new Map<string, SessionAggregate[]>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    byDate.set(session.date, [...(byDate.get(session.date) ?? []), session])
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, daySessions]) => ({
+      date,
+      sessionCount: daySessions.length,
+      machineCount: sumAggregate(daySessions, 'machineCount'),
+      setCount: sumAggregate(daySessions, 'setCount'),
+      repCount: sumAggregate(daySessions, 'repCount'),
+      sessions: daySessions,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export function getWeeklyAggregates(sessions: WorkoutSession[]): WeekAggregate[] {
+  const byWeek = new Map<string, WeekAggregate>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    const weekStartDate = getWeekStartDate(session.date)
+    const weekEnd = toUtcDate(weekStartDate)
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+    const current = byWeek.get(weekStartDate) ?? {
+      weekStartDate,
+      weekEndDate: toIsoDate(weekEnd),
+      sessionCount: 0,
+      machineCount: 0,
+      setCount: 0,
+      repCount: 0,
+    }
+
+    current.sessionCount += 1
+    current.machineCount += session.machineCount
+    current.setCount += session.setCount
+    current.repCount += session.repCount
+    byWeek.set(weekStartDate, current)
+  }
+
+  return Array.from(byWeek.values()).sort((a, b) => a.weekStartDate.localeCompare(b.weekStartDate))
+}
+
+export function getMonthlyAggregates(sessions: WorkoutSession[]): MonthAggregate[] {
+  const byMonth = new Map<string, MonthAggregate>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    const month = session.date.slice(0, 7)
+    const current = byMonth.get(month) ?? {
+      month,
+      sessionCount: 0,
+      machineCount: 0,
+      setCount: 0,
+      repCount: 0,
+    }
+
+    current.sessionCount += 1
+    current.machineCount += session.machineCount
+    current.setCount += session.setCount
+    current.repCount += session.repCount
+    byMonth.set(month, current)
+  }
+
+  return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month))
+}
+
+export function resolveCalendarMonthRange(year: number, month: number): DateRange {
+  return getMonthRange(year, month)
+}
+
+export function getCalendarMonthAggregates(
+  sessions: WorkoutSession[],
+  year: number,
+  month: number,
+): CalendarDayAggregate[] {
+  const range = resolveCalendarMonthRange(year, month)
+  const dailyAggregates = new Map(
+    getDailyAggregates(filterSessionsByDateRange(sessions, range)).map((aggregate) => [
+      aggregate.date,
+      aggregate,
+    ]),
+  )
+  const days = getInclusiveDayCount(range)
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = toUtcDate(range.startDate)
+    date.setUTCDate(date.getUTCDate() + index)
+    const isoDate = toIsoDate(date)
+    const aggregate = dailyAggregates.get(isoDate)
+
+    return {
+      date: isoDate,
+      trainingDay: Boolean(aggregate),
+      sessionCount: aggregate?.sessionCount ?? 0,
+      sessions: aggregate?.sessions ?? [],
+    }
+  })
+}
+
+export function getWorkoutSummary(session: WorkoutSession): WorkoutSummary {
+  return {
+    sessionId: session.session_id,
+    date: session.date,
+    gym: session.gym.name,
+    machineCount: session.machines.length,
+    setCount: getTotalSets(session),
+    totalReps: getTotalReps(session),
+  }
+}
+
+export function resolveWorkoutNeighbors(
+  sessions: WorkoutSession[],
+  currentSessionId: string,
+): WorkoutNeighborResolution | null {
+  const sorted = sortSessions(sessions)
+  const currentIndex = sorted.findIndex((session) => session.session_id === currentSessionId)
+
+  if (currentIndex === -1) {
+    return null
+  }
+
+  return {
+    current: sorted[currentIndex],
+    previous: sorted[currentIndex - 1] ?? null,
+    next: sorted[currentIndex + 1] ?? null,
+  }
+}
+
+export function resolveUniqueWorkoutByDate(
+  sessions: WorkoutSession[],
+  date: string,
+): WorkoutSession | null {
+  const matches = sessions.filter((session) => session.date === date)
+  return matches.length === 1 ? matches[0] : null
+}
+
+export function resolveWorkoutNeighborsByDate(
+  sessions: WorkoutSession[],
+  currentDate: string,
+): WorkoutNeighborResolution | null {
+  const current = resolveUniqueWorkoutByDate(sessions, currentDate)
+  return current ? resolveWorkoutNeighbors(sessions, current.session_id) : null
+}
+
+export function compareWorkoutSessions(
+  current: WorkoutSession,
+  previous: WorkoutSession,
+): WorkoutSessionComparison {
+  const currentSummary = getWorkoutSummary(current)
+  const previousSummary = getWorkoutSummary(previous)
+  const currentMachines = getMachinesById(current)
+  const previousMachines = getMachinesById(previous)
+
+  return {
+    current: currentSummary,
+    previous: previousSummary,
+    machineCountDelta: getNumericDelta(currentSummary.machineCount, previousSummary.machineCount),
+    setCountDelta: getNumericDelta(currentSummary.setCount, previousSummary.setCount),
+    totalRepsDelta: getNumericDelta(currentSummary.totalReps, previousSummary.totalReps),
+    addedMachines: Array.from(currentMachines.entries())
+      .filter(([machineId]) => !previousMachines.has(machineId))
+      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
+    removedMachines: Array.from(previousMachines.entries())
+      .filter(([machineId]) => !currentMachines.has(machineId))
+      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
+  }
+}
+
+export function getWeekdayDistribution(sessions: WorkoutSession[]): WeekdayDistribution[] {
+  const trainingDatesByWeekday = new Map<number, Set<string>>()
+  const sessionCounts = new Map<number, number>()
+
+  for (const session of sessions) {
+    const weekday = toUtcDate(session.date).getUTCDay()
+    sessionCounts.set(weekday, (sessionCounts.get(weekday) ?? 0) + 1)
+    const trainingDates = trainingDatesByWeekday.get(weekday) ?? new Set<string>()
+    trainingDates.add(session.date)
+    trainingDatesByWeekday.set(weekday, trainingDates)
+  }
+
+  return Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    sessionCount: sessionCounts.get(weekday) ?? 0,
+    trainingDayCount: trainingDatesByWeekday.get(weekday)?.size ?? 0,
+  }))
+}
+
+export function getMonthlyTrainingDays(sessions: WorkoutSession[]): MonthlyTrainingDays[] {
+  const datesByMonth = new Map<string, Set<string>>()
+  const sessionsByMonth = new Map<string, number>()
+
+  for (const session of sessions) {
+    const month = session.date.slice(0, 7)
+    const dates = datesByMonth.get(month) ?? new Set<string>()
+    dates.add(session.date)
+    datesByMonth.set(month, dates)
+    sessionsByMonth.set(month, (sessionsByMonth.get(month) ?? 0) + 1)
+  }
+
+  return Array.from(datesByMonth.entries())
+    .map(([month, dates]) => ({
+      month,
+      trainingDayCount: dates.size,
+      sessionCount: sessionsByMonth.get(month) ?? 0,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month))
+}
+
+export function getSetsByBodyPart(sessions: WorkoutSession[]): BodyPartSetDistribution[] {
+  const setCounts = new Map<BodyPart, number>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      setCounts.set(machine.body_part, (setCounts.get(machine.body_part) ?? 0) + machine.sets.length)
+    }
+  }
+
+  return sortBodyPartRows(
+    Array.from(setCounts.entries()).map(([bodyPart, setCount]) => ({ bodyPart, setCount })),
+  )
+}
+
+export function getBodyPartFrequency(sessions: WorkoutSession[]): BodyPartFrequency[] {
+  const sessionIdsByBodyPart = new Map<BodyPart, Set<string>>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const sessionIds = sessionIdsByBodyPart.get(machine.body_part) ?? new Set<string>()
+      sessionIds.add(session.session_id)
+      sessionIdsByBodyPart.set(machine.body_part, sessionIds)
+    }
+  }
+
+  return sortBodyPartRows(
+    Array.from(sessionIdsByBodyPart.entries()).map(([bodyPart, sessionIds]) => ({
+      bodyPart,
+      sessionCount: sessionIds.size,
+    })),
+  )
+}
+
+export function getBodyPartShare(sessions: WorkoutSession[]): BodyPartShare[] {
+  const sets = getSetsByBodyPart(sessions)
+  const totalSets = sets.reduce((total, item) => total + item.setCount, 0)
+
+  return sets.map((item) => ({
+    ...item,
+    share: totalSets === 0 ? 0 : item.setCount / totalSets,
+  }))
+}
+
+export function getBodyPartTrend(sessions: WorkoutSession[]): BodyPartTrend[] {
+  const trend = new Map<string, BodyPartTrend>()
+  const sessionIdsByTrend = new Map<string, Set<string>>()
+
+  for (const session of sessions) {
+    const month = session.date.slice(0, 7)
+    for (const machine of session.machines) {
+      const key = `${month}:${machine.body_part}`
+      const current = trend.get(key) ?? {
+        month,
+        bodyPart: machine.body_part,
+        setCount: 0,
+        sessionCount: 0,
+      }
+      const sessionIds = sessionIdsByTrend.get(key) ?? new Set<string>()
+
+      current.setCount += machine.sets.length
+      sessionIds.add(session.session_id)
+      current.sessionCount = sessionIds.size
+      trend.set(key, current)
+      sessionIdsByTrend.set(key, sessionIds)
+    }
+  }
+
+  return Array.from(trend.values()).sort(
+    (a, b) => a.month.localeCompare(b.month) || a.bodyPart.localeCompare(b.bodyPart),
+  )
+}
+
+export function getLastTrainedDateByBodyPart(sessions: WorkoutSession[]): BodyPartLastTrained[] {
+  const lastDateByBodyPart = new Map<BodyPart, string>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const current = lastDateByBodyPart.get(machine.body_part)
+      if (!current || session.date > current) {
+        lastDateByBodyPart.set(machine.body_part, session.date)
+      }
+    }
+  }
+
+  return Array.from(lastDateByBodyPart.entries())
+    .map(([bodyPart, lastTrainedDate]) => ({ bodyPart, lastTrainedDate }))
+    .sort((a, b) => b.lastTrainedDate.localeCompare(a.lastTrainedDate) || a.bodyPart.localeCompare(b.bodyPart))
+}
+
+export function getMachineFrequencyRanking(sessions: WorkoutSession[]): MachineFrequencyRanking[] {
+  const rows = new Map<string, MachineFrequencyRanking>()
+  const sessionIdsByMachine = new Map<string, Set<string>>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const row = rows.get(machine.machine_id) ?? {
+        machineId: machine.machine_id,
+        machineName: machine.name,
+        bodyPart: machine.body_part,
+        sessionCount: 0,
+        occurrenceCount: 0,
+      }
+      const sessionIds = sessionIdsByMachine.get(machine.machine_id) ?? new Set<string>()
+
+      row.occurrenceCount += 1
+      sessionIds.add(session.session_id)
+      row.sessionCount = sessionIds.size
+      rows.set(machine.machine_id, row)
+      sessionIdsByMachine.set(machine.machine_id, sessionIds)
+    }
+  }
+
+  return Array.from(rows.values()).sort(
+    (a, b) =>
+      b.sessionCount - a.sessionCount ||
+      b.occurrenceCount - a.occurrenceCount ||
+      a.machineName.localeCompare(b.machineName) ||
+      a.machineId.localeCompare(b.machineId),
+  )
+}
+
+export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribution[] {
+  const rows = new Map<string, GymSessionDistribution>()
+
+  for (const session of sessions) {
+    const row = rows.get(session.gym.id) ?? {
+      gymId: session.gym.id,
+      gymName: session.gym.name,
+      sessionCount: 0,
+    }
+
+    row.sessionCount += 1
+    rows.set(session.gym.id, row)
+  }
+
+  return Array.from(rows.values()).sort(
+    (a, b) => b.sessionCount - a.sessionCount || a.gymName.localeCompare(b.gymName) || a.gymId.localeCompare(b.gymId),
+  )
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
@@ -368,6 +972,54 @@ function updateRecord(records: Map<string, PersonalRecord>, candidate: PersonalR
 
 function toUtcDate(date: string): Date {
   return new Date(`${date}T00:00:00Z`)
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function getMonthRange(year: number, month: number): DateRange {
+  const startDate = new Date(Date.UTC(year, month - 1, 1))
+  const endDate = new Date(Date.UTC(year, month, 0))
+
+  return {
+    startDate: toIsoDate(startDate),
+    endDate: toIsoDate(endDate),
+  }
+}
+
+function getInclusiveDayCount(range: DateRange): number {
+  return Math.floor((toUtcDate(range.endDate).getTime() - toUtcDate(range.startDate).getTime()) / 86_400_000) + 1
+}
+
+function getWeekStartDate(date: string): string {
+  const day = toUtcDate(date)
+  const dayOfWeek = day.getUTCDay()
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  day.setUTCDate(day.getUTCDate() + mondayOffset)
+  return toIsoDate(day)
+}
+
+function sortSessions(sessions: WorkoutSession[]): WorkoutSession[] {
+  return [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id))
+}
+
+function getMachinesById(session: WorkoutSession): Map<string, WorkoutMachine> {
+  const machines = new Map<string, WorkoutMachine>()
+
+  for (const machine of session.machines) {
+    machines.set(machine.machine_id, machine)
+  }
+
+  return machines
+}
+
+function sortBodyPartRows<T extends { bodyPart: BodyPart }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.bodyPart.localeCompare(b.bodyPart))
+}
+
+function sumAggregate<T extends Record<K, number>, K extends keyof T>(items: T[], key: K): number {
+  return items.reduce((total, item) => total + item[key], 0)
 }
 
 function getBestSetValue(sets: MachineSet[], selectValue: (set: MachineSet) => number): number {
