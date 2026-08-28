@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { deriveApplicationReadiness, type AfStatus } from './index'
 
 const repoRoot = process.cwd()
 
@@ -39,5 +40,44 @@ describe('AF read contract refinement', () => {
     expect(apiInventory).toContain('no longer publishes top-level `version`')
     expect(apiContract).not.toContain('- `version`')
     expect(apiInventory).not.toContain('- `version`:')
+  })
+
+  it('derives shared readiness without treating optional Main Gym context as setup failure', () => {
+    const baseStatus = {
+      application: { status: 'ready', degraded: false, acceptingRequests: true },
+      components: {
+        configuration: 'available',
+        credential: 'available',
+        github: 'available',
+        runtimeData: 'available',
+        hosting: {
+          portal: 'available',
+          dashboard: 'available',
+          workouts: 'available',
+          machines: 'available',
+          analytics: 'available',
+          settings: 'available',
+          maintenance: 'available',
+        },
+      },
+      requiredActions: [],
+    } satisfies Pick<AfStatus, 'application' | 'components' | 'requiredActions'>
+
+    expect(deriveApplicationReadiness({
+      ...baseStatus,
+      requiredActions: ['CONFIGURATION_REQUIRED', 'CREDENTIAL_REQUIRED'],
+    }).state).toBe('unconfigured')
+    expect(deriveApplicationReadiness({
+      ...baseStatus,
+      application: { status: 'degraded', degraded: true, acceptingRequests: true },
+      components: { ...baseStatus.components, runtimeData: 'unavailable' },
+      requiredActions: ['RUNTIME_DATA_REQUIRED'],
+    }).state).toBe('unavailable')
+    expect(deriveApplicationReadiness({
+      ...baseStatus,
+      application: { status: 'degraded', degraded: true, acceptingRequests: true },
+      components: { ...baseStatus.components, github: 'degraded' },
+    }).state).toBe('degraded')
+    expect(deriveApplicationReadiness(baseStatus).state).toBe('ready')
   })
 })

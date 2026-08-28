@@ -1,7 +1,7 @@
 import { initializeBrandingLogo, initializeStoredBrandVariant } from './frontend-common/branding/index.js'
 import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index.js'
 import { initializeStoredTheme } from './frontend-common/theme/index.js'
-import { getAfStatus } from './frontend-common/af-client.js'
+import { deriveApplicationReadiness, getAfStatus } from './frontend-common/af-client.js'
 
 const storedBrandVariant = initializeStoredBrandVariant()
 const storedTheme = initializeStoredTheme()
@@ -24,10 +24,11 @@ async function refreshStatusNotice() {
     const manualSyncRunning = status?.operations?.manualSync === 'running'
     const startupFailed = status?.operations?.startup === 'failed'
     const manualSyncFailed = status?.operations?.manualSync === 'failed'
-    const runtimeRequired = Array.isArray(status?.requiredActions)
-      && status.requiredActions.includes('RUNTIME_DATA_REQUIRED')
-    const localFallbackActive = status?.components?.github === 'degraded'
-      && status?.components?.runtimeData === 'available'
+    const readiness = status?.readiness ?? deriveApplicationReadiness(status)
+    const runtimeRequired = readiness.state === 'unavailable'
+      && readiness.requiredActions.includes('RUNTIME_DATA_REQUIRED')
+    const localFallbackActive = readiness.state === 'degraded'
+      && readiness.degradedComponents.includes('github')
 
     if (startupRunning) {
       syncWasRunning = true

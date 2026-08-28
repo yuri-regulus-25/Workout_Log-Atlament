@@ -60,6 +60,10 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 - `versions.nativePackages.windows.version`
 - `versions.nativePackages.android.versionName`
 - `versions.nativePackages.android.versionCode`
+- `readiness.state`: `unconfigured`, `ready`, `degraded`, or `unavailable`
+- `readiness.requiredActions`
+- `readiness.unavailableComponents`
+- `readiness.degradedComponents`
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`
@@ -74,6 +78,19 @@ CONFIGURATION_REQUIRED
 CREDENTIAL_REQUIRED
 RUNTIME_DATA_REQUIRED
 ```
+
+## Application Readiness
+
+Readiness は frontend が個別に初期設定/利用可能/障害状態を推測しないための共通 domain contract である。Windows、Android、Node development runtime、shared frontend client は同じ state 名を使用する。
+
+| State | Meaning |
+|---|---|
+| `unconfigured` | Repository/branch configuration または credential が不足しており、初期設定が未完了。 |
+| `ready` | 通常利用に必要な configuration、credential、Runtime Data が揃っている。 |
+| `degraded` | Runtime Data は利用可能だが、GitHub access など一部 component が劣化している。 |
+| `unavailable` | 初期設定済みだが Runtime Data がなく、通常 application を安全に利用できない。 |
+
+Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
 
 ## Configuration Data
 
