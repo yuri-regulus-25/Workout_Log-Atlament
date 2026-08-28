@@ -32,6 +32,24 @@
       <p class="muted">{{ loadError }}</p>
     </section>
 
+    <section class="panel workout-calendar-panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-calendar-month-outline" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Workout Calendar</p>
+            <h2>{{ calendarTitle }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="workout-calendar" aria-label="Workout calendar">
+        <div v-for="day in calendarDays" :key="day.date" :class="['calendar-day', { 'calendar-day--trained': day.trainingDay }]">
+          <span>{{ Number(day.date.slice(8, 10)) }}</span>
+          <strong v-if="day.sessionCount > 0">{{ day.sessionCount }}</strong>
+        </div>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-header">
         <div class="card-heading">
@@ -60,6 +78,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
+import { getCalendarMonthAggregates, getCurrentLocalYearMonth } from '@workout-lab/workout-core'
 import WorkoutFilters from '../components/WorkoutFilters.vue'
 import WorkoutGrid from '../components/WorkoutGrid.vue'
 import { defaultWorkoutListFilters, filterWorkoutSessions } from '../workout-list-filters'
@@ -75,6 +94,23 @@ const selectedGym = ref(defaultWorkoutListFilters.selectedGym)
 const dateFrom = ref(defaultWorkoutListFilters.dateFrom)
 const dateTo = ref(defaultWorkoutListFilters.dateTo)
 const sortDirection = ref(defaultWorkoutListFilters.sortDirection)
+const currentCalendarMonth = computed(() => {
+  const latestSession = workoutSessions.value.at(-1)
+  if (!latestSession) {
+    return getCurrentLocalYearMonth()
+  }
+
+  const [year, month] = latestSession.date.split('-').map(Number)
+  return { year, month }
+})
+const calendarTitle = computed(() => {
+  const month = currentCalendarMonth.value
+  return `${month.year}-${String(month.month).padStart(2, '0')}`
+})
+const calendarDays = computed(() => {
+  const month = currentCalendarMonth.value
+  return getCalendarMonthAggregates(workoutSessions.value, month.year, month.month)
+})
 
 onMounted(async () => {
   try {
