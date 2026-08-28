@@ -100,3 +100,9 @@ The legacy `/api/common/*` alias is removed from producers and documentation. Un
 ## Phase8-A Readiness Model
 
 `GET /api/v1/common/status` now publishes `readiness` as the shared application readiness model. Frontends should consume this domain state instead of deriving setup/runtime failure independently. Main Gym unconfigured state is intentionally excluded from readiness and remains a feature-level optional context.
+
+## Phase8-C Access and Recovery
+
+Shared frontend clients derive Application Access Policy from `readiness`. `unconfigured` blocks normal applications while keeping Settings/Setup recovery available. `ready` allows normal applications. `degraded` keeps normal applications available and restricts only affected components. `unavailable` blocks unsafe normal application access and exposes recovery actions such as Settings, credential update, retry sync, or reload.
+
+Configured credential failures are runtime failures rather than setup absence. Remote fetch failure with existing Runtime Data remains a degraded fallback state: GitHub is degraded, Runtime Data stays available, and normal applications may continue using the previous successful data.

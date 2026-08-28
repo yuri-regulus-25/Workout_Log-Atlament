@@ -472,6 +472,14 @@ public sealed class AfCoreTests
             Assert.Equal("ready", afterSync.Readiness.State);
             Assert.Empty(afterSync.Readiness.RequiredActions);
             Assert.Empty(afterSync.Readiness.UnavailableComponents);
+
+            var expiredCredential = application.UpdateCredential(new CredentialUpdate("github-token", "2026-01-01"));
+            var afterExpiredCredential = application.GetStatus().Data!;
+            Assert.Equal(200, expiredCredential.StatusCode);
+            Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterExpiredCredential.Readiness.RequiredActions);
+            Assert.Equal("degraded", afterExpiredCredential.Readiness.State);
+            Assert.Contains("credential", afterExpiredCredential.Readiness.UnavailableComponents);
+            Assert.DoesNotContain("runtimeData", afterExpiredCredential.Readiness.UnavailableComponents);
         }
         finally
         {

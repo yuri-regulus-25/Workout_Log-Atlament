@@ -1665,13 +1665,14 @@ public sealed class AtlamentApplication
                 DegradedComponents());
         }
 
+        var unavailable = UnavailableComponents();
         var degraded = DegradedComponents();
-        if (_applicationStatus == ApplicationStatus.degraded || degraded.Count > 0 || requiredActions.Length > 0)
+        if (_applicationStatus == ApplicationStatus.degraded || degraded.Count > 0 || unavailable.Count > 0 || requiredActions.Length > 0)
         {
             return new ApplicationReadiness(
                 "degraded",
                 requiredActions,
-                UnavailableComponents(),
+                unavailable,
                 degraded);
         }
 

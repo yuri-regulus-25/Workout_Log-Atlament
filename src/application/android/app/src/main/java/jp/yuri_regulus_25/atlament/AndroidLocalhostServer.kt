@@ -326,7 +326,7 @@ class AndroidLocalhostServer(
         val state = when {
             requiredActions.contains("CONFIGURATION_REQUIRED") || requiredActions.contains("CREDENTIAL_REQUIRED") -> "unconfigured"
             unavailableComponents.contains("runtimeData") -> "unavailable"
-            applicationStatus() == "degraded" || degradedComponents.isNotEmpty() || requiredActions.isNotEmpty() -> "degraded"
+            applicationStatus() == "degraded" || degradedComponents.isNotEmpty() || unavailableComponents.isNotEmpty() || requiredActions.isNotEmpty() -> "degraded"
             else -> "ready"
         }
         return """
@@ -345,7 +345,7 @@ class AndroidLocalhostServer(
     private fun requiredActionNames(): List<String> {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
         if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
-        if (credentialState() != "available") actions.add(0, "CREDENTIAL_REQUIRED")
+        if (!hasEncryptedCredential()) actions.add(0, "CREDENTIAL_REQUIRED")
         if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
         return actions
     }

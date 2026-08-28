@@ -87,10 +87,12 @@ Readiness は frontend が個別に初期設定/利用可能/障害状態を推�
 |---|---|
 | `unconfigured` | Repository/branch configuration または credential が不足しており、初期設定が未完了。 |
 | `ready` | 通常利用に必要な configuration、credential、Runtime Data が揃っている。 |
-| `degraded` | Runtime Data は利用可能だが、GitHub access など一部 component が劣化している。 |
+| `degraded` | Runtime Data は利用可能だが、GitHub access、credential validity、fallback operation など一部 component が劣化している。 |
 | `unavailable` | 初期設定済みだが Runtime Data がなく、通常 application を安全に利用できない。 |
 
-Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
+Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。Credential が設定済みで期限切れ/無効になった場合は setup 未完了へ戻さず、credential component の runtime failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
+
+Shared frontend client は `readiness` から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。GitHub degraded かつ Runtime Data available の場合は fallback operation として扱い、Remote取得失敗と既存正常Dataで継続利用中であることを区別する。
 
 ## Configuration Data
 
