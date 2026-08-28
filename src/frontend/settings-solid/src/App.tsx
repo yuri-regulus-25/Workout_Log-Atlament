@@ -463,7 +463,7 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
         </div>
       </div>
       <div class="status-grid">
-        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? props.status?.version ?? '-'} />
+        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
         <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>

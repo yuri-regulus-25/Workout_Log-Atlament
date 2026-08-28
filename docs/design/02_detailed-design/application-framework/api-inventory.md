@@ -43,8 +43,7 @@ Inventory target:
 
 Retained fields:
 
-- `version`: Settings display.
-- `versions.applicationFramework`: Settings display.
+- `versions.applicationFramework`: Settings display and AF version source.
 - `versions.frontendFramework`: Settings display.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
@@ -85,3 +84,7 @@ Windows, Android, and Node development runtime now expose the same current prefi
 ```
 
 The legacy `/api/common/*` alias is removed from producers and documentation. Unknown `/api/*` routes continue to return an API error instead of frontend HTML.
+
+## Phase3 Contract Refinement
+
+`GET /api/v1/common/status` no longer publishes top-level `version`. The value duplicated `versions.applicationFramework`; Windows, Android, Node development runtime, and Settings now use `versions.applicationFramework` as the single AF version field.
