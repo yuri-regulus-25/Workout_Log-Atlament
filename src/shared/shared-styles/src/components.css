@@ -169,6 +169,21 @@
   padding: 22px;
 }
 
+.latest-workout-panel {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
+.latest-workout-panel:hover {
+  border-color: var(--wl-primary);
+}
+
+.latest-workout-panel:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--wl-focus-ring);
+}
+
 .panel.wide {
   min-width: 0;
 }
@@ -287,7 +302,17 @@
   padding: 10px 14px;
 }
 
+.field input,
+.field textarea {
+  border: 1px solid var(--wl-input-border);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-text-strong);
+  padding: 10px 14px;
+}
+
 .field input:focus,
+.field textarea:focus,
 .field select:focus,
 .primary-action:focus-visible,
 .text-link:focus-visible,

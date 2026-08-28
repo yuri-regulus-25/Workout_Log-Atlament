@@ -2,7 +2,7 @@
   container-type: inline-size;
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 40px 0 56px;
+  padding: calc(40px + env(safe-area-inset-top, 0px)) 0 calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
 .page-hero,
@@ -54,6 +54,11 @@
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    width: min(100% - 24px, 1180px);
+    padding-top: calc(28px + env(safe-area-inset-top, 0px));
+  }
+
   .hero-top,
   .top-bar {
     align-items: flex-start;

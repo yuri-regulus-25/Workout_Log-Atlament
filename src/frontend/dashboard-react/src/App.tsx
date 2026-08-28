@@ -19,6 +19,7 @@ import {
   getTotalVolume,
   toWorkoutRows,
 } from '@workout-lab/workout-core'
+import { getUniqueWorkoutDateRoute, getWorkoutDetailRoute, getWorkoutListRoute } from './dashboard-navigation'
 import './App.css'
 
 function App() {
@@ -73,6 +74,7 @@ function App() {
   const currentMonth = getCurrentLocalYearMonth()
   const monthlySessions = getMonthlySessions(sessions, currentMonth.year, currentMonth.month)
   const latestWorkout = sessions.at(-1)
+  const latestWorkoutRoute = latestWorkout ? getWorkoutDetailRoute(latestWorkout.date) : getWorkoutListRoute()
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
   const monthlyVolume = getMonthlyVolume(sessions, currentMonth.year, currentMonth.month)
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
@@ -130,7 +132,24 @@ function App() {
   const volumeChartKey = recent28Sessions.map((session) => session.session_id).join('|')
 
   const frequencyChartOptions: ApexOptions = {
-    chart: { background: 'transparent', foreColor: chartTheme.textMuted, toolbar: { show: false } },
+    chart: {
+      background: 'transparent',
+      events: {
+        dataPointSelection: (_event, _chartContext, config) => {
+          const dataPointIndex = config?.dataPointIndex
+          if (typeof dataPointIndex !== 'number') {
+            return
+          }
+
+          const route = getUniqueWorkoutDateRoute(sessions, dataPointIndex)
+          if (route) {
+            window.location.assign(route)
+          }
+        },
+      },
+      foreColor: chartTheme.textMuted,
+      toolbar: { show: false },
+    },
     colors: [chartTheme.secondary],
     dataLabels: { enabled: false },
     grid: { borderColor: chartTheme.grid },
@@ -266,7 +285,7 @@ function App() {
           )}
         </article>
 
-        <article className="panel">
+        <a className="panel latest-workout-panel" href={latestWorkoutRoute} aria-label="Open latest workout detail">
           <div className="panel-header">
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
@@ -288,7 +307,7 @@ function App() {
           ) : (
             <p className="muted">No workout data loaded.</p>
           )}
-        </article>
+        </a>
       </section>
 
       <section className="dashboard-grid">
@@ -338,6 +357,9 @@ function App() {
               <h2>最近のワークアウト</h2>
             </div>
           </div>
+          <a className="text-action" href={getWorkoutListRoute()}>
+            <i className="mdi mdi-view-list-outline" aria-hidden="true"></i>Workout List
+          </a>
         </div>
         <div className="recent-table dashboard-recent-table">
           <div className="recent-row header">
