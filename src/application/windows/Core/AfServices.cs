@@ -123,7 +123,7 @@ public sealed class AfLog
 
 public sealed class ConfigurationStore
 {
-    private static readonly HashSet<string> ResourceTypes = new(StringComparer.Ordinal) { "WORKOUT", "EXERCISE_MASTER", "GYM_MASTER" };
+    private static readonly HashSet<string> ResourceTypes = new(StringComparer.Ordinal) { "WORKOUT", "MACHINE_MASTER", "GYM_MASTER" };
     private static readonly HashSet<string> ResourceKinds = new(StringComparer.Ordinal) { "file", "directory" };
     private readonly WindowsPathProvider _paths;
 
@@ -361,10 +361,10 @@ public sealed class RuntimeDataBuilder
         "chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other"
     };
 
-    public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile exercisesFile, RuntimeSourceFile gymsFile)
+    public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile machinesFile, RuntimeSourceFile gymsFile)
     {
         var errors = new List<AfError>();
-        var exercises = ParseExerciseMaster(exercisesFile, errors);
+        var machines = ParseMachineMaster(machinesFile, errors);
         var gyms = ParseGymMaster(gymsFile, errors);
         if (errors.Any(error => error.Code == AfErrorCodes.RuntimeDataInvalid))
         {
@@ -389,14 +389,14 @@ public sealed class RuntimeDataBuilder
                 {
                     lineNo++;
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    var parsed = BuildSession(file.Path, lineNo, line, exercises, gyms, errors);
+                    var parsed = BuildSession(file.Path, lineNo, line, machines, gyms, errors);
                     if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
                     if (parsed.Session is not null) sessions.Add(parsed.Session);
                 }
             }
             else if (file.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {
-                var parsed = BuildSession(file.Path, null, file.Content, exercises, gyms, errors);
+                var parsed = BuildSession(file.Path, null, file.Content, machines, gyms, errors);
                 if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
                 if (parsed.Session is not null) sessions.Add(parsed.Session);
             }
@@ -411,46 +411,46 @@ public sealed class RuntimeDataBuilder
 
     public (WorkoutSession? Session, bool TechnicalInvalid) BuildSingleSessionForTest(string json, string path = "test.json")
     {
-        var exercises = new Dictionary<string, ExerciseMasterItem>
+        var machines = new Dictionary<string, MachineMasterItem>
         {
-            ["known-exercise"] = new("known-exercise", "Known Exercise", "chest")
+            ["known-machine"] = new("known-machine", "Known Machine", "chest")
         };
         var gyms = new Dictionary<string, GymMasterItem>
         {
             ["known-gym"] = new("known-gym", "Known Gym", "KG")
         };
         var errors = new List<AfError>();
-        return BuildSession(path, null, json, exercises, gyms, errors);
+        return BuildSession(path, null, json, machines, gyms, errors);
     }
 
-    private static Dictionary<string, ExerciseMasterItem> ParseExerciseMaster(RuntimeSourceFile file, List<AfError> errors)
+    private static Dictionary<string, MachineMasterItem> ParseMachineMaster(RuntimeSourceFile file, List<AfError> errors)
     {
         try
         {
             using var document = JsonDocument.Parse(file.Content);
             var root = document.RootElement;
-            if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("exercises", out var items) || items.ValueKind != JsonValueKind.Array)
+            if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("machines", out var items) || items.ValueKind != JsonValueKind.Array)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master contract is invalid.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master contract is invalid.", false));
                 return new();
             }
 
-            var result = new Dictionary<string, ExerciseMasterItem>(StringComparer.Ordinal);
+            var result = new Dictionary<string, MachineMasterItem>(StringComparer.Ordinal);
             foreach (var item in items.EnumerateArray())
             {
-                if (!TryGetString(item, "exercise_id", out var id) ||
+                if (!TryGetString(item, "machine_id", out var id) ||
                     !TryGetString(item, "name", out var name) ||
                     !TryGetString(item, "body_part", out var bodyPart) ||
                     !BodyParts.Contains(bodyPart) ||
                     !TryGetBool(item, "active", out _))
                 {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master item is invalid.", false));
+                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master item is invalid.", false));
                     return new();
                 }
 
-                if (!result.TryAdd(id, new ExerciseMasterItem(id, name, bodyPart)))
+                if (!result.TryAdd(id, new MachineMasterItem(id, name, bodyPart)))
                 {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate exercise_id: {id}.", false));
+                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine_id: {id}.", false));
                     return new();
                 }
             }
@@ -459,7 +459,7 @@ public sealed class RuntimeDataBuilder
         }
         catch
         {
-            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master JSON is invalid.", false));
+            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master JSON is invalid.", false));
             return new();
         }
     }
@@ -508,7 +508,7 @@ public sealed class RuntimeDataBuilder
         string filePath,
         int? line,
         string content,
-        IReadOnlyDictionary<string, ExerciseMasterItem> exercises,
+        IReadOnlyDictionary<string, MachineMasterItem> machines,
         IReadOnlyDictionary<string, GymMasterItem> gyms,
         List<AfError> errors)
     {
@@ -534,16 +534,16 @@ public sealed class RuntimeDataBuilder
                 !TryGetString(root, "status", out var status) ||
                 status is not ("complete" or "partial") ||
                 !TryGetString(root, "gym_id", out var gymId) ||
-                !root.TryGetProperty("exercises", out var exerciseItems) ||
-                exerciseItems.ValueKind != JsonValueKind.Array)
+                !root.TryGetProperty("machines", out var machineItems) ||
+                machineItems.ValueKind != JsonValueKind.Array)
             {
                 errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Workout required fields are invalid.", false));
                 return (null, true);
             }
 
-            if (status == "complete" && exerciseItems.GetArrayLength() == 0)
+            if (status == "complete" && machineItems.GetArrayLength() == 0)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires exercises.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires machines.", false));
                 return (null, true);
             }
 
@@ -553,18 +553,18 @@ public sealed class RuntimeDataBuilder
                 return (null, false);
             }
 
-            var workoutExercises = new List<WorkoutExercise>();
-            foreach (var exerciseItem in exerciseItems.EnumerateArray())
+            var workoutMachines = new List<WorkoutMachine>();
+            foreach (var machineItem in machineItems.EnumerateArray())
             {
-                var parsed = BuildExercise(filePath, line, exerciseItem, exercises, errors);
+                var parsed = BuildMachine(filePath, line, machineItem, machines, errors);
                 if (parsed.TechnicalInvalid) return (null, true);
                 if (parsed.MasterResolveFailure) return (null, false);
-                if (parsed.Exercise is not null) workoutExercises.Add(parsed.Exercise);
+                if (parsed.Machine is not null) workoutMachines.Add(parsed.Machine);
             }
 
-            if (status == "complete" && workoutExercises.Count == 0)
+            if (status == "complete" && workoutMachines.Count == 0)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires valid exercises.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires valid machines.", false));
                 return (null, true);
             }
 
@@ -575,36 +575,36 @@ public sealed class RuntimeDataBuilder
                 status,
                 new Gym(gymMaster.Id, gymMaster.Name, gymMaster.ShortName),
                 ReadCondition(root),
-                workoutExercises,
+                workoutMachines,
                 ReadStringArray(root, "notes"));
             return (session, false);
         }
     }
 
-    private static (WorkoutExercise? Exercise, bool TechnicalInvalid, bool MasterResolveFailure) BuildExercise(
+    private static (WorkoutMachine? Machine, bool TechnicalInvalid, bool MasterResolveFailure) BuildMachine(
         string filePath,
         int? line,
         JsonElement item,
-        IReadOnlyDictionary<string, ExerciseMasterItem> masters,
+        IReadOnlyDictionary<string, MachineMasterItem> masters,
         List<AfError> errors)
     {
         if (item.ValueKind != JsonValueKind.Object ||
-            !TryGetString(item, "exercise_id", out var exerciseId) ||
+            !TryGetString(item, "machine_id", out var machineId) ||
             !item.TryGetProperty("sets", out var setItems) ||
             setItems.ValueKind != JsonValueKind.Array ||
             setItems.GetArrayLength() == 0)
         {
-            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Exercise required fields are invalid.", false));
+            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Machine required fields are invalid.", false));
             return (null, true, false);
         }
 
-        if (!masters.TryGetValue(exerciseId, out var master))
+        if (!masters.TryGetValue(machineId, out var master))
         {
-            errors.Add(new AfError(AfErrorCodes.MasterExerciseNotFound, Location(filePath, line) + $"Exercise master is not found: {exerciseId}.", true));
+            errors.Add(new AfError(AfErrorCodes.MasterMachineNotFound, Location(filePath, line) + $"Machine master is not found: {machineId}.", true));
             return (null, false, true);
         }
 
-        var sets = new List<ExerciseSet>();
+        var sets = new List<MachineSet>();
         foreach (var setItem in setItems.EnumerateArray())
         {
             if (setItem.ValueKind != JsonValueKind.Object ||
@@ -612,11 +612,11 @@ public sealed class RuntimeDataBuilder
                 !TryGetDecimal(setItem, "weight_kg", out var weightKg) ||
                 !TryGetInt(setItem, "reps", out var reps))
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + $"Set in exercise {exerciseId} is invalid.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + $"Set in machine {machineId} is invalid.", false));
                 return (null, true, false);
             }
 
-            sets.Add(new ExerciseSet(
+            sets.Add(new MachineSet(
                 setNumber,
                 weightKg,
                 reps,
@@ -626,7 +626,7 @@ public sealed class RuntimeDataBuilder
                 TryGetOptionalString(setItem, "note")));
         }
 
-        return (new WorkoutExercise(exerciseId, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
+        return (new WorkoutMachine(machineId, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
     }
 
     private static SessionCondition? ReadCondition(JsonElement root)
@@ -700,7 +700,7 @@ public sealed class RuntimeDataBuilder
             .ToArray();
     }
 
-    private sealed record ExerciseMasterItem(string Id, string Name, string BodyPart);
+    private sealed record MachineMasterItem(string Id, string Name, string BodyPart);
     private sealed record GymMasterItem(string Id, string Name, string? ShortName);
 }
 
@@ -936,7 +936,7 @@ public sealed class HostingStatusService
         ["portal"] = "portal",
         ["dashboard"] = "dashboard",
         ["workouts"] = "workouts",
-        ["exercises"] = "exercises",
+        ["machines"] = "machines",
         ["analytics"] = "analytics",
         ["settings"] = "settings"
     };
@@ -955,7 +955,7 @@ public sealed class HostingStatusService
         Status("portal"),
         Status("dashboard"),
         Status("workouts"),
-        Status("exercises"),
+        Status("machines"),
         Status("analytics"),
         Status("settings"));
 
@@ -964,7 +964,7 @@ public sealed class HostingStatusService
         artifactUnavailable = false;
         var normalized = requestPath.Trim('/');
         var app = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "portal";
-        if (app is "dashboard" or "workouts" or "exercises" or "analytics" or "settings")
+        if (app is "dashboard" or "workouts" or "machines" or "analytics" or "settings")
         {
             var relative = normalized.Length == app.Length ? "index.html" : normalized[(app.Length + 1)..];
             return Resolve(app, relative, out artifactUnavailable);
@@ -1032,7 +1032,7 @@ public sealed class HostingStatusService
         return app switch
         {
             "workouts" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^\d{4}-\d{2}-\d{2}$"),
-            "exercises" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^[A-Za-z0-9][A-Za-z0-9_-]*$"),
+            "machines" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^[A-Za-z0-9][A-Za-z0-9_-]*$"),
             _ => false
         };
     }
@@ -1262,7 +1262,7 @@ public sealed class AtlamentApplication
 
             _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("configurationUpdate", true);
-            return (200, AfResponses.Ok(new ConfigurationUpdateResult(true, remoteChanged), responseErrors));
+            return (200, AfResponses.Ok(new ConfigurationUpdateResult(remoteChanged), responseErrors));
         }
         catch
         {
@@ -1363,23 +1363,23 @@ public sealed class AtlamentApplication
             {
                 // Remote failure is degraded, not fatal, when a previously built runtime file can
                 // still satisfy Frontend data requests.
-                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult("local", false, true)));
+                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult(true)));
             }
 
             return (503, new AfResponse<SyncResult>(false, remote.Errors, null));
         }
 
         _githubStatus = ComponentStatus.available;
-        var exerciseMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/exercises.json", StringComparison.OrdinalIgnoreCase));
+        var machineMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/machines.json", StringComparison.OrdinalIgnoreCase));
         var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
         var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (exerciseMaster is null || gymMaster is null)
+        if (machineMaster is null || gymMaster is null)
         {
             var error = new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true);
             return RuntimeBuildFailure(new[] { error });
         }
 
-        var build = _runtimeDataBuilder.Build(workoutFiles, exerciseMaster, gymMaster);
+        var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
         if (build.TechnicalInvalid || build.Errors.Count > 0)
         {
             return RuntimeBuildFailure(build.Errors);
@@ -1395,7 +1395,7 @@ public sealed class AtlamentApplication
         _runtimeStatus = ComponentStatus.available;
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
-        return (200, AfResponses.Ok(new SyncResult("remote", true, build.Errors.Count > 0), build.Errors));
+        return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors));
     }
 
     private (int StatusCode, AfResponse<SyncResult> Response) RuntimeBuildFailure(IReadOnlyList<AfError> errors)
@@ -1405,7 +1405,7 @@ public sealed class AtlamentApplication
         _applicationStatus = DetermineApplicationStatus();
         if (_runtimeStatus == ComponentStatus.available)
         {
-            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult("local", false, true)));
+            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult(true)));
         }
 
         return (503, new AfResponse<SyncResult>(false, errors, null));

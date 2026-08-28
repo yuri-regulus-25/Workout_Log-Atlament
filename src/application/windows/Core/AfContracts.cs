@@ -43,7 +43,7 @@ public static class AfErrorCodes
     public const string RuntimeDataEmpty = "RUNTIME_DATA_EMPTY";
     public const string RuntimeDataUnavailable = "RUNTIME_DATA_UNAVAILABLE";
     public const string RuntimeDataUpdateFailed = "RUNTIME_DATA_UPDATE_FAILED";
-    public const string MasterExerciseNotFound = "MASTER_EXERCISE_NOT_FOUND";
+    public const string MasterMachineNotFound = "MASTER_MACHINE_NOT_FOUND";
     public const string MasterGymNotFound = "MASTER_GYM_NOT_FOUND";
     public const string HostingArtifactNotFound = "HOSTING_ARTIFACT_NOT_FOUND";
     public const string HostingStartFailed = "HOSTING_START_FAILED";

@@ -4,12 +4,126 @@
   "date": "2026-03-28",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
-    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":27.5,"reps":10},{"set":2,"weight_kg":27.5,"reps":10},{"set":3,"weight_kg":27.5,"reps":10}]},
-    {"exercise_id":"lat-pulldown","sets":[{"set":1,"weight_kg":33,"reps":10},{"set":2,"weight_kg":33,"reps":10},{"set":3,"weight_kg":33,"reps":10}]},
-    {"exercise_id":"hip-adduction","sets":[{"set":1,"weight_kg":57.5,"reps":10},{"set":2,"weight_kg":57.5,"reps":10},{"set":3,"weight_kg":57.5,"reps":10}]},
-    {"exercise_id":"hip-abduction","sets":[{"set":1,"weight_kg":57.5,"reps":10},{"set":2,"weight_kg":57.5,"reps":10},{"set":3,"weight_kg":57.5,"reps":10}]},
-    {"exercise_id":"glute-bridge","sets":[{"set":1,"weight_kg":27.5,"reps":10},{"set":2,"weight_kg":27.5,"reps":10},{"set":3,"weight_kg":27.5,"reps":10}]},
-    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":50,"reps":20},{"set":2,"weight_kg":50,"reps":20},{"set":3,"weight_kg":60,"reps":20}]}
+  "machines": [
+    {
+      "machine_id": "chest-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 27.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "lat-pulldown",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 33,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 33,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 33,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "hip-adduction",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 57.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 57.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 57.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "hip-abduction",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 57.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 57.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 57.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "glute-bridge",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 27.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "leg-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 50,
+          "reps": 20
+        },
+        {
+          "set": 2,
+          "weight_kg": 50,
+          "reps": 20
+        },
+        {
+          "set": 3,
+          "weight_kg": 60,
+          "reps": 20
+        }
+      ]
+    }
   ]
 }

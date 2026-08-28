@@ -49,23 +49,22 @@ Known app artifact name:
 - portal root は `data/frontend/`
 - `dashboard`
 - `workouts`
-- `exercises`
+- `machines`
 - `analytics`
 - `settings`
 
 Dynamic route fallback は以下にのみ存在する。
 
 - `/workouts/YYYY-MM-DD`
-- `/exercises/<id>`
+- `/machines/<id>`
 
 Unknown API path は 404 を返し、frontend HTML へ fall through しない。Missing frontend artifact root は 503 を発生させる場合がある。
 
 ## API
 
-Windows は以下の両方を map する。
+Windows は以下を map する。
 
 - `/api/v1/common/*`
-- `/api/common/*`
 
 [AF API Contract](../api-contract.md) を参照。
 

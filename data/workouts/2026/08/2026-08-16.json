@@ -4,45 +4,97 @@
   "date": "2026-08-16",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "pectoral-fly",
+      "machine_id": "pectoral-fly",
       "sets": [
-        { "set": 1, "weight_kg": 20, "reps": 10 },
-        { "set": 2, "weight_kg": 22.5, "reps": 10 },
-        { "set": 3, "weight_kg": 25, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 22.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 25,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "shoulder-press",
+      "machine_id": "shoulder-press",
       "sets": [
-        { "set": 1, "weight_kg": 15, "reps": 11 },
-        { "set": 2, "weight_kg": 17.5, "reps": 10 },
-        { "set": 3, "weight_kg": 17.5, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 15,
+          "reps": 11
+        },
+        {
+          "set": 2,
+          "weight_kg": 17.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 17.5,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "pulldown",
+      "machine_id": "pulldown",
       "sets": [
-        { "set": 1, "weight_kg": 22.5, "reps": 10 },
-        { "set": 2, "weight_kg": 12.5, "reps": 4 },
-        { "set": 3, "weight_kg": 17.5, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 22.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 12.5,
+          "reps": 4
+        },
+        {
+          "set": 3,
+          "weight_kg": 17.5,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "biceps-curl",
+      "machine_id": "biceps-curl",
       "sets": [
-        { "set": 1, "weight_kg": 15, "reps": 10 },
-        { "set": 2, "weight_kg": 15, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 15,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 15,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "abdominal",
+      "machine_id": "abdominal",
       "sets": [
-        { "set": 1, "weight_kg": 20, "reps": 10 },
-        { "set": 2, "weight_kg": 20, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 20,
+          "reps": 10
+        }
       ]
     }
   ],
-  "notes": []
+  "notes": null
 }

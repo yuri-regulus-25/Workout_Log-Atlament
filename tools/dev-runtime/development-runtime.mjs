@@ -14,9 +14,7 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 
 const apiRoutes = new Set([
   '/api/v1/common/status',
-  '/api/common/status',
   '/api/v1/common/runtime/workouts',
-  '/api/common/runtime/workouts',
   '/api/workout-data',
 ])
 
@@ -52,8 +50,6 @@ createServer(async (request, response) => {
   console.log('API:')
   console.log('  GET /api/v1/common/status')
   console.log('  GET /api/v1/common/runtime/workouts')
-  console.log('  GET /api/common/status')
-  console.log('  GET /api/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
 
@@ -86,7 +82,7 @@ async function respondStatus(response) {
         portal: 'unknown',
         dashboard: 'unknown',
         workouts: 'unknown',
-        exercises: 'unknown',
+        machines: 'unknown',
         analytics: 'unknown',
         settings: 'unknown',
       },
@@ -185,12 +181,12 @@ async function loadRuntimeWorkoutData() {
 }
 
 async function loadMasterData(directory) {
-  const [exercises, gyms] = await Promise.all([
-    readJson(join(directory, 'exercises.json')),
+  const [machines, gyms] = await Promise.all([
+    readJson(join(directory, 'machines.json')),
     readJson(join(directory, 'gyms.json')),
   ])
 
-  return { exercises, gyms }
+  return { machines, gyms }
 }
 
 async function readJson(path) {
@@ -252,9 +248,9 @@ function toAfError(issue) {
     : `${issue.filePath}:${issue.line}`
   const message = `${location}: ${issue.message}`
 
-  if (issue.message.startsWith('Unknown exercise_id:')) {
+  if (issue.message.startsWith('Unknown machine_id:')) {
     return {
-      code: 'MASTER_EXERCISE_NOT_FOUND',
+      code: 'MASTER_MACHINE_NOT_FOUND',
       message,
       recoverable: true,
     }

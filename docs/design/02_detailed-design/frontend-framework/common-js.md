@@ -36,7 +36,7 @@ Root `src/shared/frontend-common/src/index.ts` は以下の typed helper を公�
 portal: /
 dashboard: /dashboard/
 workouts: /workouts/
-exercises: /exercises/
+machines: /machines/
 analytics: /analytics/
 settings: /settings/
 ```

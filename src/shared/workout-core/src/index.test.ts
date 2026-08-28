@@ -16,7 +16,7 @@ import {
   getBodyPartSummary,
   getCurrentLocalYearMonth,
   getEstimated1RM,
-  getExerciseHistory,
+  getMachineHistory,
   getMonthlySessions,
   getMonthlyVolume,
   getPersonalRecords,
@@ -35,8 +35,8 @@ describe('workout-core', () => {
     expect(getTotalVolume(sessions[0])).toBe(1_800)
   })
 
-  it('returns exercise history independent of UI framework', () => {
-    const history = getExerciseHistory(sessions, 'shoulder-press')
+  it('returns machine history independent of UI framework', () => {
+    const history = getMachineHistory(sessions, 'shoulder-press')
 
     expect(history).toHaveLength(1)
     expect(history[0]).toMatchObject({
@@ -46,19 +46,19 @@ describe('workout-core', () => {
     })
   })
 
-  it('returns exercise history from oldest to newest for chronological charts', () => {
-    const history = getExerciseHistory([
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 25, reps: 10 }] },
+  it('returns machine history from oldest to newest for chronological charts', () => {
+    const history = getMachineHistory([
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 25, reps: 10 }] },
       ]),
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
       ]),
     ], 'pec-deck')
 
     expect(history.map((row) => row.date)).toEqual(['2026-08-10', '2026-08-16'])
   })
-  it('handles empty exercise sets defensively without returning Infinity values', () => {
+  it('handles empty machine sets defensively without returning Infinity values', () => {
     const emptySetSessions: WorkoutSession[] = [
       {
         schema_version: 1,
@@ -66,9 +66,9 @@ describe('workout-core', () => {
         date: '2026-08-24',
         status: 'partial',
         gym: { id: 'example-gym', name: 'Example Gym' },
-        exercises: [
+        machines: [
           {
-            exercise_id: 'pec-deck',
+            machine_id: 'pec-deck',
             name: 'Pec Deck',
             body_part: 'chest',
             sets: [],
@@ -77,7 +77,7 @@ describe('workout-core', () => {
       },
     ]
 
-    const history = getExerciseHistory(emptySetSessions, 'pec-deck')
+    const history = getMachineHistory(emptySetSessions, 'pec-deck')
 
     expect(history[0]).toMatchObject({
       sets: 0,
@@ -134,8 +134,8 @@ describe('workout-core', () => {
     expect(formatPersonalRecordType('estimated_1rm')).toBe('推定1RM')
     expect(
       formatPersonalRecordValue({
-        exerciseId: 'chest-press',
-        exerciseName: 'チェストプレス',
+        machineId: 'chest-press',
+        machineName: 'チェストプレス',
         date: '2026-08-16',
         type: 'weight',
         value: 27.5,
@@ -143,8 +143,8 @@ describe('workout-core', () => {
     ).toBe('27.5 kg')
     expect(
       formatPersonalRecordValue({
-        exerciseId: 'chest-press',
-        exerciseName: 'チェストプレス',
+        machineId: 'chest-press',
+        machineName: 'チェストプレス',
         date: '2026-08-16',
         type: 'reps',
         value: 12,
@@ -184,13 +184,13 @@ describe('workout-core', () => {
 
   it('counts unique machines by body part for a period', () => {
     const varietySessions: WorkoutSession[] = [
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
-        { exercise_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
-        { exercise_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
-        { exercise_id: 'hack-squat', name: 'Hack Squat', body_part: 'legs', sets: [{ set: 1, weight_kg: 80, reps: 10 }] },
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+        { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        { machine_id: 'hack-squat', name: 'Hack Squat', body_part: 'legs', sets: [{ set: 1, weight_kg: 80, reps: 10 }] },
       ]),
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
       ]),
     ]
 
@@ -202,9 +202,9 @@ describe('workout-core', () => {
 
   it('calculates average set weight without reps or volume weighting', () => {
     const averageSessions: WorkoutSession[] = [
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
         {
-          exercise_id: 'pec-deck',
+          machine_id: 'pec-deck',
           name: 'Pec Deck',
           body_part: 'chest',
           sets: [
@@ -213,9 +213,9 @@ describe('workout-core', () => {
           ],
         },
       ]),
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
         {
-          exercise_id: 'pec-deck',
+          machine_id: 'pec-deck',
           name: 'Pec Deck',
           body_part: 'chest',
           sets: [{ set: 1, weight_kg: 25, reps: 10 }],
@@ -235,18 +235,18 @@ function createMinimalSession(sessionId: string, date: string): WorkoutSession {
     date,
     status: 'complete',
     gym: { id: 'example-gym', name: 'Example Gym' },
-    exercises: [],
+    machines: [],
   }
 }
 
-function createSessionWithExercises(
+function createSessionWithMachines(
   sessionId: string,
   date: string,
-  exercises: WorkoutSession['exercises'],
+  machines: WorkoutSession['machines'],
 ): WorkoutSession {
   return {
     ...createMinimalSession(sessionId, date),
-    exercises,
+    machines,
   }
 }
 

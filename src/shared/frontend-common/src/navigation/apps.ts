@@ -31,8 +31,8 @@ export const applications = [
     drawer: true,
   },
   {
-    id: 'exercises',
-    route: applicationRoutes.exercises,
+    id: 'machines',
+    route: applicationRoutes.machines,
     displayName: 'Performance Detail',
     iconClass: 'mdi-chart-multiple',
     drawer: true,

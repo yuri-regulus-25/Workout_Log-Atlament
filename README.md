@@ -87,7 +87,7 @@ src/frontend/
 ├─ portal/
 ├─ dashboard-react/
 ├─ workouts-vue/
-├─ exercises-angular/
+├─ machines-angular/
 ├─ analytics-svelte/
 ├─ settings-solid/
 └─ errors/
@@ -312,7 +312,7 @@ npm run watch
 127.0.0.1:5174  Portal dev server
 127.0.0.1:5175  Dashboard / React
 127.0.0.1:5176  Workouts / Vue
-127.0.0.1:5177  Exercises / Angular
+127.0.0.1:5177  Machines / Angular
 127.0.0.1:5178  Analytics / Svelte
 127.0.0.1:5179  Settings / Solid
 127.0.0.1:5180  Development Runtime API

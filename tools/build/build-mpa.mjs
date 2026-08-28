@@ -18,8 +18,8 @@ const apps = [
     source: join(root, 'src/frontend/workouts-vue/dist'),
   },
   {
-    path: 'exercises',
-    source: join(root, 'src/frontend/exercises-angular/dist/exercises-angular/browser'),
+    path: 'machines',
+    source: join(root, 'src/frontend/machines-angular/dist/machines-angular/browser'),
   },
   {
     path: 'analytics',

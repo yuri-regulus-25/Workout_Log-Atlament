@@ -62,7 +62,7 @@ Current known app name:
 ```text
 dashboard
 workouts
-exercises
+machines
 analytics
 settings
 ```
@@ -80,14 +80,13 @@ Android は以下も serve する。
 Dynamic frontend route fallback は以下にのみ存在する。
 
 - `workouts/YYYY-MM-DD`
-- `exercises/<id>`
+- `machines/<id>`
 
 ## API
 
-Android は以下の両方を map する。
+Android は以下を map する。
 
 - `/api/v1/common/*`
-- `/api/common/*`
 
 [AF API Contract](../api-contract.md) を参照。
 

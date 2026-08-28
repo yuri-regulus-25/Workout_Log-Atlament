@@ -44,7 +44,7 @@ export type AfStatus = {
       portal: string
       dashboard: string
       workouts: string
-      exercises: string
+      machines: string
       analytics: string
       settings: string
     }
@@ -60,7 +60,7 @@ export type RepositoryConfiguration = {
 }
 
 export type ResourceConfiguration = {
-  type: 'WORKOUT' | 'EXERCISE_MASTER' | 'GYM_MASTER'
+  type: 'WORKOUT' | 'MACHINE_MASTER' | 'GYM_MASTER'
   path: string
   resourceKind: 'file' | 'directory'
   required: boolean
@@ -88,7 +88,6 @@ export type AfConfigurationUpdate = {
 }
 
 export type ConfigurationUpdateResult = {
-  saved: boolean
   remoteChecked: boolean
 }
 
@@ -106,8 +105,6 @@ export type CredentialUpdate = {
 export type CredentialUpdateResult = CredentialStatus
 
 export type SyncResult = {
-  source: 'remote' | 'local'
-  updated: boolean
   degraded: boolean
 }
 

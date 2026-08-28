@@ -10,7 +10,7 @@ Workout Log Atlamentで扱うGitHub SoTデータ例を管理します。
 
 ```text
 data/master/
-├─ exercises.json
+├─ machines.json
 └─ gyms.json
 ```
 

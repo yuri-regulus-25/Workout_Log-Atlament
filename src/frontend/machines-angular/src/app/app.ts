@@ -25,8 +25,8 @@ import {
   formatWeightKg,
   getAverageSetWeight,
   getEstimated1RM,
-  getExerciseHistory,
-  getExerciseOptions,
+  getMachineHistory,
+  getMachineOptions,
   getMaxReps,
   getMaxWeight,
   getRecentSessions,
@@ -50,16 +50,16 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly loadError = signal<string | null>(null);
   private readonly themeRevision = signal(0);
-  protected readonly exerciseOptions = computed(() => getExerciseOptions(this.sessions()));
-  private readonly pathExerciseId = this.getPathExerciseId();
+  protected readonly machineOptions = computed(() => getMachineOptions(this.sessions()));
+  private readonly pathMachineId = this.getPathMachineId();
 
-  protected readonly hasInvalidExerciseIdParameter = signal(false);
-  protected readonly invalidExerciseId = signal(this.pathExerciseId ?? '');
-  protected readonly selectedExerciseId = signal<string>('abdominal');
+  protected readonly hasInvalidMachineIdParameter = signal(false);
+  protected readonly invalidMachineId = signal(this.pathMachineId ?? '');
+  protected readonly selectedMachineId = signal<string>('abdominal');
 
   ngAfterViewInit(): void {
     this.navigation = initializeAppNavigation({
-      currentRouteId: 'exercises',
+      currentRouteId: 'machines',
       shell: this.shellRef?.nativeElement,
     });
     this.characterEasterEgg = initializeCharacterEasterEgg({
@@ -83,36 +83,36 @@ export class App implements AfterViewInit, OnDestroy {
       .then((result) => {
         this.sessions.set(result.sessions);
         this.loadError.set(result.issues.length > 0 ? result.issues.map((issue) => issue.message).join(' / ') : null);
-        this.selectExerciseIdFromPath();
+        this.selectMachineIdFromPath();
       })
       .catch((error: unknown) => {
         this.loadError.set(error instanceof Error ? error.message : 'Workout data could not be loaded.');
       });
 
     window.addEventListener('popstate', () => {
-      this.selectExerciseIdFromPath();
+      this.selectMachineIdFromPath();
     });
   }
 
-  protected readonly selectedExercise = computed(() =>
-    this.exerciseOptions().find((exercise) => exercise.exercise_id === this.selectedExerciseId()),
+  protected readonly selectedMachine = computed(() =>
+    this.machineOptions().find((machine) => machine.machine_id === this.selectedMachineId()),
   );
   protected readonly selectedMachineName = computed(() =>
-    formatMachineTitleFromId(this.selectedExerciseId()),
+    formatMachineTitleFromId(this.selectedMachineId()),
   );
   protected readonly selectedMachineTitle = computed(() =>
-    formatMachineTitleFromId(this.selectedExerciseId()),
+    formatMachineTitleFromId(this.selectedMachineId()),
   );
   protected readonly selectedMachineJapaneseName = computed(
-    () => this.selectedExercise()?.name ?? this.selectedMachineTitle(),
+    () => this.selectedMachine()?.name ?? this.selectedMachineTitle(),
   );
   protected readonly selectedBodyPart = computed(() => {
-    const exercise = this.selectedExercise();
-    return exercise ? formatBodyPart(exercise.body_part) : '—';
+    const machine = this.selectedMachine();
+    return machine ? formatBodyPart(machine.body_part) : '—';
   });
 
   protected readonly history = computed(() =>
-    getExerciseHistory(this.sessions(), this.selectedExerciseId()),
+    getMachineHistory(this.sessions(), this.selectedMachineId()),
   );
 
   protected readonly latest = computed(() => this.history().at(-1));
@@ -123,14 +123,14 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly totalSets = computed(() =>
     this.history().reduce((total, row) => total + row.sets, 0),
   );
-  protected readonly bestWeight = computed(() => getMaxWeight(this.sessions(), this.selectedExerciseId()));
-  protected readonly bestReps = computed(() => getMaxReps(this.sessions(), this.selectedExerciseId()));
+  protected readonly bestWeight = computed(() => getMaxWeight(this.sessions(), this.selectedMachineId()));
+  protected readonly bestReps = computed(() => getMaxReps(this.sessions(), this.selectedMachineId()));
   protected readonly estimatedOneRepMax = computed(() =>
     getEstimated1RM(this.bestWeight(), this.bestReps()),
   );
   protected readonly recent28Sessions = computed(() => getRecentSessions(this.sessions(), 28));
   protected readonly averageSetWeight28d = computed(() =>
-    getAverageSetWeight(this.recent28Sessions(), this.selectedExerciseId()),
+    getAverageSetWeight(this.recent28Sessions(), this.selectedMachineId()),
   );
   protected readonly averageSetWeight28dLabel = computed(() => {
     const value = this.averageSetWeight28d();
@@ -191,30 +191,30 @@ export class App implements AfterViewInit, OnDestroy {
     return formatDisplayDate(date);
   }
 
-  protected selectExercise(exerciseId: string) {
-    this.selectedExerciseId.set(exerciseId);
-    this.hasInvalidExerciseIdParameter.set(false);
-    window.history.pushState(null, '', `${applicationRoutes.exercises}${exerciseId}/`);
+  protected selectMachine(machineId: string) {
+    this.selectedMachineId.set(machineId);
+    this.hasInvalidMachineIdParameter.set(false);
+    window.history.pushState(null, '', `${applicationRoutes.machines}${machineId}/`);
   }
 
-  private getPathExerciseId(): string | undefined {
-    return window.location.pathname.split(applicationRoutes.exercises)[1]?.split('/')[0] || undefined;
+  private getPathMachineId(): string | undefined {
+    return window.location.pathname.split(applicationRoutes.machines)[1]?.split('/')[0] || undefined;
   }
 
-  private selectExerciseIdFromPath() {
-    const pathExerciseId = this.getPathExerciseId();
-    const fallbackExerciseId = this.exerciseOptions()[0]?.exercise_id ?? 'abdominal';
-    const hasValidPathExerciseId =
-      pathExerciseId !== undefined &&
-      this.exerciseOptions().some((exercise) => exercise.exercise_id === pathExerciseId);
-    const nextExerciseId = hasValidPathExerciseId && pathExerciseId ? pathExerciseId : fallbackExerciseId;
+  private selectMachineIdFromPath() {
+    const pathMachineId = this.getPathMachineId();
+    const fallbackMachineId = this.machineOptions()[0]?.machine_id ?? 'abdominal';
+    const hasValidPathMachineId =
+      pathMachineId !== undefined &&
+      this.machineOptions().some((machine) => machine.machine_id === pathMachineId);
+    const nextMachineId = hasValidPathMachineId && pathMachineId ? pathMachineId : fallbackMachineId;
 
-    this.hasInvalidExerciseIdParameter.set(pathExerciseId !== undefined && !hasValidPathExerciseId);
-    this.invalidExerciseId.set(pathExerciseId ?? '');
-    this.selectedExerciseId.set(nextExerciseId);
+    this.hasInvalidMachineIdParameter.set(pathMachineId !== undefined && !hasValidPathMachineId);
+    this.invalidMachineId.set(pathMachineId ?? '');
+    this.selectedMachineId.set(nextMachineId);
 
-    if (window.location.pathname !== `${applicationRoutes.exercises}${nextExerciseId}/`) {
-      window.history.replaceState(null, '', `${applicationRoutes.exercises}${nextExerciseId}/`);
+    if (window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
+      window.history.replaceState(null, '', `${applicationRoutes.machines}${nextMachineId}/`);
     }
   }
 }

@@ -7,7 +7,7 @@ import {
   formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
-  getExerciseVolume,
+  getMachineVolume,
   getSessionSetCount,
   getSessionVolume,
 } from '@workout-lab/workout-core'
@@ -29,8 +29,8 @@ onMounted(async () => {
     loadError.value = error instanceof Error ? error.message : 'Workout data could not be loaded.'
   }
 })
-const totalExercises = computed(() =>
-  sessions.value.reduce((total, session) => total + session.exercises.length, 0),
+const totalMachines = computed(() =>
+  sessions.value.reduce((total, session) => total + session.machines.length, 0),
 )
 const totalSets = computed(() =>
   sessions.value.reduce((total, session) => total + getSessionSetCount(session), 0),
@@ -53,7 +53,7 @@ const totalVolume = computed(() =>
     <section class="summary-grid">
       <article class="metric-card">
         <span>Machines</span>
-        <strong>{{ totalExercises }} {{ totalExercises === 1 ? "Machine": "Machines" }}</strong>
+        <strong>{{ totalMachines }} {{ totalMachines === 1 ? "Machine": "Machines" }}</strong>
       </article>
       <article class="metric-card">
         <span>Sets</span>
@@ -80,17 +80,17 @@ const totalVolume = computed(() =>
         </div>
       </div>
 
-      <div class="exercise-list">
-        <article v-for="exercise in session.exercises" :key="exercise.exercise_id" class="exercise-card">
-          <div class="exercise-header">
+      <div class="machine-list">
+        <article v-for="machine in session.machines" :key="machine.machine_id" class="machine-card">
+          <div class="machine-header">
             <div>
-              <h3>{{ exercise.name }}</h3>
-              <p>{{ formatBodyPart(exercise.body_part) }} · {{ formatTotalWeight(getExerciseVolume(exercise)) }}</p>
+              <h3>{{ machine.name }}</h3>
+              <p>{{ formatBodyPart(machine.body_part) }} · {{ formatTotalWeight(getMachineVolume(machine)) }}</p>
             </div>
-            <a class="text-action" :href="`${applicationRoutes.exercises}${exercise.exercise_id}/`">View Performance Detail</a>
+            <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">View Performance Detail</a>
           </div>
           <ul>
-            <li v-for="set in exercise.sets" :key="set.set">
+            <li v-for="set in machine.sets" :key="set.set">
               Set {{ set.set }} · {{ set.weight_kg }} kg × {{ set.reps }} reps
               <span v-if="set.rir !== undefined && set.rir !== null"> · RIR {{ set.rir }}</span>
             </li>

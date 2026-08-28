@@ -6,11 +6,11 @@ namespace Atlament.Tests;
 
 public sealed class AfCoreTests
 {
-    private static readonly RuntimeSourceFile ExerciseMaster = new("master/exercises.json", """
+    private static readonly RuntimeSourceFile MachineMaster = new("master/machines.json", """
         {
           "schema_version": 1,
-          "exercises": [
-            { "exercise_id": "known-exercise", "name": "Known Exercise", "body_part": "chest", "active": true }
+          "machines": [
+            { "machine_id": "known-machine", "name": "Known Machine", "body_part": "chest", "active": true }
           ]
         }
         """);
@@ -30,7 +30,7 @@ public sealed class AfCoreTests
         var builder = new RuntimeDataBuilder();
         var files = new[]
         {
-            Workout("workouts/valid.json", "known-gym", "known-exercise"),
+            Workout("workouts/valid.json", "known-gym", "known-machine"),
             new RuntimeSourceFile("workouts/invalid.json", """
                 {
                   "schema_version": 1,
@@ -39,7 +39,7 @@ public sealed class AfCoreTests
                 """)
         };
 
-        var result = builder.Build(files, ExerciseMaster, GymMaster);
+        var result = builder.Build(files, MachineMaster, GymMaster);
 
         Assert.True(result.TechnicalInvalid);
         Assert.Empty(result.Sessions);
@@ -52,16 +52,16 @@ public sealed class AfCoreTests
         var builder = new RuntimeDataBuilder();
         var files = new[]
         {
-            Workout("workouts/valid.json", "known-gym", "known-exercise"),
-            Workout("workouts/missing-exercise.json", "known-gym", "missing-exercise"),
-            Workout("workouts/missing-gym.json", "missing-gym", "known-exercise")
+            Workout("workouts/valid.json", "known-gym", "known-machine"),
+            Workout("workouts/missing-machine.json", "known-gym", "missing-machine"),
+            Workout("workouts/missing-gym.json", "missing-gym", "known-machine")
         };
 
-        var result = builder.Build(files, ExerciseMaster, GymMaster);
+        var result = builder.Build(files, MachineMaster, GymMaster);
 
         Assert.False(result.TechnicalInvalid);
         Assert.Empty(result.Sessions);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterExerciseNotFound);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterMachineNotFound);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterGymNotFound);
     }
 
@@ -82,7 +82,7 @@ public sealed class AfCoreTests
                 null,
                 new[]
                 {
-                    new WorkoutExercise("known-exercise", "Known Exercise", "chest", new[] { new ExerciseSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
 
@@ -113,21 +113,21 @@ public sealed class AfCoreTests
             var paths = new WindowsPathProvider(root);
             var dashboardRoot = Path.Combine(paths.FrontendArtifactRoot, "dashboard");
             var workoutsRoot = Path.Combine(paths.FrontendArtifactRoot, "workouts");
-            var exercisesRoot = Path.Combine(paths.FrontendArtifactRoot, "exercises");
+            var machinesRoot = Path.Combine(paths.FrontendArtifactRoot, "machines");
             Directory.CreateDirectory(Path.Combine(dashboardRoot, "assets"));
             Directory.CreateDirectory(workoutsRoot);
-            Directory.CreateDirectory(exercisesRoot);
+            Directory.CreateDirectory(machinesRoot);
             File.WriteAllText(Path.Combine(paths.FrontendArtifactRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(workoutsRoot, "index.html"), "<html></html>");
-            File.WriteAllText(Path.Combine(exercisesRoot, "index.html"), "<html></html>");
+            File.WriteAllText(Path.Combine(machinesRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "assets", "app.js"), "console.log('ok');");
 
             var hosting = new HostingStatusService(paths);
 
             var staticFile = hosting.TryResolveFile("/dashboard/assets/app.js", out var staticUnavailable);
             var workoutRouteFile = hosting.TryResolveFile("/workouts/2026-08-24", out var workoutRouteUnavailable);
-            var exerciseRouteFile = hosting.TryResolveFile("/exercises/known-exercise", out var exerciseRouteUnavailable);
+            var machineRouteFile = hosting.TryResolveFile("/machines/known-machine", out var machineRouteUnavailable);
             var unknownRoute = hosting.TryResolveFile("/dashboard/2026-08-24", out var unknownRouteUnavailable);
             var missingStatic = hosting.TryResolveFile("/dashboard/assets/missing.js", out var missingUnavailable);
 
@@ -135,8 +135,8 @@ public sealed class AfCoreTests
             Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile?.PhysicalPath);
             Assert.False(workoutRouteUnavailable);
             Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "index.html"), workoutRouteFile?.PhysicalPath);
-            Assert.False(exerciseRouteUnavailable);
-            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "exercises", "index.html"), exerciseRouteFile?.PhysicalPath);
+            Assert.False(machineRouteUnavailable);
+            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "machines", "index.html"), machineRouteFile?.PhysicalPath);
             Assert.False(unknownRouteUnavailable);
             Assert.Null(unknownRoute);
             Assert.False(missingUnavailable);
@@ -223,7 +223,7 @@ public sealed class AfCoreTests
             }
 
             if (url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
-                url.Contains("/data/master/exercises.json", StringComparison.Ordinal) ||
+                url.Contains("/data/master/machines.json", StringComparison.Ordinal) ||
                 url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
             {
                 return JsonResponse("{}");
@@ -239,7 +239,7 @@ public sealed class AfCoreTests
         Assert.Equal(new[]
         {
             "data/workouts/2026/08/2026-08-24.json",
-            "data/master/exercises.json",
+            "data/master/machines.json",
             "data/master/gyms.json"
         }, files.Select(file => file.Path));
         Assert.Contains(http.RequestedUrls, url => url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal));
@@ -262,7 +262,7 @@ public sealed class AfCoreTests
             }
 
             if (url.Contains("/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
-                url.Contains("/master/exercises.json", StringComparison.Ordinal) ||
+                url.Contains("/master/machines.json", StringComparison.Ordinal) ||
                 url.Contains("/master/gyms.json", StringComparison.Ordinal))
             {
                 return JsonResponse("{}");
@@ -278,7 +278,7 @@ public sealed class AfCoreTests
         Assert.Equal(new[]
         {
             "workouts/2026/08/2026-08-24.json",
-            "master/exercises.json",
+            "master/machines.json",
             "master/gyms.json"
         }, files.Select(file => file.Path));
     }
@@ -379,12 +379,12 @@ public sealed class AfCoreTests
 
                 if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
                 {
-                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-exercise").Content);
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
                 }
 
-                if (url.Contains("/data/master/exercises.json", StringComparison.Ordinal))
+                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
                 {
-                    return JsonResponse(ExerciseMaster.Content);
+                    return JsonResponse(MachineMaster.Content);
                 }
 
                 if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
@@ -453,9 +453,9 @@ public sealed class AfCoreTests
         }
     }
 
-    private static RuntimeSourceFile Workout(string path, string gymId, string exerciseId)
+    private static RuntimeSourceFile Workout(string path, string gymId, string machineId)
     {
-        var sessionId = Path.GetFileNameWithoutExtension(path).Replace("missing-exercise", "missingExercise").Replace("missing-gym", "missingGym");
+        var sessionId = Path.GetFileNameWithoutExtension(path).Replace("missing-machine", "missingMachine").Replace("missing-gym", "missingGym");
         return new RuntimeSourceFile(path, $$"""
             {
               "schema_version": 1,
@@ -463,9 +463,9 @@ public sealed class AfCoreTests
               "date": "2026-08-24",
               "status": "complete",
               "gym_id": "{{gymId}}",
-              "exercises": [
+              "machines": [
                 {
-                  "exercise_id": "{{exerciseId}}",
+                  "machine_id": "{{machineId}}",
                   "sets": [
                     { "set": 1, "weight_kg": 20, "reps": 10 }
                   ]
@@ -481,7 +481,7 @@ public sealed class AfCoreTests
         new[]
         {
             new ResourceConfiguration("WORKOUT", "workouts/", "directory", true, false),
-            new ResourceConfiguration("EXERCISE_MASTER", "master/exercises.json", "file", true, false),
+            new ResourceConfiguration("MACHINE_MASTER", "master/machines.json", "file", true, false),
             new ResourceConfiguration("GYM_MASTER", "master/gyms.json", "file", true, false)
         },
         new TimeoutConfiguration(10, 60, 30, 10));
