@@ -732,6 +732,70 @@ public sealed class AfCoreTests
         Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Get }, methods);
     }
 
+    [Fact]
+    public async Task MasterDocumentWriteRejectsDeletingReferencedMachineBeforeGithubWrite()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+
+            var runtimeStore = new RuntimeDataStore(paths);
+            var session = new WorkoutSession(
+                1,
+                "valid",
+                "2026-08-24",
+                "complete",
+                new Gym("known-gym", "Known Gym", "KG"),
+                null,
+                new[]
+                {
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                },
+                Array.Empty<string>());
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+
+            var http = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                runtimeStore,
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+            http.RequestedUrls.Clear();
+
+            var result = await application.WriteMasterDocumentAsync(
+                "MACHINE_MASTER",
+                new MasterDocumentWriteRequest(
+                    "current-sha",
+                    "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":false,\"deleted\":true}]}"),
+                CancellationToken.None);
+
+            Assert.Equal(400, result.StatusCode);
+            Assert.False(result.Response.Success);
+            Assert.Contains(result.Response.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+            Assert.Empty(http.RequestedUrls);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
     private static async Task WaitForStartupAsync(AtlamentApplication application)
     {
         for (var attempt = 0; attempt < 20; attempt++)
