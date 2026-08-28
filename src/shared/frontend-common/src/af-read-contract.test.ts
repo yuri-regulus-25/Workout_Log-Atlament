@@ -21,11 +21,12 @@ describe('AF read contract refinement', () => {
 
     for (const sourcePath of statusSources) {
       expect(readSource(sourcePath), sourcePath).toMatch(/applicationFramework|ApplicationFramework/)
+      expect(readSource(sourcePath), sourcePath).toMatch(/nativePackages|NativePackage/)
     }
 
-    expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/\bversion: string\b/)
+    expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/AfStatus = \{\s*version:/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/status\?\.version(?!s)/)
-    expect(readSource('src/application/windows/Core/AfModels.cs')).not.toContain('JsonPropertyName("version")')
+    expect(readSource('src/application/windows/Core/AfModels.cs')).not.toMatch(/AfStatus\(\s*\[property: JsonPropertyName\("version"\)\]/)
     expect(readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')).not.toContain('"version": "${BuildConfig.VERSION_NAME}"')
     expect(readSource('tools/dev-runtime/development-runtime.mjs')).not.toContain('version: versions.applicationFramework')
   })

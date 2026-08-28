@@ -137,7 +137,19 @@ public sealed record AfStatus(
 
 public sealed record StatusVersions(
     [property: JsonPropertyName("applicationFramework")] string ApplicationFramework,
-    [property: JsonPropertyName("frontendFramework")] string FrontendFramework);
+    [property: JsonPropertyName("frontendFramework")] string FrontendFramework,
+    [property: JsonPropertyName("nativePackages")] NativePackageVersions NativePackages);
+
+public sealed record NativePackageVersions(
+    [property: JsonPropertyName("windows")] WindowsPackageVersion Windows,
+    [property: JsonPropertyName("android")] AndroidPackageVersion Android);
+
+public sealed record WindowsPackageVersion(
+    [property: JsonPropertyName("version")] string Version);
+
+public sealed record AndroidPackageVersion(
+    [property: JsonPropertyName("versionName")] string VersionName,
+    [property: JsonPropertyName("versionCode")] int VersionCode);
 
 public sealed record ApplicationState(
     [property: JsonPropertyName("status")] string Status,

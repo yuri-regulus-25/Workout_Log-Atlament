@@ -244,7 +244,16 @@ class AndroidLocalhostServer(
           "data": {
             "versions": {
               "applicationFramework": "${BuildConfig.VERSION_NAME}",
-              "frontendFramework": "${frontendFrameworkVersion()}"
+              "frontendFramework": "${frontendVersionJson().optString("frontend", "unknown")}",
+              "nativePackages": {
+                "windows": {
+                  "version": "${frontendVersionJson().optString("windows", "unknown")}"
+                },
+                "android": {
+                  "versionName": "${BuildConfig.VERSION_NAME}",
+                  "versionCode": ${BuildConfig.VERSION_CODE}
+                }
+              }
             },
             "application": {
               "status": "${applicationStatus()}",
@@ -271,11 +280,11 @@ class AndroidLocalhostServer(
     """.trimIndent()
 
 
-    private fun frontendFrameworkVersion(): String = runCatching {
+    private fun frontendVersionJson(): JSONObject = runCatching {
         context.assets.open("frontend/version.json").use { stream ->
-            JSONObject(stream.bufferedReader(StandardCharsets.UTF_8).readText()).optString("frontend", "unknown")
+            JSONObject(stream.bufferedReader(StandardCharsets.UTF_8).readText())
         }
-    }.getOrDefault("unknown")
+    }.getOrDefault(JSONObject())
 
     private fun hostingStatusJson(): String = """
         {
