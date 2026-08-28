@@ -10,6 +10,7 @@ import {
   formatTotalWeight,
   formatWeightKg,
   formatWorkoutStatus,
+  compareWorkoutSessions,
   getAverageSetWeight,
   getAverageSessionIntervalDays,
   getBodyPartMachineVariety,
@@ -27,12 +28,16 @@ import {
   getRecentSessions,
   getSessionAggregates,
   getWeeklyAggregates,
+  getWorkoutSummary,
   filterSessionsByDateRange,
   resolveCalendarMonthRange,
   resolvePeriodComparison,
   resolvePeriodRange,
   resolvePreviousMonthRange,
   resolvePreviousPeriod,
+  resolveUniqueWorkoutByDate,
+  resolveWorkoutNeighbors,
+  resolveWorkoutNeighborsByDate,
   getTotalSets,
   getTotalVolume,
   getTrainingFrequencyPerWeek,
@@ -420,6 +425,116 @@ describe('workout-core', () => {
 
     expect(getAverageSetWeight(averageSessions, 'pec-deck')).toBe(22.5)
     expect(getAverageSetWeight(averageSessions, 'leg-press')).toBeNull()
+  })
+
+  it('summarizes factual workout values without weight or volume judgment', () => {
+    const summarySession = createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [
+          { set: 1, weight_kg: 20, reps: 12 },
+          { set: 2, weight_kg: 20, reps: 10 },
+        ],
+      },
+      {
+        machine_id: 'lat-pulldown',
+        name: 'Lat Pulldown',
+        body_part: 'back',
+        sets: [{ set: 1, weight_kg: 45, reps: 8 }],
+      },
+    ])
+
+    expect(getWorkoutSummary(summarySession)).toEqual({
+      sessionId: '2026-08-10-01',
+      date: '2026-08-10',
+      gym: 'Example Gym',
+      machineCount: 2,
+      setCount: 3,
+      totalReps: 30,
+    })
+  })
+
+  it('resolves previous and next workouts by session id with boundary nulls', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-08-03-01', '2026-08-03'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-02-02', '2026-08-02'),
+      createMinimalSession('2026-08-02-01', '2026-08-02'),
+    ]
+
+    expect(resolveWorkoutNeighbors(sourceSessions, '2026-08-02-01')).toMatchObject({
+      current: { session_id: '2026-08-02-01' },
+      previous: { session_id: '2026-08-01-01' },
+      next: { session_id: '2026-08-02-02' },
+    })
+    expect(resolveWorkoutNeighbors(sourceSessions, '2026-08-01-01')).toMatchObject({
+      current: { session_id: '2026-08-01-01' },
+      previous: null,
+      next: { session_id: '2026-08-02-01' },
+    })
+    expect(resolveWorkoutNeighbors(sourceSessions, 'missing')).toBeNull()
+  })
+
+  it('resolves date-based workout navigation only when the date is unique', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-02-01', '2026-08-02'),
+      createMinimalSession('2026-08-02-02', '2026-08-02'),
+      createMinimalSession('2026-08-03-01', '2026-08-03'),
+    ]
+
+    expect(resolveUniqueWorkoutByDate(sourceSessions, '2026-08-01')?.session_id).toBe('2026-08-01-01')
+    expect(resolveUniqueWorkoutByDate(sourceSessions, '2026-08-02')).toBeNull()
+    expect(resolveWorkoutNeighborsByDate(sourceSessions, '2026-08-01')).toMatchObject({
+      current: { session_id: '2026-08-01-01' },
+      previous: null,
+      next: { session_id: '2026-08-02-01' },
+    })
+    expect(resolveWorkoutNeighborsByDate(sourceSessions, '2026-08-02')).toBeNull()
+  })
+
+  it('compares sessions by factual counts and machine membership only', () => {
+    const previous = createSessionWithMachines('2026-08-01-01', '2026-08-01', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [{ set: 1, weight_kg: 20, reps: 10 }],
+      },
+      {
+        machine_id: 'lat-pulldown',
+        name: 'Lat Pulldown',
+        body_part: 'back',
+        sets: [{ set: 1, weight_kg: 45, reps: 10 }],
+      },
+    ])
+    const current = createSessionWithMachines('2026-08-08-01', '2026-08-08', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [
+          { set: 1, weight_kg: 20, reps: 12 },
+          { set: 2, weight_kg: 20, reps: 8 },
+        ],
+      },
+      {
+        machine_id: 'leg-press',
+        name: 'Leg Press',
+        body_part: 'legs',
+        sets: [{ set: 1, weight_kg: 100, reps: 10 }],
+      },
+    ])
+
+    expect(compareWorkoutSessions(current, previous)).toMatchObject({
+      machineCountDelta: { current: 2, previous: 2, absolute: 0, percentage: 0 },
+      setCountDelta: { current: 3, previous: 2, absolute: 1, percentage: 50 },
+      totalRepsDelta: { current: 30, previous: 20, absolute: 10, percentage: 50 },
+      addedMachines: [{ machineId: 'leg-press', machineName: 'Leg Press' }],
+      removedMachines: [{ machineId: 'lat-pulldown', machineName: 'Lat Pulldown' }],
+    })
   })
 })
 
