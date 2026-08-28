@@ -319,6 +319,7 @@ describe('workout-data', () => {
             body_part: 'shoulders',
             aliases: [],
             active: true,
+            deleted: true,
           },
         ],
       }),
@@ -326,6 +327,38 @@ describe('workout-data', () => {
 
     expect(result.issues).toEqual([])
     expect(result.master?.machines[0].body_part).toBe('shoulders')
+    expect(result.master?.machines[0].deleted).toBe(true)
+  })
+
+  it('defaults missing logical delete flags to false for existing master records', () => {
+    const machineResult = parseMachineMaster(
+      'master/machines.json',
+      JSON.stringify({
+        schema_version: 1,
+        machines: [
+          {
+            machine_id: 'rear-delt',
+            name: 'リアデルト',
+            body_part: 'shoulders',
+            active: true,
+          },
+        ],
+      }),
+    )
+    const gymResult = parseGymMaster(
+      'master/gyms.json',
+      JSON.stringify({
+        schema_version: 1,
+        gyms: [
+          { gym_id: 'af-shioiri', name: 'A', active: true },
+        ],
+      }),
+    )
+
+    expect(machineResult.issues).toEqual([])
+    expect(machineResult.master?.machines[0].deleted).toBe(false)
+    expect(gymResult.issues).toEqual([])
+    expect(gymResult.master?.gyms[0].deleted).toBe(false)
   })
 
   it('reports duplicate master ids', () => {
