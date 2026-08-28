@@ -57,6 +57,105 @@
   min-height: 190px;
 }
 
+.setup-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.setup-summary {
+  align-items: center;
+  border: 1px solid var(--wl-border);
+  border-radius: var(--wl-radius-inner);
+  background: var(--wl-surface-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.setup-summary strong {
+  color: var(--wl-text-strong);
+}
+
+.setup-summary span {
+  color: var(--wl-text-muted);
+  font-weight: 700;
+}
+
+.setup-steps {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.setup-step {
+  align-items: center;
+  border: 1px solid var(--wl-border);
+  border-radius: var(--wl-radius-inner);
+  background: var(--wl-input-bg);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 150px;
+  padding: 12px;
+}
+
+.setup-step__status {
+  align-items: center;
+  border-radius: 50%;
+  display: inline-flex;
+  font-size: 1.1rem;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.setup-step.complete .setup-step__status {
+  background: var(--wl-success-bg);
+  color: var(--wl-success-text);
+}
+
+.setup-step.current {
+  border-color: var(--wl-primary);
+}
+
+.setup-step.current .setup-step__status {
+  background: var(--wl-info-bg);
+  color: var(--wl-info-text);
+}
+
+.setup-step.blocked {
+  opacity: 0.72;
+}
+
+.setup-step.blocked .setup-step__status {
+  background: var(--wl-surface-muted);
+  color: var(--wl-text-muted);
+}
+
+.setup-step__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.setup-step__body strong {
+  color: var(--wl-text-strong);
+}
+
+.setup-step__body span {
+  color: var(--wl-text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.setup-step .secondary-action {
+  grid-column: 1 / -1;
+  justify-content: center;
+}
+
 .form-grid {
   display: grid;
   gap: 14px;
@@ -245,7 +344,8 @@
 }
 
 .status-pill.degraded,
-.status-pill.expired {
+.status-pill.expired,
+.status-pill.unconfigured {
   background: var(--wl-warning-bg);
   color: var(--wl-warning-text);
 }
@@ -348,6 +448,7 @@
   .form-grid.two,
   .subsection-grid,
   .status-grid,
+  .setup-steps,
   .resource-row {
     grid-template-columns: 1fr;
   }
@@ -362,6 +463,7 @@
   .form-grid.two,
   .subsection-grid,
   .status-grid,
+  .setup-steps,
   .resource-row {
     grid-template-columns: 1fr;
   }

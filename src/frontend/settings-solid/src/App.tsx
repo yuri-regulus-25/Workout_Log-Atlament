@@ -25,6 +25,11 @@ import {
   resolveCredentialLimitDate,
   type CredentialExpiryPreset,
 } from './credential-expiry'
+import {
+  buildSetupSteps,
+  isSetupReady,
+  type SetupStep,
+} from './setup-assistant'
 
 const resourceTypes = ['WORKOUT', 'MACHINE_MASTER', 'GYM_MASTER'] as const
 const resourceKinds = ['file', 'directory'] as const
@@ -83,6 +88,12 @@ function App() {
 
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
+  const setupSteps = createMemo(() => buildSetupSteps({
+    status: status(),
+    credential: credential(),
+    repository: repository(),
+    resources: resources(),
+  }))
 
   onMount(() => {
     const navigation = initializeAppNavigation({
@@ -265,6 +276,13 @@ function App() {
     setResources((current) => current.filter((_, itemIndex) => itemIndex !== index))
   }
 
+  function runSetupStep(step: SetupStep) {
+    if (step.action === 'repository') return void saveRepository()
+    if (step.action === 'credential') return void saveCredential()
+    if (step.action === 'resources') return void saveResources()
+    return void syncNow()
+  }
+
   return (
     <main ref={shellElement} class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
@@ -290,6 +308,13 @@ function App() {
       </Show>
 
       <section class="settings-grid">
+        <SetupAssistant
+          status={status()}
+          steps={setupSteps()}
+          canOperate={canOperate()}
+          onRunStep={runSetupStep}
+        />
+
         <StatusSection status={status()} credential={credential()} />
 
         <section class="panel">
@@ -446,6 +471,68 @@ function App() {
         </section>
       </section>
     </main>
+  )
+}
+
+function SetupAssistant(props: {
+  status: AfStatus | null
+  steps: SetupStep[]
+  canOperate: boolean
+  onRunStep: (step: SetupStep) => void
+}) {
+  const ready = createMemo(() => isSetupReady(props.status))
+  const readiness = createMemo(() => props.status?.readiness)
+
+  return (
+    <section class={`panel wide-panel setup-panel ${ready() ? 'ready' : 'active'}`}>
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-progress-check" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Initial Setup</p>
+            <h2>セットアップ</h2>
+          </div>
+        </div>
+        <span class={`status-pill ${readiness()?.state ?? 'unknown'}`}>{displayStatus(readiness()?.state)}</span>
+      </div>
+      <div class="setup-summary">
+        <strong>{ready() ? '通常利用できます。' : '通常利用に必要な設定を完了してください。'}</strong>
+        <span>
+          {ready()
+            ? 'Main Gymは任意設定のため、未設定でもセットアップ完了です。'
+            : '完了判定はApplication Readinessで行います。'}
+        </span>
+      </div>
+      <div class="setup-steps">
+        <For each={props.steps}>
+          {(step) => (
+            <article class={`setup-step ${step.state}`}>
+              <div class="setup-step__status" aria-hidden="true">
+                <i class={`mdi ${step.state === 'complete' ? 'mdi-check' : step.state === 'current' ? 'mdi-arrow-right' : 'mdi-lock-outline'}`} />
+              </div>
+              <div class="setup-step__body">
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+              <button
+                class="secondary-action"
+                type="button"
+                disabled={!props.canOperate || step.state === 'blocked'}
+                onClick={() => props.onRunStep(step)}
+              >
+                {step.actionLabel}
+              </button>
+            </article>
+          )}
+        </For>
+      </div>
+      <Show when={(readiness()?.requiredActions.length ?? 0) > 0}>
+        <div class="required-actions">
+          <p class="eyebrow">Required Actions</p>
+          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{action}</span>}</For>
+        </div>
+      </Show>
+    </section>
   )
 }
 
