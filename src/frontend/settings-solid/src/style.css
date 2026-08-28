@@ -156,6 +156,28 @@
   justify-content: center;
 }
 
+.recovery-actions {
+  align-items: center;
+  border: 1px solid var(--wl-warning-border);
+  border-radius: var(--wl-radius-inner);
+  background: var(--wl-warning-bg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.recovery-actions .eyebrow {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.recovery-note {
+  color: var(--wl-warning-text);
+  font-weight: 800;
+}
+
 .form-grid {
   display: grid;
   gap: 14px;

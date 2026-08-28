@@ -140,7 +140,7 @@ function readinessJson(status) {
     state = 'unconfigured'
   } else if (!status.acceptingRequests || status.applicationStatus === 'failed' || unavailableComponents.includes('runtimeData')) {
     state = 'unavailable'
-  } else if (status.applicationStatus === 'degraded' || degradedComponents.length > 0 || requiredActions.length > 0) {
+  } else if (status.applicationStatus === 'degraded' || degradedComponents.length > 0 || unavailableComponents.length > 0 || requiredActions.length > 0) {
     state = 'degraded'
   }
 

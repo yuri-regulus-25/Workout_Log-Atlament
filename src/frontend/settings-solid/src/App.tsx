@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web'
 import {
   initializeAppNavigation,
   pageTransitionClassName,
+  deriveApplicationAccessPolicy,
   getAfStatus,
   getConfiguration,
   getCredentialStatus,
@@ -12,6 +13,8 @@ import {
   type AfConfiguration,
   type AfError,
   type AfStatus,
+  type ApplicationAccessPolicy,
+  type ApplicationRecoveryAction,
   type CredentialStatus,
   type ResourceConfiguration,
   type TimeoutConfiguration,
@@ -88,6 +91,10 @@ function App() {
 
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
+  const accessPolicy = createMemo(() => {
+    const readiness = status()?.readiness
+    return readiness ? deriveApplicationAccessPolicy(readiness) : null
+  })
   const setupSteps = createMemo(() => buildSetupSteps({
     status: status(),
     credential: credential(),
@@ -283,6 +290,13 @@ function App() {
     return void syncNow()
   }
 
+  function runRecoveryAction(action: ApplicationRecoveryAction) {
+    if (action === 'retry-sync') return void syncNow()
+    if (action === 'reload') return void refresh()
+    if (action === 'update-credential') return void saveCredential()
+    scrollToTop()
+  }
+
   return (
     <main ref={shellElement} class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
@@ -310,9 +324,11 @@ function App() {
       <section class="settings-grid">
         <SetupAssistant
           status={status()}
+          accessPolicy={accessPolicy()}
           steps={setupSteps()}
           canOperate={canOperate()}
           onRunStep={runSetupStep}
+          onRunRecovery={runRecoveryAction}
         />
 
         <StatusSection status={status()} credential={credential()} />
@@ -476,9 +492,11 @@ function App() {
 
 function SetupAssistant(props: {
   status: AfStatus | null
+  accessPolicy: ApplicationAccessPolicy | null
   steps: SetupStep[]
   canOperate: boolean
   onRunStep: (step: SetupStep) => void
+  onRunRecovery: (action: ApplicationRecoveryAction) => void
 }) {
   const ready = createMemo(() => isSetupReady(props.status))
   const readiness = createMemo(() => props.status?.readiness)
@@ -531,6 +549,30 @@ function SetupAssistant(props: {
           <p class="eyebrow">Required Actions</p>
           <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{action}</span>}</For>
         </div>
+      </Show>
+      <Show when={props.accessPolicy && (props.accessPolicy.fallbackActive || props.accessPolicy.recoveryActions.length > 0) ? props.accessPolicy : null}>
+        {(policy) => (
+          <div class="recovery-actions">
+            <p class="eyebrow">Recovery</p>
+            <Show when={policy().fallbackActive}>
+              <span class="recovery-note">Remote取得に失敗しています。既存Runtime Dataで継続利用中です。</span>
+            </Show>
+            <div class="button-row">
+              <For each={policy().recoveryActions}>
+                {(action) => (
+                  <button
+                    class="secondary-action"
+                    type="button"
+                    disabled={!props.canOperate}
+                    onClick={() => props.onRunRecovery(action)}
+                  >
+                    {recoveryActionLabel(action)}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
       </Show>
     </section>
   )
@@ -611,6 +653,14 @@ function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): 
 function displayStatus(value?: string) {
   if (!value) return '-'
   return statusLabels[value] ?? value
+}
+
+function recoveryActionLabel(action: ApplicationRecoveryAction) {
+  if (action === 'complete-setup') return 'Setup'
+  if (action === 'update-credential') return 'Credential'
+  if (action === 'retry-sync') return 'Retry Sync'
+  if (action === 'reload') return 'Reload'
+  return 'Settings'
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { deriveApplicationReadiness, type AfStatus } from './index'
+import { deriveApplicationAccessPolicy, deriveApplicationReadiness, type AfStatus } from './index'
 
 const repoRoot = process.cwd()
 
@@ -78,6 +78,59 @@ describe('AF read contract refinement', () => {
       application: { status: 'degraded', degraded: true, acceptingRequests: true },
       components: { ...baseStatus.components, github: 'degraded' },
     }).state).toBe('degraded')
+    expect(deriveApplicationReadiness({
+      ...baseStatus,
+      components: { ...baseStatus.components, credential: 'unavailable' },
+    }).state).toBe('degraded')
     expect(deriveApplicationReadiness(baseStatus).state).toBe('ready')
+  })
+
+  it('derives shared access policy for setup, runtime failure, and fallback states', () => {
+    expect(deriveApplicationAccessPolicy({
+      state: 'unconfigured',
+      requiredActions: ['CONFIGURATION_REQUIRED'],
+      unavailableComponents: ['configuration'],
+      degradedComponents: [],
+    })).toMatchObject({
+      normalApplicationsAvailable: false,
+      setupAvailable: true,
+      recoveryActions: ['open-settings', 'complete-setup'],
+      fallbackActive: false,
+    })
+
+    expect(deriveApplicationAccessPolicy({
+      state: 'degraded',
+      requiredActions: [],
+      unavailableComponents: [],
+      degradedComponents: ['github'],
+    })).toMatchObject({
+      normalApplicationsAvailable: true,
+      recoveryActions: ['retry-sync', 'open-settings', 'reload'],
+      restrictedComponents: ['github'],
+      fallbackActive: true,
+    })
+
+    expect(deriveApplicationAccessPolicy({
+      state: 'degraded',
+      requiredActions: [],
+      unavailableComponents: ['credential'],
+      degradedComponents: [],
+    })).toMatchObject({
+      normalApplicationsAvailable: true,
+      recoveryActions: ['update-credential', 'open-settings', 'reload'],
+      fallbackActive: false,
+    })
+
+    expect(deriveApplicationAccessPolicy({
+      state: 'unavailable',
+      requiredActions: ['RUNTIME_DATA_REQUIRED'],
+      unavailableComponents: ['runtimeData'],
+      degradedComponents: [],
+    })).toMatchObject({
+      normalApplicationsAvailable: false,
+      setupAvailable: false,
+      recoveryActions: ['retry-sync', 'open-settings', 'reload'],
+      fallbackActive: false,
+    })
   })
 })
