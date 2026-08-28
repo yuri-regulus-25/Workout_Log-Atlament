@@ -67,6 +67,7 @@ export type MachineMasterItem = {
   body_part: BodyPart
   aliases?: string[]
   active: boolean
+  deleted: boolean
 }
 
 export type MachineMaster = {
@@ -79,6 +80,7 @@ export type GymMasterItem = {
   name: string
   short_name?: string
   active: boolean
+  deleted: boolean
 }
 
 export type GymMaster = {

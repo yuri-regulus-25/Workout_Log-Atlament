@@ -5,25 +5,29 @@
       "gym_id": "af-shioiri",
       "name": "エニタイムフィットネス 横須賀汐入店",
       "short_name": "AF横須賀汐入",
-      "active": true
+      "active": true,
+      "deleted": false
     },
     {
       "gym_id": "af-akihabara",
       "name": "エニタイムフィットネス 秋葉原店",
       "short_name": "AF秋葉原",
-      "active": true
+      "active": true,
+      "deleted": false
     },
     {
       "gym_id": "af-yakoekimae",
       "name": "エニタイムフィットネス 矢向駅前店",
       "short_name": "AF矢向駅前",
-      "active": true
+      "active": true,
+      "deleted": false
     },
     {
       "gym_id": "af-minatomirai",
       "name": "エニタイムフィットネス みなとみらい店",
       "short_name": "AFみなとみらい",
-      "active": true
+      "active": true,
+      "deleted": false
     }
   ]
 }

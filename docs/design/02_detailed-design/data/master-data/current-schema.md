@@ -32,6 +32,7 @@ Top-level structure:
 | `body_part` | string | yes | Supported body part value のいずれかである必要がある。 |
 | `aliases` | string[] | no、JS parser では `[]` default | 現行 data に存在する。 |
 | `active` | boolean | yes | Parser/validator で必須。 |
+| `deleted` | boolean | yes、JS parser では missing を `false` に normalize | Logical delete flag。Historical reference の存在解決には使用しない。 |
 
 Supported body part:
 
@@ -60,6 +61,7 @@ Top-level structure:
 | `name` | string | yes | Display name。 |
 | `short_name` | string | no | Short display name。 |
 | `active` | boolean | yes | Parser/validator で必須。 |
+| `deleted` | boolean | yes、JS parser では missing を `false` に normalize | Logical delete flag。Historical reference の存在解決には使用しない。 |
 
 ## Validation
 
@@ -74,7 +76,9 @@ Top-level structure:
 - valid machine `body_part`
 - required `active`
 
-`active:false` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive record を reject しない。
+`active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
+
+新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
 
 ## Runtime Use
 
