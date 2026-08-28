@@ -1191,7 +1191,6 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        ApplicationFrameworkVersion,
         new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion()),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
