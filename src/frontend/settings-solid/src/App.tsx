@@ -19,7 +19,7 @@ import {
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
 
-const resourceTypes = ['WORKOUT', 'EXERCISE_MASTER', 'GYM_MASTER'] as const
+const resourceTypes = ['WORKOUT', 'MACHINE_MASTER', 'GYM_MASTER'] as const
 const resourceKinds = ['file', 'directory'] as const
 const statusLabels: Record<string, string> = {
   available: '利用可能',
@@ -40,7 +40,7 @@ const statusLabels: Record<string, string> = {
 }
 const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   WORKOUT: 'WORKOUT / ワークアウト情報',
-  EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
+  MACHINE_MASTER: 'MACHINE_MASTER / 種目マスター',
   GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
 type Message = {

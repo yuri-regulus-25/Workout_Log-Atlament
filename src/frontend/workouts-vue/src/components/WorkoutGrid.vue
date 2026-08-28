@@ -11,7 +11,7 @@ const emit = defineEmits<{
   openSession: [session: WorkoutSession]
 }>()
 
-type SortKey = 'date' | 'gym' | 'exerciseCount' | 'totalSets' | 'totalVolume'
+type SortKey = 'date' | 'gym' | 'machineCount' | 'totalSets' | 'totalVolume'
 type SortDirection = 'asc' | 'desc'
 
 const pageSize = ref(10)
@@ -93,7 +93,7 @@ function sortMark(key: SortKey): string {
         <tr>
           <th class="date-cell"><button type="button" @click="setSort('date')">Date {{ sortMark('date') }}</button></th>
           <th class="gym-cell"><button type="button" @click="setSort('gym')">Gym {{ sortMark('gym') }}</button></th>
-          <th class="machines-cell"><button type="button" @click="setSort('exerciseCount')">Machines {{ sortMark('exerciseCount') }}</button></th>
+          <th class="machines-cell"><button type="button" @click="setSort('machineCount')">Machines {{ sortMark('machineCount') }}</button></th>
           <th class="sets-cell"><button type="button" @click="setSort('totalSets')">Sets {{ sortMark('totalSets') }}</button></th>
           <th class="volume-cell"><button type="button" @click="setSort('totalVolume')">Volume {{ sortMark('totalVolume') }}</button></th>
           <th class="machine-names-cell">Machine names</th>
@@ -107,10 +107,10 @@ function sortMark(key: SortKey): string {
         >
           <td class="date-cell">{{ formatDisplayDate(row.date) }}</td>
           <td class="gym-cell" :title="fullGymName(row)">{{ displayGymName(row) }}</td>
-          <td class="machines-cell">{{ row.exerciseCount }}</td>
+          <td class="machines-cell">{{ row.machineCount }}</td>
           <td class="sets-cell">{{ row.totalSets }}</td>
           <td class="volume-cell">{{ row.totalVolume.toLocaleString() }} kg</td>
-          <td class="machine-names-cell" :title="row.exercises">{{ row.exercises }}</td>
+          <td class="machine-names-cell" :title="row.machines">{{ row.machines }}</td>
         </tr>
       </tbody>
     </table>

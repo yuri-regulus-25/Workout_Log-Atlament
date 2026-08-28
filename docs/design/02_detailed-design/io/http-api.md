@@ -45,8 +45,8 @@ Production/preview hosting は以下を serve する。
 - `/dashboard/`
 - `/workouts/`
 - `/workouts/YYYY-MM-DD`
-- `/exercises/`
-- `/exercises/<id>`
+- `/machines/`
+- `/machines/<id>`
 - `/analytics/`
 - `/settings/`
 - `/404.html`

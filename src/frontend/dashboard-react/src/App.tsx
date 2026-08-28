@@ -282,7 +282,7 @@ function App() {
               <p className="muted">
                 {latestWorkout.gym.name}<br />
                 {getTotalSets(latestWorkout)} sets<br />
-                {latestWorkout.exercises.length} machines
+                {latestWorkout.machines.length} machines
               </p>
             </>
           ) : (
@@ -351,7 +351,7 @@ function App() {
             <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
               <span className="date-cell">{formatDisplayDate(row.date)}</span>
               <span className="gym-cell">{row.gym}</span>
-              <span className="machines-cell">{row.exerciseCount}</span>
+              <span className="machines-cell">{row.machineCount}</span>
               <span className="sets-cell">{row.totalSets}</span>
               <span className="volume-cell">{row.totalVolume.toLocaleString()} kg</span>
             </a>

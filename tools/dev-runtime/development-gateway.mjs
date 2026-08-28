@@ -29,8 +29,8 @@ const routes = [
     },
   },
   {
-    name: 'exercises',
-    prefixes: ['/exercises'],
+    name: 'machines',
+    prefixes: ['/machines'],
     target: {
       host: '127.0.0.1',
       port: 5177,

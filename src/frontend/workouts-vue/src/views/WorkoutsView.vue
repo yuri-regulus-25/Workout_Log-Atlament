@@ -63,8 +63,8 @@ const machineOptions = computed(() => {
   const names = new Set<string>()
 
   for (const session of workoutSessions.value) {
-    for (const exercise of session.exercises) {
-      names.add(exercise.name)
+    for (const machine of session.machines) {
+      names.add(machine.name)
     }
   }
 
@@ -77,7 +77,7 @@ const filteredSessions = computed(() => {
   }
 
   return workoutSessions.value.filter((session) =>
-    session.exercises.some((exercise) => exercise.name === selectedMachine.value),
+    session.machines.some((machine) => machine.name === selectedMachine.value),
   )
 })
 

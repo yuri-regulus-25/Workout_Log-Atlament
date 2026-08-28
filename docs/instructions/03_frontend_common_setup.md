@@ -81,7 +81,7 @@ src/shared/frontend-common/easter-egg/
       ├─ portal.json
       ├─ dashboard.json
       ├─ workouts.json
-      ├─ exercises.json
+      ├─ machines.json
       ├─ analytics.json
       ├─ settings.json
       └─ errors.json

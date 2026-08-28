@@ -8,7 +8,7 @@ const pages = [
   '/dashboard/',
   '/workouts/',
   '/workouts/2026-08-14',
-  '/exercises/pec-deck',
+  '/machines/pec-deck',
   '/analytics/',
   '/settings/',
 ]

@@ -14,7 +14,7 @@ describe('real workout data', () => {
 
     expect(masterResult.issues).toEqual([])
     expect(masterResult.masterData).toBeDefined()
-    expect(masterResult.masterData?.exercises.exercises).toHaveLength(19)
+    expect(masterResult.masterData?.machines.machines).toHaveLength(19)
     expect(masterResult.masterData?.gyms.gyms).toHaveLength(4)
 
     const result = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
@@ -28,9 +28,9 @@ describe('real workout data', () => {
     expect(result.sessions.every((session) => session.gym.name.length > 0)).toBe(true)
     expect(
       result.sessions.every((session) =>
-        session.exercises.every(
-          (exercise) =>
-            exercise.name.length > 0 && exercise.body_part.length > 0 && exercise.sets.length > 0,
+        session.machines.every(
+          (machine) =>
+            machine.name.length > 0 && machine.body_part.length > 0 && machine.sets.length > 0,
         ),
       ),
     ).toBe(true)
@@ -42,12 +42,12 @@ describe('real workout data', () => {
 
     expect(result.sessions.length).toBeGreaterThan(0)
     expect(
-      result.sessions.every((session) => session.status === 'partial' || session.exercises.length > 0),
+      result.sessions.every((session) => session.status === 'partial' || session.machines.length > 0),
     ).toBe(true)
     expect(
       result.sessions.every((session) =>
-        session.exercises.every((exercise) =>
-          exercise.sets.every(
+        session.machines.every((machine) =>
+          machine.sets.every(
             (set) =>
               Number.isFinite(set.set) &&
               Number.isFinite(set.weight_kg) &&
@@ -79,7 +79,7 @@ describe('real workout data', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(rawSessionCount)
     expect(result.sessions[0].gym.name.length).toBeGreaterThan(0)
-    expect(result.sessions.some((session) => session.exercises.some((exercise) => exercise.name === 'リアデルト'))).toBe(true)
+    expect(result.sessions.some((session) => session.machines.some((machine) => machine.name === 'リアデルト'))).toBe(true)
   })
 
   it('loads normalized runtime sessions from the Windows AF runtime API contract', async () => {

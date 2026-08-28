@@ -88,7 +88,7 @@ RUNTIME_DATA_REQUIRED
   },
   "resources": [
     { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory", "required": true, "emptyAllowed": false },
-    { "type": "EXERCISE_MASTER", "path": "master/exercises.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
+    { "type": "MACHINE_MASTER", "path": "master/machines.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
     { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file", "required": true, "emptyAllowed": false }
   ],
   "timeouts": {
@@ -104,7 +104,7 @@ Valid resource type は以下のみである。
 
 ```text
 WORKOUT
-EXERCISE_MASTER
+MACHINE_MASTER
 GYM_MASTER
 ```
 

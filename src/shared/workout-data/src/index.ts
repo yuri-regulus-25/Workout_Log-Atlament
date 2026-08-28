@@ -1,11 +1,11 @@
 import type {
   BodyPart,
-  ExerciseMaster,
-  ExerciseMasterItem,
-  ExerciseSet,
+  MachineMaster,
+  MachineMasterItem,
+  MachineSet,
   GymMaster,
   GymMasterItem,
-  WorkoutExercise,
+  WorkoutMachine,
   WorkoutLoadResult,
   WorkoutMasterData,
   WorkoutParseIssue,
@@ -16,7 +16,7 @@ import type {
 type UnknownRecord = Record<string, unknown>
 
 type MasterLookup = {
-  exercisesById: Map<string, ExerciseMasterItem>
+  machinesById: Map<string, MachineMasterItem>
   gymsById: Map<string, GymMasterItem>
 }
 
@@ -69,27 +69,27 @@ const allowedBodyParts = new Set<BodyPart>([
   'other',
 ])
 
-export const sampleExerciseMaster: ExerciseMaster = {
+export const sampleMachineMaster: MachineMaster = {
   schema_version: 1,
-  exercises: [
-    { exercise_id: 'abdominal', name: 'アブドミナル', body_part: 'core', aliases: [], active: true },
+  machines: [
+    { machine_id: 'abdominal', name: 'アブドミナル', body_part: 'core', aliases: [], active: true },
     {
-      exercise_id: 'shoulder-press',
+      machine_id: 'shoulder-press',
       name: 'ショルダープレス',
       body_part: 'shoulders',
       aliases: [],
       active: true,
     },
     {
-      exercise_id: 'lat-pulldown',
+      machine_id: 'lat-pulldown',
       name: 'ラットプルダウン',
       body_part: 'back',
       aliases: [],
       active: true,
     },
-    { exercise_id: 'hack-squat', name: 'ハックスクワット', body_part: 'legs', aliases: [], active: true },
+    { machine_id: 'hack-squat', name: 'ハックスクワット', body_part: 'legs', aliases: [], active: true },
     {
-      exercise_id: 'hip-abduction',
+      machine_id: 'hip-abduction',
       name: 'ヒップアブダクション',
       body_part: 'glutes',
       aliases: [],
@@ -123,7 +123,7 @@ export const sampleGymMaster: GymMaster = {
 }
 
 export const sampleMasterData: WorkoutMasterData = {
-  exercises: sampleExerciseMaster,
+  machines: sampleMachineMaster,
   gyms: sampleGymMaster,
 }
 
@@ -138,9 +138,9 @@ export const sampleWorkoutJson = `{
     "motivation": null,
     "notes": ["PoC sample log from recoverable chat context."]
   },
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "hip-abduction",
+      "machine_id": "hip-abduction",
       "sets": [
         { "set": 1, "weight_kg": 65, "reps": 10, "rir": null },
         { "set": 2, "weight_kg": 65, "reps": 10, "rir": null },
@@ -153,8 +153,8 @@ export const sampleWorkoutJson = `{
 }`
 
 export const sampleWorkoutJsonl = `
-{"schema_version":1,"session_id":"2026-08-16-01","date":"2026-08-16","status":"complete","gym_id":"af-akihabara","condition":{"fatigue":2,"motivation":4,"notes":["Short upper body session."]},"exercises":[{"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":22.5,"reps":10,"rir":2},{"set":2,"weight_kg":22.5,"reps":9,"rir":1},{"set":3,"weight_kg":20,"reps":10,"rir":1}]},{"exercise_id":"lat-pulldown","sets":[{"set":1,"weight_kg":45,"reps":12,"rir":2},{"set":2,"weight_kg":45,"reps":11,"rir":1}]}],"notes":["Good tempo on shoulder press."]}
-{"schema_version":1,"session_id":"2026-08-18-01","date":"2026-08-18","status":"complete","gym_id":"af-minatomirai","condition":{"fatigue":3,"motivation":5,"notes":[]},"exercises":[{"exercise_id":"hack-squat","sets":[{"set":1,"weight_kg":80,"reps":10,"rir":2},{"set":2,"weight_kg":90,"reps":8,"rir":1},{"set":3,"weight_kg":90,"reps":8,"rir":1}]},{"exercise_id":"abdominal","sets":[{"set":1,"weight_kg":35,"reps":15,"rir":2},{"set":2,"weight_kg":35,"reps":15,"rir":2}]}],"notes":["Leg-focused day."]}
+{"schema_version":1,"session_id":"2026-08-16-01","date":"2026-08-16","status":"complete","gym_id":"af-akihabara","condition":{"fatigue":2,"motivation":4,"notes":["Short upper body session."]},"machines":[{"machine_id":"shoulder-press","sets":[{"set":1,"weight_kg":22.5,"reps":10,"rir":2},{"set":2,"weight_kg":22.5,"reps":9,"rir":1},{"set":3,"weight_kg":20,"reps":10,"rir":1}]},{"machine_id":"lat-pulldown","sets":[{"set":1,"weight_kg":45,"reps":12,"rir":2},{"set":2,"weight_kg":45,"reps":11,"rir":1}]}],"notes":["Good tempo on shoulder press."]}
+{"schema_version":1,"session_id":"2026-08-18-01","date":"2026-08-18","status":"complete","gym_id":"af-minatomirai","condition":{"fatigue":3,"motivation":5,"notes":[]},"machines":[{"machine_id":"hack-squat","sets":[{"set":1,"weight_kg":80,"reps":10,"rir":2},{"set":2,"weight_kg":90,"reps":8,"rir":1},{"set":3,"weight_kg":90,"reps":8,"rir":1}]},{"machine_id":"abdominal","sets":[{"set":1,"weight_kg":35,"reps":15,"rir":2},{"set":2,"weight_kg":35,"reps":15,"rir":2}]}],"notes":["Leg-focused day."]}
 `.trim()
 
 export function loadSampleWorkoutSessions(): WorkoutSession[] {
@@ -345,7 +345,7 @@ export function normalizeWorkoutRecord(
   const date = readString(value, 'date')
   const status = normalizeStatus(readString(value, 'status'))
   const gymId = readString(value, 'gym_id')
-  const exercisesValue = value['exercises']
+  const machinesValue = value['machines']
 
   if (schemaVersion === null) {
     issues.push({ filePath, line, message: 'Missing required numeric field: schema_version.' })
@@ -373,8 +373,8 @@ export function normalizeWorkoutRecord(
     issues.push({ filePath, line, message: 'Missing required string field: gym_id.' })
   }
 
-  if (!Array.isArray(exercisesValue)) {
-    issues.push({ filePath, line, message: 'Missing required array field: exercises.' })
+  if (!Array.isArray(machinesValue)) {
+    issues.push({ filePath, line, message: 'Missing required array field: machines.' })
   }
 
   const gym = gymId ? masterLookup.gymsById.get(gymId) : undefined
@@ -391,26 +391,26 @@ export function normalizeWorkoutRecord(
     !status ||
     !gymId ||
     !gym ||
-    !Array.isArray(exercisesValue)
+    !Array.isArray(machinesValue)
   ) {
     return { sessions: [], issues }
   }
 
-  const exerciseIssueCountBefore = issues.length
-  const exercises = exercisesValue
-    .map((exercise, index) => normalizeExercise(exercise, index, masterLookup, issues, filePath, line))
-    .filter((exercise): exercise is WorkoutExercise => exercise !== null)
-  const exerciseIssues = issues.slice(exerciseIssueCountBefore)
+  const machineIssueCountBefore = issues.length
+  const machines = machinesValue
+    .map((machine, index) => normalizeMachine(machine, index, masterLookup, issues, filePath, line))
+    .filter((machine): machine is WorkoutMachine => machine !== null)
+  const machineIssues = issues.slice(machineIssueCountBefore)
 
   if (
     status === 'complete' &&
-    exercises.length === 0 &&
-    (exerciseIssues.length === 0 || !exerciseIssues.every(isMasterResolveIssue))
+    machines.length === 0 &&
+    (machineIssues.length === 0 || !machineIssues.every(isMasterResolveIssue))
   ) {
     issues.push({
       filePath,
       line,
-      message: 'Complete workout session requires at least one valid exercise.',
+      message: 'Complete workout session requires at least one valid machine.',
     })
   }
 
@@ -425,7 +425,7 @@ export function normalizeWorkoutRecord(
     status,
     gym: { id: gym.gym_id, name: gym.name, short_name: gym.short_name },
     condition: normalizeCondition(value['condition'], issues, filePath, line),
-    exercises,
+    machines,
     notes: readStringArray(value, 'notes') ?? [],
   }
 
@@ -433,46 +433,46 @@ export function normalizeWorkoutRecord(
 }
 
 function isMasterResolveIssue(issue: WorkoutParseIssue): boolean {
-  return issue.message.startsWith('Unknown exercise_id:') || issue.message.startsWith('Unknown gym_id:')
+  return issue.message.startsWith('Unknown machine_id:') || issue.message.startsWith('Unknown gym_id:')
 }
 
-function normalizeExercise(
+function normalizeMachine(
   value: unknown,
   index: number,
   masterLookup: MasterLookup,
   issues: WorkoutParseIssue[],
   filePath: string,
   line?: number,
-): WorkoutExercise | null {
+): WorkoutMachine | null {
   if (!isRecord(value)) {
-    issues.push({ filePath, line, message: `Exercise at index ${index} must be an object.` })
+    issues.push({ filePath, line, message: `Machine at index ${index} must be an object.` })
     return null
   }
 
-  const exerciseId = readString(value, 'exercise_id')
+  const machineId = readString(value, 'machine_id')
   const setsValue = value['sets']
 
-  if (!exerciseId) {
-    issues.push({ filePath, line, message: `Exercise at index ${index} is missing exercise_id.` })
+  if (!machineId) {
+    issues.push({ filePath, line, message: `Machine at index ${index} is missing machine_id.` })
   }
 
   if (!Array.isArray(setsValue)) {
     issues.push({
       filePath,
       line,
-      message: `Exercise at index ${index} is missing required array field: sets.`,
+      message: `Machine at index ${index} is missing required array field: sets.`,
     })
     return null
   }
 
-  if (!exerciseId) {
+  if (!machineId) {
     return null
   }
 
-  const masterExercise = masterLookup.exercisesById.get(exerciseId)
+  const masterMachine = masterLookup.machinesById.get(machineId)
 
-  if (!masterExercise) {
-    issues.push({ filePath, line, message: `Unknown exercise_id: ${exerciseId}.` })
+  if (!masterMachine) {
+    issues.push({ filePath, line, message: `Unknown machine_id: ${machineId}.` })
     return null
   }
 
@@ -480,28 +480,28 @@ function normalizeExercise(
     issues.push({
       filePath,
       line,
-      message: `Exercise "${exerciseId}" requires at least one set.`,
+      message: `Machine "${machineId}" requires at least one set.`,
     })
     return null
   }
 
   const sets = setsValue
     .map((set, setIndex) => normalizeSet(set, setIndex, issues, filePath, line))
-    .filter((set): set is ExerciseSet => set !== null)
+    .filter((set): set is MachineSet => set !== null)
 
   if (sets.length === 0) {
     issues.push({
       filePath,
       line,
-      message: `Exercise "${exerciseId}" has no valid sets.`,
+      message: `Machine "${machineId}" has no valid sets.`,
     })
     return null
   }
 
   return {
-    exercise_id: exerciseId,
-    name: masterExercise.name,
-    body_part: masterExercise.body_part,
+    machine_id: machineId,
+    name: masterMachine.name,
+    body_part: masterMachine.body_part,
     sets,
     notes: readStringArray(value, 'notes') ?? [],
   }
@@ -513,7 +513,7 @@ function normalizeSet(
   issues: WorkoutParseIssue[],
   filePath: string,
   line?: number,
-): ExerciseSet | null {
+): MachineSet | null {
   if (!isRecord(value)) {
     issues.push({ filePath, line, message: `Set at index ${index} must be an object.` })
     return null
@@ -568,12 +568,12 @@ function normalizeCondition(
   }
 }
 
-export function parseExerciseMaster(path: string, content: string): {
-  master?: ExerciseMaster
+export function parseMachineMaster(path: string, content: string): {
+  master?: MachineMaster
   issues: WorkoutParseIssue[]
 } {
   try {
-    return normalizeExerciseMaster(JSON.parse(content) as unknown, path)
+    return normalizeMachineMaster(JSON.parse(content) as unknown, path)
   } catch (error) {
     return { issues: [{ filePath: path, message: getErrorMessage(error) }] }
   }
@@ -590,37 +590,37 @@ export function parseGymMaster(path: string, content: string): {
   }
 }
 
-export function normalizeExerciseMaster(
+export function normalizeMachineMaster(
   value: unknown,
   filePath = '<memory>',
-): { master?: ExerciseMaster; issues: WorkoutParseIssue[] } {
+): { master?: MachineMaster; issues: WorkoutParseIssue[] } {
   const issues: WorkoutParseIssue[] = []
 
   if (!isRecord(value)) {
-    return { issues: [{ filePath, message: 'Exercise master must be an object.' }] }
+    return { issues: [{ filePath, message: 'Machine master must be an object.' }] }
   }
 
   const schemaVersion = readNumber(value, 'schema_version')
-  const exercisesValue = value['exercises']
+  const machinesValue = value['machines']
 
   if (schemaVersion === null) {
     issues.push({ filePath, message: 'Missing required numeric field: schema_version.' })
   }
 
-  if (!Array.isArray(exercisesValue)) {
-    issues.push({ filePath, message: 'Missing required array field: exercises.' })
+  if (!Array.isArray(machinesValue)) {
+    issues.push({ filePath, message: 'Missing required array field: machines.' })
   }
 
-  if (schemaVersion === null || !Array.isArray(exercisesValue)) {
+  if (schemaVersion === null || !Array.isArray(machinesValue)) {
     return { issues }
   }
 
   const seenIds = new Set<string>()
-  const exercises = exercisesValue
-    .map((exercise, index) => normalizeExerciseMasterItem(exercise, index, seenIds, issues, filePath))
-    .filter((exercise): exercise is ExerciseMasterItem => exercise !== null)
+  const machines = machinesValue
+    .map((machine, index) => normalizeMachineMasterItem(machine, index, seenIds, issues, filePath))
+    .filter((machine): machine is MachineMasterItem => machine !== null)
 
-  return issues.length === 0 ? { master: { schema_version: schemaVersion, exercises }, issues } : { issues }
+  return issues.length === 0 ? { master: { schema_version: schemaVersion, machines }, issues } : { issues }
 }
 
 export function normalizeGymMaster(
@@ -656,50 +656,50 @@ export function normalizeGymMaster(
   return issues.length === 0 ? { master: { schema_version: schemaVersion, gyms }, issues } : { issues }
 }
 
-function normalizeExerciseMasterItem(
+function normalizeMachineMasterItem(
   value: unknown,
   index: number,
   seenIds: Set<string>,
   issues: WorkoutParseIssue[],
   filePath: string,
-): ExerciseMasterItem | null {
+): MachineMasterItem | null {
   if (!isRecord(value)) {
-    issues.push({ filePath, message: `Exercise master item at index ${index} must be an object.` })
+    issues.push({ filePath, message: `Machine master item at index ${index} must be an object.` })
     return null
   }
 
-  const exerciseId = readString(value, 'exercise_id')
+  const machineId = readString(value, 'machine_id')
   const name = readString(value, 'name')
   const bodyPart = readString(value, 'body_part')
   const aliases = readStringArray(value, 'aliases') ?? []
   const active = readBoolean(value, 'active')
 
-  if (!exerciseId) {
-    issues.push({ filePath, message: `Exercise master item at index ${index} is missing exercise_id.` })
+  if (!machineId) {
+    issues.push({ filePath, message: `Machine master item at index ${index} is missing machine_id.` })
   }
 
   if (!name) {
-    issues.push({ filePath, message: `Exercise master item at index ${index} is missing name.` })
+    issues.push({ filePath, message: `Machine master item at index ${index} is missing name.` })
   }
 
   if (!bodyPart || !isBodyPart(bodyPart)) {
-    issues.push({ filePath, message: `Exercise master item at index ${index} has invalid body_part.` })
+    issues.push({ filePath, message: `Machine master item at index ${index} has invalid body_part.` })
   }
 
   if (active === null) {
-    issues.push({ filePath, message: `Exercise master item at index ${index} is missing active.` })
+    issues.push({ filePath, message: `Machine master item at index ${index} is missing active.` })
   }
 
-  if (exerciseId && seenIds.has(exerciseId)) {
-    issues.push({ filePath, message: `Duplicate exercise_id: ${exerciseId}.` })
+  if (machineId && seenIds.has(machineId)) {
+    issues.push({ filePath, message: `Duplicate machine_id: ${machineId}.` })
   }
 
-  if (exerciseId) {
-    seenIds.add(exerciseId)
+  if (machineId) {
+    seenIds.add(machineId)
   }
 
-  return exerciseId && name && bodyPart && isBodyPart(bodyPart) && active !== null
-    ? { exercise_id: exerciseId, name, body_part: bodyPart, aliases, active }
+  return machineId && name && bodyPart && isBodyPart(bodyPart) && active !== null
+    ? { machine_id: machineId, name, body_part: bodyPart, aliases, active }
     : null
 }
 
@@ -753,21 +753,21 @@ function createMasterLookup(
   masterData: WorkoutMasterData,
   issues: WorkoutParseIssue[] = [],
 ): MasterLookup {
-  const exerciseResult = normalizeExerciseMaster(masterData.exercises, '<master:exercises>')
+  const machineResult = normalizeMachineMaster(masterData.machines, '<master:machines>')
   const gymResult = normalizeGymMaster(masterData.gyms, '<master:gyms>')
 
-  issues.push(...exerciseResult.issues, ...gymResult.issues)
+  issues.push(...machineResult.issues, ...gymResult.issues)
 
   return {
-    exercisesById: new Map(
-      (exerciseResult.master?.exercises ?? []).map((exercise) => [exercise.exercise_id, exercise]),
+    machinesById: new Map(
+      (machineResult.master?.machines ?? []).map((machine) => [machine.machine_id, machine]),
     ),
     gymsById: new Map((gymResult.master?.gyms ?? []).map((gym) => [gym.gym_id, gym])),
   }
 }
 
 function isMasterLookup(value: WorkoutMasterData | MasterLookup): value is MasterLookup {
-  return 'exercisesById' in value && 'gymsById' in value
+  return 'machinesById' in value && 'gymsById' in value
 }
 
 function normalizeStatus(status: string | null): WorkoutStatus | null {
@@ -843,7 +843,7 @@ function isWorkoutFile(value: unknown): value is WorkoutFile {
 function isRuntimeMasterData(value: unknown): value is WorkoutMasterData {
   return (
     isRecord(value) &&
-    isRecord(value['exercises']) &&
+    isRecord(value['machines']) &&
     isRecord(value['gyms'])
   )
 }

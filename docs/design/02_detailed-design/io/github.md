@@ -21,7 +21,7 @@ Resource path は request 前に root path と combine される。
 現行 valid resource type:
 
 - `WORKOUT`: directory, default `workouts/`
-- `EXERCISE_MASTER`: file, default `master/exercises.json`
+- `MACHINE_MASTER`: file, default `master/machines.json`
 - `GYM_MASTER`: file, default `master/gyms.json`
 
 ## Fetch Behavior

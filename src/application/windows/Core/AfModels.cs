@@ -33,7 +33,7 @@ public sealed record AfConfiguration(
         new[]
         {
             new ResourceConfiguration("WORKOUT", "workouts/", "directory", true, false),
-            new ResourceConfiguration("EXERCISE_MASTER", "master/exercises.json", "file", true, false),
+            new ResourceConfiguration("MACHINE_MASTER", "master/machines.json", "file", true, false),
             new ResourceConfiguration("GYM_MASTER", "master/gyms.json", "file", true, false)
         },
         new TimeoutConfiguration(10, 60, 30, 10));
@@ -99,7 +99,7 @@ public sealed record WorkoutSession(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("gym")] Gym Gym,
     [property: JsonPropertyName("condition")] SessionCondition? Condition,
-    [property: JsonPropertyName("exercises")] IReadOnlyList<WorkoutExercise> Exercises,
+    [property: JsonPropertyName("machines")] IReadOnlyList<WorkoutMachine> Machines,
     [property: JsonPropertyName("notes")] IReadOnlyList<string> Notes);
 
 public sealed record Gym(
@@ -107,14 +107,14 @@ public sealed record Gym(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("short_name")] string? ShortName);
 
-public sealed record WorkoutExercise(
-    [property: JsonPropertyName("exercise_id")] string ExerciseId,
+public sealed record WorkoutMachine(
+    [property: JsonPropertyName("machine_id")] string MachineId,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("body_part")] string BodyPart,
-    [property: JsonPropertyName("sets")] IReadOnlyList<ExerciseSet> Sets,
+    [property: JsonPropertyName("sets")] IReadOnlyList<MachineSet> Sets,
     [property: JsonPropertyName("notes")] IReadOnlyList<string> Notes);
 
-public sealed record ExerciseSet(
+public sealed record MachineSet(
     [property: JsonPropertyName("set")] int Set,
     [property: JsonPropertyName("weight_kg")] decimal WeightKg,
     [property: JsonPropertyName("reps")] int Reps,
@@ -166,7 +166,7 @@ public sealed record HostingComponentState(
     [property: JsonPropertyName("portal")] string Portal,
     [property: JsonPropertyName("dashboard")] string Dashboard,
     [property: JsonPropertyName("workouts")] string Workouts,
-    [property: JsonPropertyName("exercises")] string Exercises,
+    [property: JsonPropertyName("machines")] string Machines,
     [property: JsonPropertyName("analytics")] string Analytics,
     [property: JsonPropertyName("settings")] string Settings);
 

@@ -4,30 +4,30 @@
 
 ```text
 data/master/
-├─ exercises.json
+├─ machines.json
 └─ gyms.json
 ```
 
 現行には machine、body part entity、separate record としての alias、main gym configuration の Master file は存在しない。
 
-## Exercise Master
+## Machine Master
 
-File: `data/master/exercises.json`
+File: `data/master/machines.json`
 
 Top-level structure:
 
 ```json
 {
   "schema_version": 1,
-  "exercises": []
+  "machines": []
 }
 ```
 
-各 exercise record は以下を持つ。
+各 machine record は以下を持つ。
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `exercise_id` | string | yes | Unique exercise ID。Workout Log から reference される。 |
+| `machine_id` | string | yes | Unique machine ID。Workout Log から reference される。 |
 | `name` | string | yes | Display name。 |
 | `body_part` | string | yes | Supported body part value のいずれかである必要がある。 |
 | `aliases` | string[] | no、JS parser では `[]` default | 現行 data に存在する。 |
@@ -69,9 +69,9 @@ Top-level structure:
 - `schema_version`
 - required array
 - required record field
-- duplicate `exercise_id`
+- duplicate `machine_id`
 - duplicate `gym_id`
-- valid exercise `body_part`
+- valid machine `body_part`
 - required `active`
 
 `active:false` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive record を reject しない。
@@ -81,6 +81,6 @@ Top-level structure:
 Master Data は Workout Data の normalize に使用される。
 
 - raw `gym_id` は normalized `gym.id`、`gym.name`、optional `gym.short_name` になる。
-- raw `exercise_id` は normalized `exercise_id`、`name`、`body_part` になる。
+- raw `machine_id` は normalized `machine_id`、`name`、`body_part` になる。
 
-Reference された gym または exercise を resolve できない場合、その sync/load operation の Runtime Data は accept されない。
+Reference された gym または machine を resolve できない場合、その sync/load operation の Runtime Data は accept されない。

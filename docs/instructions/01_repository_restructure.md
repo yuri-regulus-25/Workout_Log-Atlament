@@ -39,7 +39,7 @@ tools/
 | --- | --- | --- |
 | `apps/dashboard-react/` | `src/frontend/dashboard-react/` | MOVE |
 | `apps/workouts-vue/` | `src/frontend/workouts-vue/` | MOVE |
-| `apps/exercises-angular/` | `src/frontend/exercises-angular/` | MOVE |
+| `apps/machines-angular/` | `src/frontend/machines-angular/` | MOVE |
 | `apps/analytics-svelte/` | `src/frontend/analytics-svelte/` | MOVE |
 | `packages/workout-types/` | `src/shared/workout-types/` | MOVE |
 | `packages/workout-core/` | `src/shared/workout-core/` | MOVE |

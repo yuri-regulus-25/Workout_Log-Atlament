@@ -3,7 +3,7 @@ import { extname, join } from 'node:path'
 import type { WorkoutMasterData } from '@workout-lab/workout-types'
 import {
   loadWorkoutSessionsFromFiles,
-  parseExerciseMaster,
+  parseMachineMaster,
   parseGymMaster,
   sampleMasterData,
 } from './index.ts'
@@ -28,22 +28,22 @@ export async function loadMasterDataFromDirectory(masterDirectory: string): Prom
   masterData?: WorkoutMasterData
   issues: { filePath: string; message: string; line?: number }[]
 }> {
-  const exerciseMasterPath = join(masterDirectory, 'exercises.json')
+  const machineMasterPath = join(masterDirectory, 'machines.json')
   const gymMasterPath = join(masterDirectory, 'gyms.json')
-  const exerciseResult = parseExerciseMaster(
-    exerciseMasterPath,
-    await readFile(exerciseMasterPath, 'utf8'),
+  const machineResult = parseMachineMaster(
+    machineMasterPath,
+    await readFile(machineMasterPath, 'utf8'),
   )
   const gymResult = parseGymMaster(gymMasterPath, await readFile(gymMasterPath, 'utf8'))
-  const issues = [...exerciseResult.issues, ...gymResult.issues]
+  const issues = [...machineResult.issues, ...gymResult.issues]
 
-  if (!exerciseResult.master || !gymResult.master || issues.length > 0) {
+  if (!machineResult.master || !gymResult.master || issues.length > 0) {
     return { issues }
   }
 
   return {
     masterData: {
-      exercises: exerciseResult.master,
+      machines: machineResult.master,
       gyms: gymResult.master,
     },
     issues,

@@ -143,7 +143,7 @@ Settings画面では次を確認する。
 - Remote同期失敗時、保存済みRuntime DataがあればLocal Fallbackで継続する。
 - 再起動後、Startup Syncが実行される。
 - status上でConfiguration / Credential / Runtime Dataが利用可能になる。
-- status上でPortal / Dashboard / Workouts / Exercises / Analytics / SettingsのHostingが利用可能になる。
+- status上でPortal / Dashboard / Workouts / Machines / Analytics / SettingsのHostingが利用可能になる。
 
 ## 未完了事項
 

@@ -4,14 +4,156 @@
   "date": "2026-05-17",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
-    {"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":12.5,"reps":10},{"set":2,"weight_kg":12.5,"reps":10},{"set":3,"weight_kg":17.5,"reps":8}]},
-    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":105,"reps":10},{"set":2,"weight_kg":125,"reps":10},{"set":3,"weight_kg":145,"reps":10}]},
-    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":30,"reps":10},{"set":2,"weight_kg":30,"reps":10},{"set":3,"weight_kg":40,"reps":10}]},
-    {"exercise_id":"hack-squat","sets":[{"set":1,"weight_kg":10,"reps":10},{"set":2,"weight_kg":20,"reps":10}]},
-    {"exercise_id":"abdominal","sets":[{"set":1,"weight_kg":10,"reps":10},{"set":2,"weight_kg":10,"reps":10},{"set":3,"weight_kg":15,"reps":10}]},
-    {"exercise_id":"torso-rotation","sets":[{"set":1,"weight_kg":25,"reps":10},{"set":2,"weight_kg":25,"reps":10}]},
-    {"exercise_id":"seated-row","sets":[{"set":1,"weight_kg":21.5,"reps":10},{"set":2,"weight_kg":21.5,"reps":10},{"set":3,"weight_kg":33,"reps":10}]},
-    {"exercise_id":"glute-bridge","sets":[{"set":1,"weight_kg":27.5,"reps":10},{"set":2,"weight_kg":27.5,"reps":10},{"set":3,"weight_kg":27.5,"reps":10}]}
+  "machines": [
+    {
+      "machine_id": "shoulder-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 12.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 12.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 17.5,
+          "reps": 8
+        }
+      ]
+    },
+    {
+      "machine_id": "leg-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 105,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 125,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 145,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "chest-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 30,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 30,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 40,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "hack-squat",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 10,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 20,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "abdominal",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 10,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 10,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 15,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "torso-rotation",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 25,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 25,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "seated-row",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 21.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 21.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 33,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "glute-bridge",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 27.5,
+          "reps": 10
+        }
+      ]
+    }
   ]
 }

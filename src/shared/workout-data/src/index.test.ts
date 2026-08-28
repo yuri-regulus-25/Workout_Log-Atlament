@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   loadSampleWorkoutSessions,
   loadWorkoutSessionsFromFiles,
-  parseExerciseMaster,
+  parseMachineMaster,
   parseGymMaster,
   parseWorkoutJson,
   parseWorkoutJsonl,
@@ -29,9 +29,9 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'complete',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'abdominal',
+            machine_id: 'abdominal',
             sets: [{ set: 1, weight_kg: 40, reps: 12 }],
           },
         ],
@@ -41,8 +41,8 @@ describe('workout-data', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions[0].date).toBe('2026-08-22')
     expect(result.sessions[0].gym.name).toBe('エニタイムフィットネス 横須賀汐入店')
-    expect(result.sessions[0].exercises[0]).toMatchObject({
-      exercise_id: 'abdominal',
+    expect(result.sessions[0].machines[0]).toMatchObject({
+      machine_id: 'abdominal',
       name: 'アブドミナル',
       body_part: 'core',
     })
@@ -52,8 +52,8 @@ describe('workout-data', () => {
     const result = parseWorkoutJsonl(
       'workouts/2026/08/2026-08-22.jsonl',
       [
-        '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"complete","gym_id":"af-shioiri","exercises":[{"exercise_id":"abdominal","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}',
-        '{"schema_version":1,"session_id":"2026-08-22-02","date":"2026-08-22","status":"complete","gym_id":"af-akihabara","exercises":[{"exercise_id":"lat-pulldown","sets":[{"set":1,"weight_kg":50,"reps":10}]}]}',
+        '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"complete","gym_id":"af-shioiri","machines":[{"machine_id":"abdominal","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}',
+        '{"schema_version":1,"session_id":"2026-08-22-02","date":"2026-08-22","status":"complete","gym_id":"af-akihabara","machines":[{"machine_id":"lat-pulldown","sets":[{"set":1,"weight_kg":50,"reps":10}]}]}',
       ].join('\n'),
     )
 
@@ -73,9 +73,9 @@ describe('workout-data', () => {
         date: '2026-08-14',
         status: 'partial',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'hip-abduction',
+            machine_id: 'hip-abduction',
             sets: [{ set: 1, weight_kg: 65, reps: 10 }],
           },
         ],
@@ -84,7 +84,7 @@ describe('workout-data', () => {
 
     expect(result.sessions[0].status).toBe('partial')
     expect(result.sessions[0].gym.name).toBe('エニタイムフィットネス 横須賀汐入店')
-    expect(result.sessions[0].exercises[0].exercise_id).toBe('hip-abduction')
+    expect(result.sessions[0].machines[0].machine_id).toBe('hip-abduction')
     expect(result.issues).toEqual([])
   })
 
@@ -97,7 +97,7 @@ describe('workout-data', () => {
         date: '2026-08-14',
         status: 'partial_log',
         gym_id: 'af-shioiri',
-        exercises: [],
+        machines: [],
       }),
     )
 
@@ -112,9 +112,9 @@ describe('workout-data', () => {
         date: '2026-08-14',
         status: 'complete',
         gym_id: 'unknown-gym',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'hip-abduction',
+            machine_id: 'hip-abduction',
             sets: [{ set: 1, weight_kg: 65, reps: 10 }],
           },
         ],
@@ -139,9 +139,9 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'complete',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'abdominal',
+            machine_id: 'abdominal',
             sets: [{ set: 1, weight_kg: 40, reps: 12 }],
           },
         ],
@@ -161,9 +161,9 @@ describe('workout-data', () => {
         date: '2026/08/22',
         status: 'complete',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'abdominal',
+            machine_id: 'abdominal',
             sets: [{ set: 1, weight_kg: 40, reps: 12 }],
           },
         ],
@@ -174,7 +174,7 @@ describe('workout-data', () => {
     expect(result.issues.some((issue) => issue.message.includes('YYYY-MM-DD'))).toBe(true)
   })
 
-  it('rejects exercises with missing exercise_id instead of generating placeholders', () => {
+  it('rejects machines with missing machine_id instead of generating placeholders', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
       JSON.stringify({
@@ -183,7 +183,7 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'partial',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
             sets: [{ set: 1, weight_kg: 40, reps: 12 }],
           },
@@ -194,12 +194,12 @@ describe('workout-data', () => {
     expect(result.sessions).toEqual([])
     expect(result.issues.map((issue) => issue.message)).toEqual(
       expect.arrayContaining([
-        'Exercise at index 0 is missing exercise_id.',
+        'Machine at index 0 is missing machine_id.',
       ]),
     )
   })
 
-  it('rejects unknown exercise_id references', () => {
+  it('rejects unknown machine_id references', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
       JSON.stringify({
@@ -208,9 +208,9 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'partial',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'unknown-exercise',
+            machine_id: 'unknown-machine',
             sets: [{ set: 1, weight_kg: 40, reps: 12 }],
           },
         ],
@@ -218,7 +218,7 @@ describe('workout-data', () => {
     )
 
     expect(result.sessions).toEqual([])
-    expect(result.issues.some((issue) => issue.message.includes('Unknown exercise_id'))).toBe(true)
+    expect(result.issues.some((issue) => issue.message.includes('Unknown machine_id'))).toBe(true)
   })
 
   it('rejects sets with missing required fields instead of generating set numbers', () => {
@@ -230,9 +230,9 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'partial',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'abdominal',
+            machine_id: 'abdominal',
             sets: [{ weight_kg: 40, reps: 12 }],
           },
         ],
@@ -243,12 +243,12 @@ describe('workout-data', () => {
     expect(result.issues.map((issue) => issue.message)).toEqual(
       expect.arrayContaining([
         'Set at index 0 requires numeric set, weight_kg, and reps.',
-        'Exercise "abdominal" has no valid sets.',
+        'Machine "abdominal" has no valid sets.',
       ]),
     )
   })
 
-  it('rejects complete sessions when exercises have empty sets', () => {
+  it('rejects complete sessions when machines have empty sets', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
       JSON.stringify({
@@ -257,9 +257,9 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'complete',
         gym_id: 'af-shioiri',
-        exercises: [
+        machines: [
           {
-            exercise_id: 'abdominal',
+            machine_id: 'abdominal',
             sets: [],
           },
         ],
@@ -269,13 +269,13 @@ describe('workout-data', () => {
     expect(result.sessions).toEqual([])
     expect(result.issues.map((issue) => issue.message)).toEqual(
       expect.arrayContaining([
-        'Exercise "abdominal" requires at least one set.',
-        'Complete workout session requires at least one valid exercise.',
+        'Machine "abdominal" requires at least one set.',
+        'Complete workout session requires at least one valid machine.',
       ]),
     )
   })
 
-  it('allows partial sessions with no exercises for intentionally incomplete logs', () => {
+  it('allows partial sessions with no machines for intentionally incomplete logs', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
       JSON.stringify({
@@ -284,13 +284,13 @@ describe('workout-data', () => {
         date: '2026-08-22',
         status: 'partial',
         gym_id: 'af-shioiri',
-        exercises: [],
+        machines: [],
       }),
     )
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(1)
-    expect(result.sessions[0].exercises).toEqual([])
+    expect(result.sessions[0].machines).toEqual([])
   })
 
   it('collects parse issues without dropping valid files', () => {
@@ -298,7 +298,7 @@ describe('workout-data', () => {
       {
         path: 'valid.json',
         content:
-          '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"partial","gym_id":"af-shioiri","exercises":[]}',
+          '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"partial","gym_id":"af-shioiri","machines":[]}',
       },
       { path: 'invalid.json', content: '{' },
     ])
@@ -307,14 +307,14 @@ describe('workout-data', () => {
     expect(result.issues).toHaveLength(1)
   })
 
-  it('validates exercise master records', () => {
-    const result = parseExerciseMaster(
-      'master/exercises.json',
+  it('validates machine master records', () => {
+    const result = parseMachineMaster(
+      'master/machines.json',
       JSON.stringify({
         schema_version: 1,
-        exercises: [
+        machines: [
           {
-            exercise_id: 'rear-delt',
+            machine_id: 'rear-delt',
             name: 'リアデルト',
             body_part: 'shoulders',
             aliases: [],
@@ -325,7 +325,7 @@ describe('workout-data', () => {
     )
 
     expect(result.issues).toEqual([])
-    expect(result.master?.exercises[0].body_part).toBe('shoulders')
+    expect(result.master?.machines[0].body_part).toBe('shoulders')
   })
 
   it('reports duplicate master ids', () => {

@@ -20,21 +20,21 @@ Raw session の required field:
 | `date` | string | yes | `YYYY-MM-DD`. |
 | `status` | string | yes | `complete` or `partial`. |
 | `gym_id` | string | yes | Gym Master で resolve できる必要がある。 |
-| `exercises` | array | yes | Exercise list。 |
+| `machines` | array | yes | Machine list。 |
 | `condition` | object | no | Optional session condition。 |
 | `notes` | string[] | no | Optional session notes。 |
 
-`complete` session は少なくとも 1 つの valid exercise を必要とする。`partial` session は empty exercise list を持てる。
+`complete` session は少なくとも 1 つの valid machine を必要とする。`partial` session は empty machine list を持てる。
 
-## Raw Exercise
+## Raw Machine
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `exercise_id` | string | yes | Exercise Master で resolve できる必要がある。 |
-| `sets` | array | yes | Valid exercise には少なくとも 1 つの valid set が必要。 |
-| `notes` | string[] | no | Optional exercise notes。 |
+| `machine_id` | string | yes | Machine Master で resolve できる必要がある。 |
+| `sets` | array | yes | Valid machine には少なくとも 1 つの valid set が必要。 |
+| `notes` | string[] | no | Optional machine notes。 |
 
-Workout file は exercise display name または body part を保存しない。これらの field は Master Data から取得される。
+Workout file は machine display name または body part を保存しない。これらの field は Master Data から取得される。
 
 ## Raw Set
 
@@ -55,8 +55,8 @@ Normalized runtime session は `workout-types` の TypeScript `WorkoutSession` s
 主な normalized change:
 
 - raw `gym_id` は resolved `gym` object に置き換えられる。
-- raw exercise は `name` と `body_part` で拡張される。
-- raw `exercise_id`、set data、notes は保持される。
+- raw machine は `name` と `body_part` で拡張される。
+- raw `machine_id`、set data、notes は保持される。
 
 ## Validation and Compatibility
 
@@ -67,7 +67,7 @@ Normalized runtime session は `workout-types` の TypeScript `WorkoutSession` s
 - invalid date format
 - invalid status
 - missing or unknown `gym_id`
-- missing or unknown `exercise_id`
+- missing or unknown `machine_id`
 - missing set field
 - duplicate Master ID
 - invalid Master body part

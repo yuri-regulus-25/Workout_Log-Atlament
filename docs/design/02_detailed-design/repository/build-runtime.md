@@ -28,7 +28,7 @@ Copy 対象:
 - `src/version.json` を `dist/version.json` へ配置する。
 - Dashboard を `dist/dashboard/` へ配置する。
 - Workouts を `dist/workouts/` へ配置する。
-- Exercises を `dist/exercises/` へ配置する。
+- Machines を `dist/machines/` へ配置する。
 - Analytics を `dist/analytics/` へ配置する。
 - Settings を `dist/settings/` へ配置する。
 
@@ -42,7 +42,7 @@ Development では local Node runtime と gateway を使用する。
 - Portal: `127.0.0.1:5174`
 - Dashboard: `127.0.0.1:5175`
 - Workouts: `127.0.0.1:5176`
-- Exercises: `127.0.0.1:5177`
+- Machines: `127.0.0.1:5177`
 - Analytics: `127.0.0.1:5178`
 - Settings: `127.0.0.1:5179`
 - Development Runtime API: `127.0.0.1:5180`

@@ -4,9 +4,9 @@
   "date": "2026-08-22",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "pectoral-fly",
+      "machine_id": "pectoral-fly",
       "sets": [
         {
           "set": 1,
@@ -28,7 +28,7 @@
       ]
     },
     {
-      "exercise_id": "shoulder-press",
+      "machine_id": "shoulder-press",
       "sets": [
         {
           "set": 1,

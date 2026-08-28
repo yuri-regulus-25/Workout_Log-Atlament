@@ -2,7 +2,7 @@ export const applicationRoutes = {
   portal: '/',
   dashboard: '/dashboard/',
   workouts: '/workouts/',
-  exercises: '/exercises/',
+  machines: '/machines/',
   analytics: '/analytics/',
   settings: '/settings/',
 } as const
