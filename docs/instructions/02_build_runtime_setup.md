@@ -41,7 +41,7 @@ npm run watch
 npm run watch:portal
 npm run watch:dashboard
 npm run watch:workouts
-npm run watch:exercises
+npm run watch:machines
 npm run watch:analytics
 npm run watch:settings
 ```
@@ -93,7 +93,7 @@ Gateway       5173
 Portal        5174
 Dashboard     5175
 Workouts      5176
-Exercises     5177
+Machines     5177
 Analytics     5178
 Settings      5179
 Dev API       5180

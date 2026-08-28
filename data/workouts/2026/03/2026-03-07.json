@@ -4,35 +4,75 @@
   "date": "2026-03-07",
   "status": "complete",
   "gym_id": "af-akihabara",
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "shoulder-press",
+      "machine_id": "shoulder-press",
       "sets": [
-        { "set": 1, "weight_kg": 18, "reps": 10 },
-        { "set": 2, "weight_kg": 18, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 18,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 18,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "chest-press",
+      "machine_id": "chest-press",
       "sets": [
-        { "set": 1, "weight_kg": 19, "reps": 10 },
-        { "set": 2, "weight_kg": 19, "reps": 10 },
-        { "set": 3, "weight_kg": 19, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 19,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 19,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 19,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "leg-extension",
+      "machine_id": "leg-extension",
       "sets": [
-        { "set": 1, "weight_kg": 41, "reps": 10 },
-        { "set": 2, "weight_kg": 41, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 41,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 41,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "hip-adduction",
+      "machine_id": "hip-adduction",
       "sets": [
-        { "set": 1, "weight_kg": 55, "reps": 20 },
-        { "set": 2, "weight_kg": 55, "reps": 20 },
-        { "set": 3, "weight_kg": 55, "reps": 20 }
+        {
+          "set": 1,
+          "weight_kg": 55,
+          "reps": 20
+        },
+        {
+          "set": 2,
+          "weight_kg": 55,
+          "reps": 20
+        },
+        {
+          "set": 3,
+          "weight_kg": 55,
+          "reps": 20
+        }
       ]
     }
   ]

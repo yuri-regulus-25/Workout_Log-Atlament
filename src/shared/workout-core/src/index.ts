@@ -1,73 +1,73 @@
 import type {
   BodyPart,
   BodyPartSummary,
-  ExerciseHistoryRow,
-  ExerciseSet,
+  MachineHistoryRow,
+  MachineSet,
   PersonalRecord,
-  WorkoutExercise,
+  WorkoutMachine,
   WorkoutRow,
   WorkoutSession,
   WorkoutStatus,
 } from '@workout-lab/workout-types'
 
-export function getSetVolume(set: ExerciseSet): number {
+export function getSetVolume(set: MachineSet): number {
   return set.weight_kg * set.reps
 }
 
-export function getExerciseVolume(exercise: WorkoutExercise): number {
-  return exercise.sets.reduce((total, set) => total + getSetVolume(set), 0)
+export function getMachineVolume(machine: WorkoutMachine): number {
+  return machine.sets.reduce((total, set) => total + getSetVolume(set), 0)
 }
 
 export function getTotalVolume(session: WorkoutSession): number {
-  return session.exercises.reduce((total, exercise) => total + getExerciseVolume(exercise), 0)
+  return session.machines.reduce((total, machine) => total + getMachineVolume(machine), 0)
 }
 
 export function getTotalSets(session: WorkoutSession): number {
-  return session.exercises.reduce((total, exercise) => total + exercise.sets.length, 0)
+  return session.machines.reduce((total, machine) => total + machine.sets.length, 0)
 }
 
 export const getSessionVolume = getTotalVolume
 export const getSessionSetCount = getTotalSets
 
-export function getExerciseOptions(sessions: WorkoutSession[]): WorkoutExercise[] {
-  const exercisesById = new Map<string, WorkoutExercise>()
+export function getMachineOptions(sessions: WorkoutSession[]): WorkoutMachine[] {
+  const machinesById = new Map<string, WorkoutMachine>()
 
   for (const session of sessions) {
-    for (const exercise of session.exercises) {
-      exercisesById.set(exercise.exercise_id, exercise)
+    for (const machine of session.machines) {
+      machinesById.set(machine.machine_id, machine)
     }
   }
 
-  return Array.from(exercisesById.values()).sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(machinesById.values()).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function getExerciseHistory(
+export function getMachineHistory(
   sessions: WorkoutSession[],
-  exerciseId: string,
-): ExerciseHistoryRow[] {
+  machineId: string,
+): MachineHistoryRow[] {
   return sessions.flatMap((session) =>
-    session.exercises
-      .filter((exercise) => exercise.exercise_id === exerciseId)
-      .map((exercise) => ({
+    session.machines
+      .filter((machine) => machine.machine_id === machineId)
+      .map((machine) => ({
         date: session.date,
         gym: session.gym.name,
-        exerciseId: exercise.exercise_id,
-        exerciseName: exercise.name,
-        bodyPart: exercise.body_part,
-        sets: exercise.sets.length,
-        bestWeight: getBestSetValue(exercise.sets, (set) => set.weight_kg),
-        bestReps: getBestSetValue(exercise.sets, (set) => set.reps),
-        volume: getExerciseVolume(exercise),
+        machineId: machine.machine_id,
+        machineName: machine.name,
+        bodyPart: machine.body_part,
+        sets: machine.sets.length,
+        bestWeight: getBestSetValue(machine.sets, (set) => set.weight_kg),
+        bestReps: getBestSetValue(machine.sets, (set) => set.reps),
+        volume: getMachineVolume(machine),
       })),
   ).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export function getMaxWeight(sessions: WorkoutSession[], exerciseId: string): number {
-  return Math.max(0, ...getExerciseHistory(sessions, exerciseId).map((history) => history.bestWeight))
+export function getMaxWeight(sessions: WorkoutSession[], machineId: string): number {
+  return Math.max(0, ...getMachineHistory(sessions, machineId).map((history) => history.bestWeight))
 }
 
-export function getMaxReps(sessions: WorkoutSession[], exerciseId: string): number {
-  return Math.max(0, ...getExerciseHistory(sessions, exerciseId).map((history) => history.bestReps))
+export function getMaxReps(sessions: WorkoutSession[], machineId: string): number {
+  return Math.max(0, ...getMachineHistory(sessions, machineId).map((history) => history.bestReps))
 }
 
 export function getEstimated1RM(weight: number, reps: number): number {
@@ -104,10 +104,10 @@ export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
   const machinesByBodyPart = new Map<BodyPart, Set<string>>()
 
   for (const session of sessions) {
-    for (const exercise of session.exercises) {
-      const machines = machinesByBodyPart.get(exercise.body_part) ?? new Set<string>()
-      machines.add(exercise.exercise_id)
-      machinesByBodyPart.set(exercise.body_part, machines)
+    for (const machine of session.machines) {
+      const machines = machinesByBodyPart.get(machine.body_part) ?? new Set<string>()
+      machines.add(machine.machine_id)
+      machinesByBodyPart.set(machine.body_part, machines)
     }
   }
 
@@ -121,12 +121,12 @@ export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
 
 export function getAverageSetWeight(
   sessions: WorkoutSession[],
-  exerciseId: string,
+  machineId: string,
 ): number | null {
   const weights = sessions.flatMap((session) =>
-    session.exercises
-      .filter((exercise) => exercise.exercise_id === exerciseId)
-      .flatMap((exercise) => exercise.sets.map((set) => set.weight_kg)),
+    session.machines
+      .filter((machine) => machine.machine_id === machineId)
+      .flatMap((machine) => machine.sets.map((set) => set.weight_kg)),
   )
 
   if (weights.length === 0) {
@@ -140,8 +140,8 @@ export function formatDisplayDate(date: string): string {
   return date.replaceAll('-', '/')
 }
 
-export function formatMachineTitleFromId(exerciseId: string): string {
-  return exerciseId
+export function formatMachineTitleFromId(machineId: string): string {
+  return machineId
     .split(/[-_]+/)
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -240,16 +240,16 @@ export function getBodyPartSummary(sessions: WorkoutSession[]): BodyPartSummary[
   const totals = new Map<string, BodyPartSummary>()
 
   for (const session of sessions) {
-    for (const exercise of session.exercises) {
-      const current = totals.get(exercise.body_part) ?? {
-        bodyPart: exercise.body_part,
+    for (const machine of session.machines) {
+      const current = totals.get(machine.body_part) ?? {
+        bodyPart: machine.body_part,
         sets: 0,
         volume: 0,
       }
 
-      current.sets += exercise.sets.length
-      current.volume += getExerciseVolume(exercise)
-      totals.set(exercise.body_part, current)
+      current.sets += machine.sets.length
+      current.volume += getMachineVolume(machine)
+      totals.set(machine.body_part, current)
     }
   }
 
@@ -260,26 +260,26 @@ export function getPersonalRecords(sessions: WorkoutSession[]): PersonalRecord[]
   const records = new Map<string, PersonalRecord>()
 
   for (const session of sessions) {
-    for (const exercise of session.exercises) {
-      for (const set of exercise.sets) {
+    for (const machine of session.machines) {
+      for (const set of machine.sets) {
         const estimated1RM = getEstimated1RM(set.weight_kg, set.reps)
         updateRecord(records, {
-          exerciseId: exercise.exercise_id,
-          exerciseName: exercise.name,
+          machineId: machine.machine_id,
+          machineName: machine.name,
           date: session.date,
           type: 'weight',
           value: set.weight_kg,
         })
         updateRecord(records, {
-          exerciseId: exercise.exercise_id,
-          exerciseName: exercise.name,
+          machineId: machine.machine_id,
+          machineName: machine.name,
           date: session.date,
           type: 'reps',
           value: set.reps,
         })
         updateRecord(records, {
-          exerciseId: exercise.exercise_id,
-          exerciseName: exercise.name,
+          machineId: machine.machine_id,
+          machineName: machine.name,
           date: session.date,
           type: 'estimated_1rm',
           value: estimated1RM,
@@ -349,16 +349,16 @@ export function toWorkoutRows(sessions: WorkoutSession[]): WorkoutRow[] {
     sessionId: session.session_id,
     date: session.date,
     gym: session.gym.name,
-    exerciseCount: session.exercises.length,
+    machineCount: session.machines.length,
     totalSets: getTotalSets(session),
     totalVolume: getTotalVolume(session),
-    exercises: session.exercises.map((exercise) => exercise.name).join(', '),
+    machines: session.machines.map((machine) => machine.name).join(', '),
     status: session.status,
   }))
 }
 
 function updateRecord(records: Map<string, PersonalRecord>, candidate: PersonalRecord) {
-  const key = `${candidate.exerciseId}:${candidate.type}`
+  const key = `${candidate.machineId}:${candidate.type}`
   const current = records.get(key)
 
   if (!current || candidate.value > current.value) {
@@ -370,7 +370,7 @@ function toUtcDate(date: string): Date {
   return new Date(`${date}T00:00:00Z`)
 }
 
-function getBestSetValue(sets: ExerciseSet[], selectValue: (set: ExerciseSet) => number): number {
+function getBestSetValue(sets: MachineSet[], selectValue: (set: MachineSet) => number): number {
   if (sets.length === 0) {
     return 0
   }

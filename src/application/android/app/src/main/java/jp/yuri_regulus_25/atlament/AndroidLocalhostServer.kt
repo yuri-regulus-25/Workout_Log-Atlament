@@ -43,15 +43,15 @@ class AndroidLocalhostServer(
     private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray)
     private data class RuntimeFetchedResources(
         val workoutFiles: List<RuntimeSourceFile>,
-        val exerciseMaster: RuntimeSourceFile?,
+        val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
-    private data class ExerciseMasterItem(val id: String, val name: String, val bodyPart: String)
+    private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String)
     private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
     private class AfException(val code: String, override val message: String) : Exception(message)
-    private val appNames = setOf("dashboard", "workouts", "exercises", "analytics", "settings")
+    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
-    private val resourceTypes = setOf("WORKOUT", "EXERCISE_MASTER", "GYM_MASTER")
+    private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
     private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
     private val credentialPreferences: SharedPreferences = context.getSharedPreferences("atlament_secure_credential", Context.MODE_PRIVATE)
@@ -228,7 +228,7 @@ class AndroidLocalhostServer(
         val normalized = route.trim('/')
         return when (app) {
             "workouts" -> normalized.matches(Regex("""\d{4}-\d{2}-\d{2}"""))
-            "exercises" -> normalized.matches(Regex("""[A-Za-z0-9][A-Za-z0-9_-]*"""))
+            "machines" -> normalized.matches(Regex("""[A-Za-z0-9][A-Za-z0-9_-]*"""))
             else -> false
         }
     }
@@ -279,7 +279,7 @@ class AndroidLocalhostServer(
           "portal": "${assetStatus("frontend/index.html")}",
           "dashboard": "${assetStatus("frontend/dashboard/index.html")}",
           "workouts": "${assetStatus("frontend/workouts/index.html")}",
-          "exercises": "${assetStatus("frontend/exercises/index.html")}",
+          "machines": "${assetStatus("frontend/machines/index.html")}",
           "analytics": "${assetStatus("frontend/analytics/index.html")}",
           "settings": "${assetStatus("frontend/settings/index.html")}"
         }
@@ -476,7 +476,7 @@ class AndroidLocalhostServer(
           },
           "resources": [
             { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory", "required": true, "emptyAllowed": false },
-            { "type": "EXERCISE_MASTER", "path": "master/exercises.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
+            { "type": "MACHINE_MASTER", "path": "master/machines.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
             { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file", "required": true, "emptyAllowed": false }
           ],
           "timeouts": {
@@ -763,25 +763,25 @@ class AndroidLocalhostServer(
         val configuration = JSONObject(loadConfigurationJson())
         val fetched = fetchConfiguredResources(configuration)
         val workoutFiles = fetched.workoutFiles
-        val exerciseMaster = fetched.exerciseMaster
+        val machineMaster = fetched.machineMaster
         val gymMaster = fetched.gymMaster
 
         val errors = JSONArray()
-        val exercises = exerciseMaster?.let { parseExerciseMaster(it, errors) }
+        val machines = machineMaster?.let { parseMachineMaster(it, errors) }
         val gyms = gymMaster?.let { parseGymMaster(it, errors) }
-        if (exerciseMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required exercise master resource is missing."))
+        if (machineMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required machine master resource is missing."))
         if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
         if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0 || exercises == null || gyms == null) return RuntimeBuildResult(null, errors)
+        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
             if (file.path.endsWith(".jsonl", ignoreCase = true)) {
                 file.content.split("\r\n", "\n").forEachIndexed { index, line ->
-                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, exercises, gyms, errors)?.let(sessions::put)
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors)?.let(sessions::put)
                 }
             } else if (file.path.endsWith(".json", ignoreCase = true)) {
-                buildSession(file.path, null, file.content, exercises, gyms, errors)?.let(sessions::put)
+                buildSession(file.path, null, file.content, machines, gyms, errors)?.let(sessions::put)
             }
         }
 
@@ -808,7 +808,7 @@ class AndroidLocalhostServer(
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val token = readCredentialToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
-        var exerciseMaster: RuntimeSourceFile? = null
+        var machineMaster: RuntimeSourceFile? = null
         var gymMaster: RuntimeSourceFile? = null
         val resources = configuration.getJSONArray("resources")
 
@@ -834,45 +834,45 @@ class AndroidLocalhostServer(
             }
 
             when (type) {
-                "EXERCISE_MASTER" -> exerciseMaster = fetched.firstOrNull()
+                "MACHINE_MASTER" -> machineMaster = fetched.firstOrNull()
                 "GYM_MASTER" -> gymMaster = fetched.firstOrNull()
                 "WORKOUT" -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
                 else -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) && it.path.contains("workouts/", ignoreCase = true) })
             }
         }
 
-        return RuntimeFetchedResources(workoutFiles, exerciseMaster, gymMaster)
+        return RuntimeFetchedResources(workoutFiles, machineMaster, gymMaster)
     }
 
-    private fun parseExerciseMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, ExerciseMasterItem> {
+    private fun parseMachineMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, MachineMasterItem> {
         return try {
             val root = JSONObject(file.content)
-            val items = root.optJSONArray("exercises")
+            val items = root.optJSONArray("machines")
             if (!root.has("schema_version") || items == null) {
-                errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master contract is invalid."))
+                errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master contract is invalid."))
                 return emptyMap()
             }
 
-            val result = linkedMapOf<String, ExerciseMasterItem>()
+            val result = linkedMapOf<String, MachineMasterItem>()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
-                val id = item?.optString("exercise_id").orEmpty().trim()
+                val id = item?.optString("machine_id").orEmpty().trim()
                 val name = item?.optString("name").orEmpty().trim()
                 val bodyPart = item?.optString("body_part").orEmpty().trim()
                 val hasActive = item?.has("active") == true
                 if (id.isBlank() || name.isBlank() || bodyPart !in bodyParts || !hasActive) {
-                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master item is invalid."))
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master item is invalid."))
                     return emptyMap()
                 }
                 if (result.containsKey(id)) {
-                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate exercise_id: $id."))
+                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine_id: $id."))
                     return emptyMap()
                 }
-                result[id] = ExerciseMasterItem(id, name, bodyPart)
+                result[id] = MachineMasterItem(id, name, bodyPart)
             }
             result
         } catch (_: Exception) {
-            errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Exercise master JSON is invalid."))
+            errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master JSON is invalid."))
             emptyMap()
         }
     }
@@ -914,7 +914,7 @@ class AndroidLocalhostServer(
         filePath: String,
         line: Int?,
         content: String,
-        exercises: Map<String, ExerciseMasterItem>,
+        machines: Map<String, MachineMasterItem>,
         gyms: Map<String, GymMasterItem>,
         errors: JSONArray
     ): JSONObject? {
@@ -930,14 +930,14 @@ class AndroidLocalhostServer(
         val date = root.optString("date").trim()
         val status = root.optString("status").trim()
         val gymId = root.optString("gym_id").trim()
-        val exerciseItems = root.optJSONArray("exercises")
+        val machineItems = root.optJSONArray("machines")
         val parsedDate = runCatching { LocalDate.parse(date) }.getOrNull()
-        if (schemaVersion == Int.MIN_VALUE || sessionId.isBlank() || parsedDate == null || status !in setOf("complete", "partial") || gymId.isBlank() || exerciseItems == null) {
+        if (schemaVersion == Int.MIN_VALUE || sessionId.isBlank() || parsedDate == null || status !in setOf("complete", "partial") || gymId.isBlank() || machineItems == null) {
             errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Workout required fields are invalid."))
             return null
         }
-        if (status == "complete" && exerciseItems.length() == 0) {
-            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires exercises."))
+        if (status == "complete" && machineItems.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires machines."))
             return null
         }
 
@@ -947,13 +947,13 @@ class AndroidLocalhostServer(
             return null
         }
 
-        val normalizedExercises = JSONArray()
-        for (index in 0 until exerciseItems.length()) {
-            val normalized = buildExercise(filePath, line, exerciseItems.optJSONObject(index), exercises, errors) ?: return null
-            normalizedExercises.put(normalized)
+        val normalizedMachines = JSONArray()
+        for (index in 0 until machineItems.length()) {
+            val normalized = buildMachine(filePath, line, machineItems.optJSONObject(index), machines, errors) ?: return null
+            normalizedMachines.put(normalized)
         }
-        if (status == "complete" && normalizedExercises.length() == 0) {
-            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires valid exercises."))
+        if (status == "complete" && normalizedMachines.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Complete workout session requires valid machines."))
             return null
         }
 
@@ -964,27 +964,27 @@ class AndroidLocalhostServer(
             .put("status", status)
             .put("gym", JSONObject().put("id", gym.id).put("name", gym.name).put("short_name", gym.shortName ?: JSONObject.NULL))
             .put("condition", root.optJSONObject("condition") ?: JSONObject.NULL)
-            .put("exercises", normalizedExercises)
+            .put("machines", normalizedMachines)
             .put("notes", readStringArray(root.optJSONArray("notes")))
     }
 
-    private fun buildExercise(
+    private fun buildMachine(
         filePath: String,
         line: Int?,
         item: JSONObject?,
-        masters: Map<String, ExerciseMasterItem>,
+        masters: Map<String, MachineMasterItem>,
         errors: JSONArray
     ): JSONObject? {
-        val exerciseId = item?.optString("exercise_id").orEmpty().trim()
+        val machineId = item?.optString("machine_id").orEmpty().trim()
         val setItems = item?.optJSONArray("sets")
-        if (item == null || exerciseId.isBlank() || setItems == null || setItems.length() == 0) {
-            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Exercise required fields are invalid."))
+        if (item == null || machineId.isBlank() || setItems == null || setItems.length() == 0) {
+            errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Machine required fields are invalid."))
             return null
         }
 
-        val master = masters[exerciseId]
+        val master = masters[machineId]
         if (master == null) {
-            errors.put(errorJson("MASTER_EXERCISE_NOT_FOUND", location(filePath, line) + "Exercise master is not found: $exerciseId."))
+            errors.put(errorJson("MASTER_MACHINE_NOT_FOUND", location(filePath, line) + "Machine master is not found: $machineId."))
             return null
         }
 
@@ -992,7 +992,7 @@ class AndroidLocalhostServer(
         for (index in 0 until setItems.length()) {
             val set = setItems.optJSONObject(index)
             if (set == null || !set.has("set") || !set.has("weight_kg") || !set.has("reps")) {
-                errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Set in exercise $exerciseId is invalid."))
+                errors.put(errorJson("RUNTIME_DATA_INVALID", location(filePath, line) + "Set in machine $machineId is invalid."))
                 return null
             }
             sets.put(JSONObject()
@@ -1006,7 +1006,7 @@ class AndroidLocalhostServer(
         }
 
         return JSONObject()
-            .put("exercise_id", exerciseId)
+            .put("machine_id", machineId)
             .put("name", master.name)
             .put("body_part", master.bodyPart)
             .put("sets", sets)

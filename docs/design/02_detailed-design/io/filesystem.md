@@ -12,7 +12,7 @@ Repository `dist/` と `dist-windows/` は generated artifact である。
 
 Node development runtime は以下を読み取る。
 
-- `data/master/exercises.json`
+- `data/master/machines.json`
 - `data/master/gyms.json`
 - `data/workouts/**/*.json`
 - `data/workouts/**/*.jsonl`

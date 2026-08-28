@@ -4,10 +4,86 @@
   "date": "2026-05-03",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
-    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":90,"reps":10},{"set":2,"weight_kg":105,"reps":10},{"set":3,"weight_kg":130,"reps":10},{"set":4,"weight_kg":140,"reps":10}]},
-    {"exercise_id":"glute-bridge","sets":[{"set":1,"weight_kg":40,"reps":10},{"set":2,"weight_kg":42.5,"reps":10},{"set":3,"weight_kg":50,"reps":10}]},
-    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":32.5,"reps":10},{"set":2,"weight_kg":35,"reps":10},{"set":3,"weight_kg":35,"reps":10}]},
-    {"exercise_id":"biceps-curl","sets":[{"set":1,"weight_kg":27.5,"reps":5},{"set":2,"weight_kg":20,"reps":10}]}
+  "machines": [
+    {
+      "machine_id": "leg-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 90,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 105,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 130,
+          "reps": 10
+        },
+        {
+          "set": 4,
+          "weight_kg": 140,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "glute-bridge",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 40,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 42.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 50,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "chest-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 32.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 35,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 35,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "biceps-curl",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 27.5,
+          "reps": 5
+        },
+        {
+          "set": 2,
+          "weight_kg": 20,
+          "reps": 10
+        }
+      ]
+    }
   ]
 }

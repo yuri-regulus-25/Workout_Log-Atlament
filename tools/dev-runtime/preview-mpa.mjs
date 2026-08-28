@@ -81,12 +81,12 @@ async function respondWorkoutData(response) {
 }
 
 async function loadMasterData(directory) {
-  const [exercises, gyms] = await Promise.all([
-    readJson(join(directory, 'exercises.json')),
+  const [machines, gyms] = await Promise.all([
+    readJson(join(directory, 'machines.json')),
     readJson(join(directory, 'gyms.json')),
   ])
 
-  return { exercises, gyms }
+  return { machines, gyms }
 }
 
 async function readJson(path) {
@@ -129,7 +129,7 @@ function resolveFile(pathname) {
 function resolveDefinedMpaRoute(pathname) {
   const normalized = pathname.replace(/\/+$/, '')
   if (/^\/workouts\/\d{4}-\d{2}-\d{2}$/.test(normalized)) return 'workouts/index.html'
-  if (/^\/exercises\/[A-Za-z0-9][A-Za-z0-9_-]*$/.test(normalized)) return 'exercises/index.html'
+  if (/^\/machines\/[A-Za-z0-9][A-Za-z0-9_-]*$/.test(normalized)) return 'machines/index.html'
   return null
 }
 

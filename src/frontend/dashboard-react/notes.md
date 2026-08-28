@@ -20,7 +20,7 @@
 ## Deliberate shortcuts
 
 - Uses runtime master/workout data loaded through `@workout-lab/workout-data`.
-- Links to `/workouts/`, `/workouts/:date`, `/exercises/:id`, and `/analytics/` assume future MPA integration.
+- Links to `/workouts/`, `/workouts/:date`, `/machines/:id`, and `/analytics/` assume future MPA integration.
 - Dashboard remains read-only.
 
 ## First impressions

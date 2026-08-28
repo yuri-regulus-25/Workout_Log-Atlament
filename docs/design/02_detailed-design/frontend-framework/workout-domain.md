@@ -39,7 +39,7 @@ Load issue は Data Load Warning として表示される。
 現行 list view:
 
 - すべての runtime session を load する
-- loaded session 内の exercise display name から machine option を build する
+- loaded session 内の machine display name から machine option を build する
 - `all` または 1 つの selected machine name filter を support する
 - `WorkoutGrid` を render する
 - selected session date の detail route を開く
@@ -55,10 +55,10 @@ Load issue は Data Load Warning として表示される。
 - date と session count を表示する
 - summary card として Machines、Sets、Volume、Sessions を表示する
 - content を session と gym で group 化する
-- 各 exercise の name、body part、exercise volume、sets を表示する
+- 各 machine の name、body part、machine volume、sets を表示する
 - RIR が存在する場合は表示する
 - session notes が存在する場合は表示する
-- 各 exercise を Performance Detail へ link する
+- 各 machine を Performance Detail へ link する
 - date に session がない場合、simple back link を表示する
 
 ## Core Use
@@ -67,7 +67,7 @@ Workout Domain は `workout-core` を以下に使用する。
 
 - display date formatting
 - body part display formatting
-- exercise/session volume
+- machine/session volume
 - set count
 - total weight label formatting
 

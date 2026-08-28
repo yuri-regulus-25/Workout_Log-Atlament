@@ -40,12 +40,12 @@ const workoutDataMiddleware: Connect.NextHandleFunction = async (_request, respo
 }
 
 async function loadMasterData(directory: string) {
-  const [exercises, gyms] = await Promise.all([
-    readJson(join(directory, 'exercises.json')),
+  const [machines, gyms] = await Promise.all([
+    readJson(join(directory, 'machines.json')),
     readJson(join(directory, 'gyms.json')),
   ])
 
-  return { exercises, gyms }
+  return { machines, gyms }
 }
 
 async function readJson(path: string) {

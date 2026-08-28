@@ -1,12 +1,12 @@
-# Exercises Frontend
+# Machines Frontend
 
 Angular + TypeScriptでPerformance Detail画面を実装しています。
 
 ## 担当Route
 
 ```text
-/exercises/
-/exercises/:id
+/machines/
+/machines/:id
 ```
 
 ## 主な表示内容
@@ -22,10 +22,10 @@ Angular + TypeScriptでPerformance Detail画面を実装しています。
 ## 開発起動
 
 ```sh
-npm run dev:exercises
+npm run dev:machines
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/exercises/` を開きます。Exercisesの開発Server固定Portは `127.0.0.1:5177` です。
+Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/machines/` を開きます。Machinesの開発Server固定Portは `127.0.0.1:5177` です。
 
 ## Build
 
@@ -33,11 +33,11 @@ Gateway経由で確認する場合はRepository直下で `npm run watch` を実�
 npm run build
 ```
 
-統合Buildにより、AngularのBuild Artifactは `dist/exercises/` に配置されます。Production buildでは `/exercises/` をbase hrefとして使用します。
+統合Buildにより、AngularのBuild Artifactは `dist/machines/` に配置されます。Production buildでは `/machines/` をbase hrefとして使用します。
 
 ## Favicon
 
-Angularのfaviconは `public/favicon.svg` を使用します。PortalのBuilt with表示も `dist/exercises/favicon.svg` を参照します。
+Angularのfaviconは `public/favicon.svg` を使用します。PortalのBuilt with表示も `dist/machines/favicon.svg` を参照します。
 
 ## Runtime Data
 

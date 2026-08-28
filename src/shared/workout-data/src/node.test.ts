@@ -11,11 +11,11 @@ describe('workout-data node loader', () => {
     await mkdir(month, { recursive: true })
     await writeFile(
       join(month, '2026-08-22.json'),
-      '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"complete","gym_id":"af-shioiri","exercises":[{"exercise_id":"abdominal","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}',
+      '{"schema_version":1,"session_id":"2026-08-22-01","date":"2026-08-22","status":"complete","gym_id":"af-shioiri","machines":[{"machine_id":"abdominal","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}',
     )
     await writeFile(
       join(month, '2026-08-23.jsonl'),
-      '{"schema_version":1,"session_id":"2026-08-23-01","date":"2026-08-23","status":"complete","gym_id":"af-akihabara","exercises":[{"exercise_id":"lat-pulldown","sets":[{"set":1,"weight_kg":50,"reps":10}]}]}',
+      '{"schema_version":1,"session_id":"2026-08-23-01","date":"2026-08-23","status":"complete","gym_id":"af-akihabara","machines":[{"machine_id":"lat-pulldown","sets":[{"set":1,"weight_kg":50,"reps":10}]}]}',
     )
 
     const result = await loadWorkoutSessionsFromDirectory(root)
@@ -34,8 +34,8 @@ describe('workout-data node loader', () => {
     await mkdir(master, { recursive: true })
     await mkdir(workouts, { recursive: true })
     await writeFile(
-      join(master, 'exercises.json'),
-      '{"schema_version":1,"exercises":[{"exercise_id":"rear-delt","name":"リアデルト","body_part":"shoulders","aliases":[],"active":true}]}',
+      join(master, 'machines.json'),
+      '{"schema_version":1,"machines":[{"machine_id":"rear-delt","name":"リアデルト","body_part":"shoulders","aliases":[],"active":true}]}',
     )
     await writeFile(
       join(master, 'gyms.json'),
@@ -43,7 +43,7 @@ describe('workout-data node loader', () => {
     )
     await writeFile(
       join(workouts, '2026-08-24.json'),
-      '{"schema_version":1,"session_id":"2026-08-24-01","date":"2026-08-24","status":"complete","gym_id":"af-shioiri","exercises":[{"exercise_id":"rear-delt","sets":[{"set":1,"weight_kg":20,"reps":12}]}]}',
+      '{"schema_version":1,"session_id":"2026-08-24-01","date":"2026-08-24","status":"complete","gym_id":"af-shioiri","machines":[{"machine_id":"rear-delt","sets":[{"set":1,"weight_kg":20,"reps":12}]}]}',
     )
 
     const masterResult = await loadMasterDataFromDirectory(master)
@@ -52,7 +52,7 @@ describe('workout-data node loader', () => {
     expect(masterResult.issues).toEqual([])
     expect(result.issues).toEqual([])
     expect(result.sessions[0].gym.short_name).toBe('AF横須賀汐入')
-    expect(result.sessions[0].exercises[0]).toMatchObject({
+    expect(result.sessions[0].machines[0]).toMatchObject({
       name: 'リアデルト',
       body_part: 'shoulders',
     })

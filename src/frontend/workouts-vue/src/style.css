@@ -39,30 +39,30 @@
   max-width: 760px;
 }
 
-.exercise-list {
+.machine-list {
   display: grid;
   gap: 14px;
 }
 
-.exercise-card {
+.machine-card {
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-inner);
   padding: 14px;
 }
 
-.exercise-header {
+.machine-header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
 }
 
-.exercise-header p {
+.machine-header p {
   margin-top: 2px;
   color: var(--wl-text-muted);
   font-size: 0.85rem;
 }
 
-.exercise-card ul {
+.machine-card ul {
   display: grid;
   gap: 6px;
   margin: 12px 0 0;

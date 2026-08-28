@@ -4,24 +4,60 @@
   "date": "2026-03-01",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "pulldown",
+      "machine_id": "pulldown",
       "sets": [
-        { "set": 1, "weight_kg": 20, "reps": 10 },
-        { "set": 2, "weight_kg": 20, "reps": 10 },
-        { "set": 3, "weight_kg": 20, "reps": 10 },
-        { "set": 4, "weight_kg": 20, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 4,
+          "weight_kg": 20,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "leg-press",
+      "machine_id": "leg-press",
       "sets": [
-        { "set": 1, "weight_kg": 25, "reps": 20 },
-        { "set": 2, "weight_kg": 25, "reps": 20 },
-        { "set": 3, "weight_kg": 25, "reps": 20 },
-        { "set": 4, "weight_kg": 25, "reps": 20 },
-        { "set": 5, "weight_kg": 25, "reps": 20 }
+        {
+          "set": 1,
+          "weight_kg": 25,
+          "reps": 20
+        },
+        {
+          "set": 2,
+          "weight_kg": 25,
+          "reps": 20
+        },
+        {
+          "set": 3,
+          "weight_kg": 25,
+          "reps": 20
+        },
+        {
+          "set": 4,
+          "weight_kg": 25,
+          "reps": 20
+        },
+        {
+          "set": 5,
+          "weight_kg": 25,
+          "reps": 20
+        }
       ]
     }
   ]

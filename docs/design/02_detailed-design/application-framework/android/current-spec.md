@@ -62,7 +62,7 @@ Current known app name:
 ```text
 dashboard
 workouts
-exercises
+machines
 analytics
 settings
 ```
@@ -80,7 +80,7 @@ Android は以下も serve する。
 Dynamic frontend route fallback は以下にのみ存在する。
 
 - `workouts/YYYY-MM-DD`
-- `exercises/<id>`
+- `machines/<id>`
 
 ## API
 

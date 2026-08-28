@@ -79,7 +79,7 @@ Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-w
 /
 /dashboard/
 /workouts/
-/exercises/
+/machines/
 /analytics/
 /settings/
 ```

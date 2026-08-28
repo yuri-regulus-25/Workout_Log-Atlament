@@ -1,7 +1,7 @@
 <main #shell class="app-shell {{ pageTransitionClassName }}">
   <header class="page-hero">
     <div class="hero-top">
-      <div class="atl-brand-row" aria-label="Atlament Exercises">
+      <div class="atl-brand-row" aria-label="Atlament Machines">
         <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
       </div>
     </div>
@@ -16,13 +16,13 @@
 
       <label class="field">
         <span>Machine</span>
-        <select [value]="selectedExerciseId()" (change)="selectExercise($any($event.target).value)">
-          @for (exercise of exerciseOptions(); track exercise.exercise_id) {
+        <select [value]="selectedMachineId()" (change)="selectMachine($any($event.target).value)">
+          @for (machine of machineOptions(); track machine.machine_id) {
             <option
-              [value]="exercise.exercise_id"
-              [selected]="exercise.exercise_id === selectedExerciseId()"
+              [value]="machine.machine_id"
+              [selected]="machine.machine_id === selectedMachineId()"
             >
-              {{ exercise.name }}
+              {{ machine.name }}
             </option>
           }
         </select>
@@ -38,7 +38,7 @@
     </section>
   }
 
-  @if (hasInvalidExerciseIdParameter()) {
+  @if (hasInvalidMachineIdParameter()) {
     <section class="parameter-error-card" role="alert" aria-live="polite">
       <p class="eyebrow">Parameter Error</p>
       <h2>パラメータ不正</h2>
@@ -50,7 +50,7 @@
         </svg>
         <span>存在しないマシンIDが指定されたため、初期表示を行います。</span>
       </p>
-      <p class="muted">指定ID: {{ invalidExerciseId() }}</p>
+      <p class="muted">指定ID: {{ invalidMachineId() }}</p>
     </section>
   }
 
@@ -145,7 +145,7 @@
         <span class="volume-cell">Volume</span>
       </div>
 
-      @for (row of history(); track row.date + row.exerciseId) {
+      @for (row of history(); track row.date + row.machineId) {
         <div class="history-row">
           <span class="date-cell">{{ formatDate(row.date) }}</span>
           <span class="gym-cell">{{ row.gym }}</span>

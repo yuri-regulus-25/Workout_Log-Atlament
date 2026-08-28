@@ -63,7 +63,7 @@ class MainActivity : Activity() {
             localhostServer = server
             if (loadInitialUrl) {
                 // The WebView always talks to packaged assets through localhost so Android and
-                // Windows exercise the same frontend/API contract shape.
+                // Windows machine the same frontend/API contract shape.
                 webView.loadUrl(server.baseUrl)
             }
         } catch (ex: Exception) {

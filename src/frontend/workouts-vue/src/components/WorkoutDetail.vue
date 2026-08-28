@@ -4,7 +4,7 @@ import {
   formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
-  getExerciseVolume,
+  getMachineVolume,
   getSessionSetCount,
   getSessionVolume,
 } from '@workout-lab/workout-core'
@@ -34,7 +34,7 @@ defineProps<{
       <dl class="detail-metrics">
         <div>
           <dt>Machines</dt>
-          <dd>{{ session.exercises.length }}</dd>
+          <dd>{{ session.machines.length }}</dd>
         </div>
         <div>
           <dt>Sets</dt>
@@ -46,16 +46,16 @@ defineProps<{
         </div>
       </dl>
 
-      <article v-for="exercise in session.exercises" :key="exercise.exercise_id" class="exercise-card">
-        <div class="exercise-header">
+      <article v-for="machine in session.machines" :key="machine.machine_id" class="machine-card">
+        <div class="machine-header">
           <div>
-            <h3>{{ exercise.name }}</h3>
-            <p>{{ formatBodyPart(exercise.body_part) }}</p>
+            <h3>{{ machine.name }}</h3>
+            <p>{{ formatBodyPart(machine.body_part) }}</p>
           </div>
-          <strong>{{ formatTotalWeight(getExerciseVolume(exercise)) }}</strong>
+          <strong>{{ formatTotalWeight(getMachineVolume(machine)) }}</strong>
         </div>
         <ul>
-          <li v-for="set in exercise.sets" :key="set.set">
+          <li v-for="set in machine.sets" :key="set.set">
             Set {{ set.set }} · {{ set.weight_kg }} kg × {{ set.reps }} reps
             <span v-if="set.rir !== undefined && set.rir !== null"> · RIR {{ set.rir }}</span>
           </li>
