@@ -282,6 +282,41 @@
   grid-column: 2;
 }
 
+.credential-expiry {
+  border: 1px solid var(--wl-border);
+  border-radius: var(--wl-radius-inner);
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.credential-expiry span {
+  color: var(--wl-text-muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.credential-expiry strong {
+  color: var(--wl-text-strong);
+}
+
+.credential-expiry p {
+  color: var(--wl-text-muted);
+  margin: 0;
+}
+
+.credential-expiry.valid {
+  border-color: var(--wl-success-border);
+  background: var(--wl-success-bg);
+}
+
+.credential-expiry.expired {
+  border-color: var(--wl-warning-border);
+  background: var(--wl-warning-bg);
+}
+
 .message {
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-inner);
