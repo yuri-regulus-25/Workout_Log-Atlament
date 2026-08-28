@@ -18,6 +18,13 @@ import {
 } from '@workout-lab/frontend-common'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
+import {
+  credentialExpiryPresets,
+  describeCredentialExpiry,
+  inferCredentialExpiryPreset,
+  resolveCredentialLimitDate,
+  type CredentialExpiryPreset,
+} from './credential-expiry'
 
 const resourceTypes = ['WORKOUT', 'MACHINE_MASTER', 'GYM_MASTER'] as const
 const resourceKinds = ['file', 'directory'] as const
@@ -66,6 +73,7 @@ function App() {
   })
   const [token, setToken] = createSignal('')
   const [limitDate, setLimitDate] = createSignal('')
+  const [expiryPreset, setExpiryPreset] = createSignal<CredentialExpiryPreset>('30')
   const [loading, setLoading] = createSignal(true)
   const [busy, setBusy] = createSignal<string | null>(null)
   const [message, setMessage] = createSignal<Message | null>(null)
@@ -73,6 +81,7 @@ function App() {
   let characterTriggerElement: HTMLParagraphElement | undefined
 
   const canOperate = createMemo(() => !loading() && busy() === null)
+  const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
 
   onMount(() => {
     const navigation = initializeAppNavigation({
@@ -165,7 +174,7 @@ function App() {
       const nextLimitDate = limitDate().trim()
       const result = await updateCredential({
         token: nextToken.length > 0 ? nextToken : null,
-        limitDate: nextLimitDate.length > 0 ? nextLimitDate : null,
+        limitDate: nextLimitDate.length > 0 ? nextLimitDate : resolveCredentialLimitDate(expiryPreset(), limitDate()),
       })
 
       setToken('')
@@ -222,6 +231,14 @@ function App() {
   function applyCredential(next: CredentialStatus) {
     setCredential(next)
     setLimitDate(next.limitDate ?? '')
+    setExpiryPreset(inferCredentialExpiryPreset(next.limitDate))
+  }
+
+  function updateExpiryPreset(value: CredentialExpiryPreset) {
+    setExpiryPreset(value)
+    if (value !== 'custom') {
+      setLimitDate(resolveCredentialLimitDate(value, limitDate()))
+    }
   }
 
   function updateResource(index: number, patch: Partial<ResourceConfiguration>) {
@@ -386,13 +403,27 @@ function App() {
             <strong>{credential()?.configured ? '設定済み' : '未設定'}</strong>
             <span>登録された情報は、システム内に保存されます。</span>
           </div>
+          <div class={`credential-expiry ${expiryDescription().state}`}>
+            <span>{expiryDescription().label}</span>
+            <strong>{credential()?.limitDate ?? '-'}</strong>
+            <p>{expiryDescription().detail}</p>
+          </div>
           <div class="form-grid">
             <Field label="GitHub Token">
               <input type="password" autocomplete="new-password" value={token()} onInput={(event) => setToken(event.currentTarget.value)} />
             </Field>
-            <Field label="Token Limit Date">
-              <input type="date" value={limitDate()} onInput={(event) => setLimitDate(event.currentTarget.value)} />
+            <Field label="Token Limit">
+              <select value={expiryPreset()} onChange={(event) => updateExpiryPreset(event.currentTarget.value as CredentialExpiryPreset)}>
+                <For each={credentialExpiryPresets}>
+                  {(preset) => <option value={preset.value}>{preset.label}</option>}
+                </For>
+              </select>
             </Field>
+            <Show when={expiryPreset() === 'custom'}>
+              <Field label="Custom Limit Date">
+                <input type="date" value={limitDate()} onInput={(event) => setLimitDate(event.currentTarget.value)} />
+              </Field>
+            </Show>
           </div>
           <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveCredential}>Update</button>
         </section>
