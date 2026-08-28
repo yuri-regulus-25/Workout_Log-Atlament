@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join, relative } from 'node:path'
 import {
@@ -15,6 +15,8 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 const apiRoutes = new Set([
   '/api/v1/common/status',
   '/api/v1/common/master-write/boundary',
+  '/api/v1/common/master-write/documents/MACHINE_MASTER',
+  '/api/v1/common/master-write/documents/GYM_MASTER',
   '/api/v1/common/runtime/workouts',
   '/api/workout-data',
 ])
@@ -43,6 +45,11 @@ createServer(async (request, response) => {
       return
     }
 
+    if (url.pathname.includes('/master-write/documents/')) {
+      await respondMasterDocument(request, response, url.pathname)
+      return
+    }
+
     await respondLegacyWorkoutData(response)
   } catch (error) {
     writeJson(response, 500, fail(
@@ -56,6 +63,8 @@ createServer(async (request, response) => {
   console.log('API:')
   console.log('  GET /api/v1/common/status')
   console.log('  GET /api/v1/common/master-write/boundary')
+  console.log('  GET|PUT /api/v1/common/master-write/documents/MACHINE_MASTER')
+  console.log('  GET|PUT /api/v1/common/master-write/documents/GYM_MASTER')
   console.log('  GET /api/v1/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
@@ -91,6 +100,7 @@ async function respondStatus(response) {
         machines: 'unknown',
         analytics: 'unknown',
         settings: 'unknown',
+        maintenance: 'unknown',
       },
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
@@ -123,6 +133,55 @@ async function respondRuntimeWorkouts(response) {
   }
 
   writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors))
+}
+
+async function respondMasterDocument(request, response, path) {
+  const type = path.endsWith('/MACHINE_MASTER') ? 'MACHINE_MASTER' : 'GYM_MASTER'
+  const documentPath = type === 'MACHINE_MASTER'
+    ? join(masterDirectory, 'machines.json')
+    : join(masterDirectory, 'gyms.json')
+  if (request.method === 'GET') {
+    writeJson(response, 200, ok({
+      type,
+      path: type === 'MACHINE_MASTER' ? 'master/machines.json' : 'master/gyms.json',
+      revision: await localRevision(documentPath),
+      content: await readFile(documentPath, 'utf8'),
+    }))
+    return
+  }
+
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET and PUT are supported.', true))
+    return
+  }
+
+  const payload = JSON.parse(await readRequestBody(request))
+  const currentRevision = await localRevision(documentPath)
+  if (payload.expectedRevision !== currentRevision) {
+    writeJson(response, 409, fail('MASTER_WRITE_CONFLICT', 'Master document revision has changed.', true))
+    return
+  }
+
+  await writeFile(documentPath, payload.content, 'utf8')
+  writeJson(response, 200, ok({
+    type,
+    path: type === 'MACHINE_MASTER' ? 'master/machines.json' : 'master/gyms.json',
+    revision: await localRevision(documentPath),
+  }))
+}
+
+async function localRevision(path) {
+  const current = await stat(path)
+  return `${current.size}-${Math.trunc(current.mtimeMs)}`
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    request.on('data', (chunk) => chunks.push(chunk))
+    request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    request.on('error', reject)
+  })
 }
 
 async function respondMasterWriteBoundary(response) {

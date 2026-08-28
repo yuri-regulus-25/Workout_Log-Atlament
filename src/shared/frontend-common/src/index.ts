@@ -55,6 +55,7 @@ export type AfStatus = {
       machines: string
       analytics: string
       settings: string
+      maintenance: string
     }
   }
   requiredActions: string[]
@@ -151,6 +152,11 @@ export type MasterDocumentWriteResult = {
   revision: string
 }
 
+export type MasterDocumentWriteRequest = {
+  expectedRevision: string
+  content: string
+}
+
 export type MasterWriteErrorCode =
   | 'MASTER_WRITE_INVALID'
   | 'MASTER_WRITE_CONFLICT'
@@ -190,6 +196,22 @@ export async function getCredentialStatus(): Promise<AfCallResult<CredentialStat
 
 export async function getMasterWriteBoundary(): Promise<AfCallResult<MasterWriteBoundary>> {
   return callAf<MasterWriteBoundary>('/api/v1/common/master-write/boundary')
+}
+
+export async function getMasterDocument(
+  type: MasterDocumentType,
+): Promise<AfCallResult<MasterDocumentSnapshot>> {
+  return callAf<MasterDocumentSnapshot>(`/api/v1/common/master-write/documents/${type}`)
+}
+
+export async function updateMasterDocument(
+  type: MasterDocumentType,
+  request: MasterDocumentWriteRequest,
+): Promise<AfCallResult<MasterDocumentWriteResult>> {
+  return callAf<MasterDocumentWriteResult>(`/api/v1/common/master-write/documents/${type}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  })
 }
 
 export async function updateCredential(

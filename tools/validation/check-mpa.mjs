@@ -11,6 +11,7 @@ const pages = [
   '/machines/pec-deck',
   '/analytics/',
   '/settings/',
+  '/maintenance/',
 ]
 
 const notFoundPages = [
@@ -18,6 +19,7 @@ const notFoundPages = [
   '/dashboard/2026-08-14',
   '/analytics/detail',
   '/settings/repository',
+  '/maintenance/detail',
 ]
 
 const server = spawn(process.execPath, ['tools/dev-runtime/preview-mpa.mjs'], {

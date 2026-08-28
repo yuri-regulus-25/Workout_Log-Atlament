@@ -1276,7 +1276,8 @@ public sealed class HostingStatusService
         ["workouts"] = "workouts",
         ["machines"] = "machines",
         ["analytics"] = "analytics",
-        ["settings"] = "settings"
+        ["settings"] = "settings",
+        ["maintenance"] = "maintenance"
     };
 
     public HostingStatusService(WindowsPathProvider paths)
@@ -1295,14 +1296,15 @@ public sealed class HostingStatusService
         Status("workouts"),
         Status("machines"),
         Status("analytics"),
-        Status("settings"));
+        Status("settings"),
+        Status("maintenance"));
 
     public FrontendArtifactFile? TryResolveFile(string requestPath, out bool artifactUnavailable)
     {
         artifactUnavailable = false;
         var normalized = requestPath.Trim('/');
         var app = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "portal";
-        if (app is "dashboard" or "workouts" or "machines" or "analytics" or "settings")
+        if (app is "dashboard" or "workouts" or "machines" or "analytics" or "settings" or "maintenance")
         {
             var relative = normalized.Length == app.Length ? "index.html" : normalized[(app.Length + 1)..];
             return Resolve(app, relative, out artifactUnavailable);
@@ -1577,6 +1579,22 @@ public sealed class AtlamentApplication
         }
     }
 
+    private static int MapMasterWriteStatusCode(IReadOnlyList<AfError> errors)
+    {
+        var code = errors.FirstOrDefault()?.Code;
+        return code switch
+        {
+            AfErrorCodes.MasterWriteConflict => 409,
+            AfErrorCodes.MasterWriteInvalid => 400,
+            AfErrorCodes.CredentialRequired or AfErrorCodes.GithubUnauthorized => 401,
+            AfErrorCodes.GithubForbidden => 403,
+            AfErrorCodes.GithubResourceNotFound => 404,
+            AfErrorCodes.GithubRateLimit => 429,
+            AfErrorCodes.GithubTimeout or AfErrorCodes.GithubConnectionFailed => 503,
+            _ => 500
+        };
+    }
+
     public AfResponse<RuntimeWorkoutData> GetRuntimeWorkouts()
     {
         var (data, errors) = _runtimeDataStore.LoadCurrent();
@@ -1661,6 +1679,51 @@ public sealed class AtlamentApplication
                 false,
                 false,
                 false)));
+    }
+
+    public async Task<(int StatusCode, AfResponse<MasterDocumentSnapshot> Response)> ReadMasterDocumentAsync(string type, CancellationToken cancellationToken)
+    {
+        if (_configurationStatus != ComponentStatus.available)
+        {
+            return (400, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+        }
+
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            return (401, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
+        }
+
+        var result = await _github.ReadMasterDocumentAsync(_configuration, _token, type, cancellationToken);
+        return result.Document is null
+            ? (MapMasterWriteStatusCode(result.Errors), new AfResponse<MasterDocumentSnapshot>(false, result.Errors, null))
+            : (200, AfResponses.Ok(result.Document));
+    }
+
+    public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
+        string type,
+        MasterDocumentWriteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_configurationStatus != ComponentStatus.available)
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+        }
+
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            return (401, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
+        }
+
+        var result = await _github.SaveMasterDocumentAsync(
+            _configuration,
+            _token,
+            type,
+            request.ExpectedRevision ?? "",
+            request.Content ?? "",
+            cancellationToken);
+        return result.Result is null
+            ? (MapMasterWriteStatusCode(result.Errors), new AfResponse<MasterDocumentWriteResult>(false, result.Errors, null))
+            : (200, AfResponses.Ok(result.Result));
     }
 
     public (int StatusCode, AfResponse<CredentialUpdateResult> Response) UpdateCredential(CredentialUpdate update)
