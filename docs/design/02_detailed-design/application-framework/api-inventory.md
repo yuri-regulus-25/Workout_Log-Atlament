@@ -45,6 +45,9 @@ Retained fields:
 
 - `versions.applicationFramework`: Settings display and AF version source.
 - `versions.frontendFramework`: Settings display.
+- `versions.nativePackages.windows.version`: Settings display for Windows package version.
+- `versions.nativePackages.android.versionName`: Settings display for Android package version.
+- `versions.nativePackages.android.versionCode`: Settings display for Android package code.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
 - `operations.manualSync`: Portal manual sync state display.
@@ -88,3 +91,7 @@ The legacy `/api/common/*` alias is removed from producers and documentation. Un
 ## Phase3 Contract Refinement
 
 `GET /api/v1/common/status` no longer publishes top-level `version`. The value duplicated `versions.applicationFramework`; Windows, Android, Node development runtime, and Settings now use `versions.applicationFramework` as the single AF version field.
+
+## Phase4 Read Information Extension
+
+`GET /api/v1/common/status` now publishes native package metadata under `versions.nativePackages`. This adds only package version information already held by platform build metadata or the shipped `version.json`; component status and data freshness fields were not added because Phase3 status already represents the existing component states and no lightweight cross-platform last-successful-sync persistence exists yet.

@@ -1191,7 +1191,7 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion()),
+        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions()),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1204,17 +1204,32 @@ public sealed class AtlamentApplication
 
     private string GetFrontendFrameworkVersion()
     {
+        var version = ReadVersionJson();
+        return version?["frontend"]?.GetValue<string>() ?? "unknown";
+    }
+
+    private NativePackageVersions GetNativePackageVersions()
+    {
+        var version = ReadVersionJson();
+        return new NativePackageVersions(
+            new WindowsPackageVersion(version?["windows"]?.GetValue<string>() ?? ApplicationFrameworkVersion),
+            new AndroidPackageVersion(
+                version?["android"]?["versionName"]?.GetValue<string>() ?? "unknown",
+                version?["android"]?["versionCode"]?.GetValue<int>() ?? 0));
+    }
+
+    private JsonNode? ReadVersionJson()
+    {
         try
         {
             var versionFile = _hosting.TryResolveFile("/version.json", out _);
-            if (versionFile is null) return "unknown";
+            if (versionFile is null) return null;
             using var stream = _hosting.OpenRead(versionFile);
-            var document = JsonNode.Parse(stream);
-            return document?["frontend"]?.GetValue<string>() ?? "unknown";
+            return JsonNode.Parse(stream);
         }
         catch
         {
-            return "unknown";
+            return null;
         }
     }
 

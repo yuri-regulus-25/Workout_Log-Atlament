@@ -95,6 +95,15 @@ async function loadVersions() {
   return {
     applicationFramework: 'development',
     frontendFramework: version.frontend,
+    nativePackages: {
+      windows: {
+        version: version.windows,
+      },
+      android: {
+        versionName: version.android.versionName,
+        versionCode: version.android.versionCode,
+      },
+    },
   }
 }
 
