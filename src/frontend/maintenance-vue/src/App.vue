@@ -14,21 +14,26 @@
       </v-alert>
 
       <section class="maintenance-toolbar">
+        <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
+          <v-btn value="masters">Masters</v-btn>
+          <v-btn value="unresolved">Unresolved</v-btn>
+        </v-btn-toggle>
         <v-btn-toggle v-model="selectedType" mandatory density="comfortable" variant="outlined">
           <v-btn value="MACHINE_MASTER">Machines</v-btn>
           <v-btn value="GYM_MASTER">Gyms</v-btn>
         </v-btn-toggle>
-        <v-btn-toggle v-model="displayMode" mandatory density="comfortable" variant="outlined">
+        <v-btn-toggle v-if="viewMode === 'masters'" v-model="displayMode" mandatory density="comfortable" variant="outlined">
           <v-btn value="active">Active</v-btn>
           <v-btn value="deleted">Deleted</v-btn>
           <v-btn value="all">All</v-btn>
         </v-btn-toggle>
         <v-spacer />
         <v-chip variant="tonal" size="small">{{ currentRevisionLabel }}</v-chip>
-        <v-btn prepend-icon="mdi-plus" color="primary" @click="openCreate">Create</v-btn>
+        <v-btn v-if="viewMode === 'masters'" prepend-icon="mdi-plus" color="primary" @click="openCreate">Create</v-btn>
       </section>
 
       <v-data-table
+        v-if="viewMode === 'masters'"
         class="maintenance-table"
         :headers="tableHeaders"
         :items="visibleRecords"
@@ -66,6 +71,31 @@
               :disabled="isGym(item) && item.main && !item.deleted"
               @click="requestLifecycleToggle(item)"
             />
+          </div>
+        </template>
+      </v-data-table>
+
+      <v-data-table
+        v-else
+        class="maintenance-table"
+        :headers="unresolvedHeaders"
+        :items="visibleUnresolved"
+        :loading="loading"
+        item-value="referenceId"
+        hover
+        density="comfortable"
+      >
+        <template #item.type="{ item }">
+          <v-chip size="small" variant="tonal">{{ item.type === 'MACHINE_MASTER' ? 'Machine' : 'Gym' }}</v-chip>
+        </template>
+        <template #item.affected="{ item }">
+          <v-chip size="small" variant="tonal">{{ item.affectedWorkouts.length }}</v-chip>
+        </template>
+        <template #item.actions="{ item }">
+          <div class="row-actions" @click.stop>
+            <v-btn icon="mdi-eye-outline" variant="text" size="small" aria-label="Inspect" @click="inspectUnresolved(item)" />
+            <v-btn icon="mdi-link-variant" variant="text" size="small" aria-label="Resolve" @click="openResolve(item)" />
+            <v-btn icon="mdi-plus" variant="text" size="small" aria-label="Create" @click="createFromUnresolved(item)" />
           </div>
         </template>
       </v-data-table>
@@ -125,6 +155,36 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+
+      <v-dialog v-model="resolveOpen" max-width="720" persistent>
+        <v-card>
+          <v-card-title>Resolve Unresolved Reference</v-card-title>
+          <v-card-text>
+            <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
+              {{ selectedUnresolved.referenceId }} affects {{ selectedUnresolved.affectedWorkouts.length }} workout(s).
+            </v-alert>
+            <v-select
+              v-model="resolveTargetId"
+              label="Target Master Record"
+              :items="resolveOptions"
+              item-title="title"
+              item-value="value"
+            />
+            <v-data-table
+              v-if="selectedUnresolved"
+              class="maintenance-table compact-table"
+              :headers="affectedHeaders"
+              :items="selectedUnresolved.affectedWorkouts"
+              density="compact"
+            />
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn variant="text" @click="resolveOpen = false">Cancel</v-btn>
+            <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="resolveToExisting">Resolve</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </main>
   </v-app>
 </template>
@@ -132,10 +192,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
-import { getMasterDocument, updateMasterDocument, type MasterDocumentType } from '@workout-lab/frontend-common'
+import {
+  getMasterDocument,
+  getUnresolvedMasterReferences,
+  updateMasterDocument,
+  type MasterDocumentType,
+  type UnresolvedMasterReference,
+} from '@workout-lab/frontend-common'
 
 type MachineRecord = {
   machine_id: string
+  source_ids?: string[]
   name: string
   body_part: string
   aliases: string[]
@@ -145,6 +212,7 @@ type MachineRecord = {
 
 type GymRecord = {
   gym_id: string
+  source_ids?: string[]
   name: string
   short_name?: string
   active: boolean
@@ -155,6 +223,7 @@ type GymRecord = {
 type RecordDraft = MachineRecord | GymRecord
 
 const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'core', 'cardio', 'other']
+const viewMode = ref<'masters' | 'unresolved'>('masters')
 const selectedType = ref<MasterDocumentType>('MACHINE_MASTER')
 const displayMode = ref<'active' | 'deleted' | 'all'>('active')
 const loading = ref(false)
@@ -163,15 +232,19 @@ const machineRevision = ref('')
 const gymRevision = ref('')
 const machines = ref<MachineRecord[]>([])
 const gyms = ref<GymRecord[]>([])
+const unresolved = ref<UnresolvedMasterReference[]>([])
 const referencedGyms = ref(new Set<string>())
 const referencedMachines = ref(new Set<string>())
 const dialogOpen = ref(false)
 const discardOpen = ref(false)
 const confirmOpen = ref(false)
+const resolveOpen = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const machineDraft = ref<MachineRecord | null>(null)
 const gymDraft = ref<GymRecord | null>(null)
 const pendingOperation = ref<{ kind: 'lifecycle' | 'main-gym'; record: RecordDraft } | null>(null)
+const selectedUnresolved = ref<UnresolvedMasterReference | null>(null)
+const resolveTargetId = ref('')
 const originalDraft = ref('')
 const aliasText = ref('')
 const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
@@ -212,6 +285,10 @@ const confirmText = computed(() => {
 })
 
 const records = computed(() => selectedType.value === 'MACHINE_MASTER' ? machines.value : gyms.value)
+const visibleUnresolved = computed(() => unresolved.value.filter((item) => item.type === selectedType.value))
+const resolveOptions = computed(() => records.value
+  .filter((record) => record.active && !record.deleted)
+  .map((record) => ({ title: `${recordId(record)} - ${record.name}`, value: recordId(record) })))
 
 const visibleRecords = computed(() => records.value.filter((record) => {
   if (displayMode.value === 'all') return true
@@ -235,6 +312,19 @@ const tableHeaders = computed(() => selectedType.value === 'MACHINE_MASTER'
       { title: 'State', key: 'state', sortable: false },
       { title: '', key: 'actions', sortable: false, width: 96 },
     ])
+
+const unresolvedHeaders = [
+  { title: 'Type', key: 'type', sortable: false },
+  { title: 'Reference ID', key: 'referenceId' },
+  { title: 'Affected', key: 'affected', sortable: false },
+  { title: '', key: 'actions', sortable: false, width: 128 },
+]
+
+const affectedHeaders = [
+  { title: 'Workout', key: 'filePath' },
+  { title: 'Line', key: 'line' },
+  { title: 'Message', key: 'message' },
+]
 
 const idError = computed(() => {
   if (!activeDraft.value || dialogMode.value === 'edit') return ''
@@ -264,11 +354,17 @@ async function loadAll() {
     machineRevision.value = machineResult.data.revision
     gymRevision.value = gymResult.data.revision
     await loadRuntimeReferences()
+    await loadUnresolved()
   } catch (error) {
     message.value = { type: 'error', text: error instanceof Error ? error.message : 'Master load failed.' }
   } finally {
     loading.value = false
   }
+}
+
+async function loadUnresolved() {
+  const result = await getUnresolvedMasterReferences()
+  unresolved.value = result.success && result.data ? result.data : []
 }
 
 async function loadRuntimeReferences() {
@@ -295,10 +391,10 @@ async function loadRuntimeReferences() {
 function openCreate() {
   dialogMode.value = 'create'
   machineDraft.value = selectedType.value === 'MACHINE_MASTER'
-    ? { machine_id: '', name: '', body_part: 'other', aliases: [], active: true, deleted: false }
+    ? { machine_id: '', source_ids: [], name: '', body_part: 'other', aliases: [], active: true, deleted: false }
     : null
   gymDraft.value = selectedType.value === 'GYM_MASTER'
-    ? { gym_id: '', name: '', short_name: '', active: true, deleted: false, main: false }
+    ? { gym_id: '', source_ids: [], name: '', short_name: '', active: true, deleted: false, main: false }
     : null
   aliasText.value = ''
   originalDraft.value = JSON.stringify(activeDraft.value)
@@ -320,6 +416,7 @@ function openCopy(record: RecordDraft) {
     machineDraft.value = structuredClone(record)
     gymDraft.value = null
     machineDraft.value.machine_id = ''
+    machineDraft.value.source_ids = []
     machineDraft.value.active = true
     machineDraft.value.deleted = false
     aliasText.value = machineDraft.value.aliases.join(', ')
@@ -327,6 +424,7 @@ function openCopy(record: RecordDraft) {
     gymDraft.value = structuredClone(record)
     machineDraft.value = null
     gymDraft.value.gym_id = ''
+    gymDraft.value.source_ids = []
     gymDraft.value.active = true
     gymDraft.value.deleted = false
     gymDraft.value.main = false
@@ -334,6 +432,47 @@ function openCopy(record: RecordDraft) {
   }
   originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
+}
+
+function inspectUnresolved(item: UnresolvedMasterReference) {
+  selectedUnresolved.value = item
+  resolveTargetId.value = ''
+  resolveOpen.value = true
+}
+
+function openResolve(item: UnresolvedMasterReference) {
+  selectedType.value = item.type
+  inspectUnresolved(item)
+}
+
+function createFromUnresolved(item: UnresolvedMasterReference) {
+  selectedType.value = item.type
+  viewMode.value = 'masters'
+  dialogMode.value = 'create'
+  if (item.type === 'MACHINE_MASTER') {
+    machineDraft.value = { machine_id: item.referenceId, source_ids: [], name: item.referenceId, body_part: 'other', aliases: [], active: true, deleted: false }
+    gymDraft.value = null
+    aliasText.value = ''
+  } else {
+    gymDraft.value = { gym_id: item.referenceId, source_ids: [], name: item.referenceId, short_name: '', active: true, deleted: false, main: false }
+    machineDraft.value = null
+    aliasText.value = ''
+  }
+  originalDraft.value = JSON.stringify(activeDraft.value)
+  dialogOpen.value = true
+}
+
+async function resolveToExisting() {
+  if (!selectedUnresolved.value || !resolveTargetId.value) return
+  const unresolvedItem = selectedUnresolved.value
+  const targetId = resolveTargetId.value
+  const next = records.value.map((record) => {
+    if (recordId(record) !== targetId) return record
+    const sourceIds = new Set([...(record.source_ids ?? []), unresolvedItem.referenceId])
+    return { ...record, source_ids: Array.from(sourceIds).sort() }
+  })
+  await saveRecords(unresolvedItem.type, next)
+  resolveOpen.value = false
 }
 
 function requestLifecycleToggle(record: RecordDraft) {
@@ -413,24 +552,12 @@ async function saveRecord(record: RecordDraft, mode: 'create' | 'edit') {
       const next = mode === 'create'
         ? [...machines.value, record as MachineRecord]
         : machines.value.map((machine) => machine.machine_id === (record as MachineRecord).machine_id ? record as MachineRecord : machine)
-      const result = await updateMasterDocument('MACHINE_MASTER', {
-        expectedRevision: machineRevision.value,
-        content: JSON.stringify({ schema_version: 1, machines: next }, null, 2),
-      })
-      if (!result.success || !result.data) throw new Error(result.errors[0]?.message ?? 'Machine master save failed.')
-      machines.value = next
-      machineRevision.value = result.data.revision
+      await saveRecords('MACHINE_MASTER', next)
     } else {
       const next = mode === 'create'
         ? [...gyms.value, record as GymRecord]
         : gyms.value.map((gym) => gym.gym_id === (record as GymRecord).gym_id ? record as GymRecord : gym)
-      const result = await updateMasterDocument('GYM_MASTER', {
-        expectedRevision: gymRevision.value,
-        content: JSON.stringify({ schema_version: 1, gyms: next }, null, 2),
-      })
-      if (!result.success || !result.data) throw new Error(result.errors[0]?.message ?? 'Gym master save failed.')
-      gyms.value = next
-      gymRevision.value = result.data.revision
+      await saveRecords('GYM_MASTER', next)
     }
     message.value = { type: 'success', text: 'Saved.' }
   } catch (error) {
@@ -438,6 +565,24 @@ async function saveRecord(record: RecordDraft, mode: 'create' | 'edit') {
   } finally {
     saving.value = false
   }
+}
+
+async function saveRecords(type: MasterDocumentType, next: RecordDraft[]) {
+  const result = await updateMasterDocument(type, {
+    expectedRevision: type === 'MACHINE_MASTER' ? machineRevision.value : gymRevision.value,
+    content: JSON.stringify(type === 'MACHINE_MASTER'
+      ? { schema_version: 1, machines: next }
+      : { schema_version: 1, gyms: next }, null, 2),
+  })
+  if (!result.success || !result.data) throw new Error(result.errors[0]?.message ?? 'Master save failed.')
+  if (type === 'MACHINE_MASTER') {
+    machines.value = next as MachineRecord[]
+    machineRevision.value = result.data.revision
+  } else {
+    gyms.value = next as GymRecord[]
+    gymRevision.value = result.data.revision
+  }
+  await loadUnresolved()
 }
 
 async function saveMainGym(record: GymRecord) {

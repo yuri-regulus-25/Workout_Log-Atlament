@@ -508,7 +508,7 @@ function normalizeMachine(
   }
 
   return {
-    machine_id: machineId,
+    machine_id: masterMachine.machine_id,
     name: masterMachine.name,
     body_part: masterMachine.body_part,
     sets,
@@ -678,6 +678,7 @@ function normalizeMachineMasterItem(
   }
 
   const machineId = readString(value, 'machine_id')
+  const sourceIds = readStringArray(value, 'source_ids') ?? []
   const name = readString(value, 'name')
   const bodyPart = readString(value, 'body_part')
   const aliases = readStringArray(value, 'aliases') ?? []
@@ -709,7 +710,7 @@ function normalizeMachineMasterItem(
   }
 
   return machineId && name && bodyPart && isBodyPart(bodyPart) && active !== null
-    ? { machine_id: machineId, name, body_part: bodyPart, aliases, active, deleted }
+    ? { machine_id: machineId, source_ids: sourceIds, name, body_part: bodyPart, aliases, active, deleted }
     : null
 }
 
@@ -726,6 +727,7 @@ function normalizeGymMasterItem(
   }
 
   const gymId = readString(value, 'gym_id')
+  const sourceIds = readStringArray(value, 'source_ids') ?? []
   const name = readString(value, 'name')
   const shortName = readString(value, 'short_name')
   const active = readBoolean(value, 'active')
@@ -757,8 +759,8 @@ function normalizeGymMasterItem(
   }
 
   return shortName
-    ? { gym_id: gymId, name, short_name: shortName, active, deleted, main }
-    : { gym_id: gymId, name, active, deleted, main }
+    ? { gym_id: gymId, source_ids: sourceIds, name, short_name: shortName, active, deleted, main }
+    : { gym_id: gymId, source_ids: sourceIds, name, active, deleted, main }
 }
 
 function createMasterLookup(
@@ -771,11 +773,31 @@ function createMasterLookup(
   issues.push(...machineResult.issues, ...gymResult.issues)
 
   return {
-    machinesById: new Map(
-      (machineResult.master?.machines ?? []).map((machine) => [machine.machine_id, machine]),
-    ),
-    gymsById: new Map((gymResult.master?.gyms ?? []).map((gym) => [gym.gym_id, gym])),
+    machinesById: createMachineLookup(machineResult.master?.machines ?? []),
+    gymsById: createGymLookup(gymResult.master?.gyms ?? []),
   }
+}
+
+function createMachineLookup(machines: MachineMasterItem[]): Map<string, MachineMasterItem> {
+  const lookup = new Map<string, MachineMasterItem>()
+  for (const machine of machines) {
+    lookup.set(machine.machine_id, machine)
+    for (const sourceId of machine.source_ids ?? []) {
+      lookup.set(sourceId, machine)
+    }
+  }
+  return lookup
+}
+
+function createGymLookup(gyms: GymMasterItem[]): Map<string, GymMasterItem> {
+  const lookup = new Map<string, GymMasterItem>()
+  for (const gym of gyms) {
+    lookup.set(gym.gym_id, gym)
+    for (const sourceId of gym.source_ids ?? []) {
+      lookup.set(sourceId, gym)
+    }
+  }
+  return lookup
 }
 
 function isMasterLookup(value: WorkoutMasterData | MasterLookup): value is MasterLookup {

@@ -44,6 +44,7 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 | GET | `/credential/status` | Token value を含まない credential status。 |
 | POST | `/credential` | Credential token と limit date の update。 |
 | GET | `/master-write/boundary` | Master write の固定 allowlist と security state。 |
+| GET | `/master-write/unresolved` | Workout Data 上の未解決 Master reference 一覧。 |
 | GET | `/master-write/documents/{type}` | Master document の current revision と content。 |
 | PUT | `/master-write/documents/{type}` | Expected revision 付き Master document write。 |
 | POST | `/shutdown` | Application shutdown request。 |
@@ -162,9 +163,31 @@ Successful write response data:
 }
 ```
 
+`GET /master-write/unresolved` response data:
+
+```json
+[
+  {
+    "type": "MACHINE_MASTER",
+    "referenceId": "legacy-machine-id",
+    "affectedWorkouts": [
+      {
+        "filePath": "data/workouts/2026/08/2026-08-24.json",
+        "line": null,
+        "message": "data/workouts/2026/08/2026-08-24.json: Machine master is not found: legacy-machine-id."
+      }
+    ]
+  }
+]
+```
+
+Unresolved list は current remote Workout/Master files を read して build validation error から生成する。Raw Workout JSON は更新しない。
+
 Write は GitHub Contents API の current SHA と `expectedRevision` を比較してから 1 回の PUT を実行する。Mismatch は `MASTER_WRITE_CONFLICT` であり、client は再取得して表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
 
 Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine を logical delete する write も reject する。
+
+Unresolved reference を既存 Master record へ resolve する場合は、Master record の optional `source_ids` に unresolved raw ID を追加する。Runtime normalization は `machine_id` / `gym_id` に加えて `source_ids` を lookup key として扱い、normalized output は canonical Master ID を返す。新規 Master record で resolve する場合は unresolved raw ID を canonical ID として通常 Create flow を通す。
 
 主な failure code:
 

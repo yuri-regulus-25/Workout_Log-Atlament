@@ -109,6 +109,16 @@ public sealed record MasterDocumentWriteResult(
     [property: JsonPropertyName("path")] string Path,
     [property: JsonPropertyName("revision")] string Revision);
 
+public sealed record UnresolvedMasterReference(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("referenceId")] string ReferenceId,
+    [property: JsonPropertyName("affectedWorkouts")] IReadOnlyList<UnresolvedAffectedWorkout> AffectedWorkouts);
+
+public sealed record UnresolvedAffectedWorkout(
+    [property: JsonPropertyName("filePath")] string FilePath,
+    [property: JsonPropertyName("line")] int? Line,
+    [property: JsonPropertyName("message")] string Message);
+
 public sealed record SyncResult(
     [property: JsonPropertyName("degraded")] bool Degraded);
 

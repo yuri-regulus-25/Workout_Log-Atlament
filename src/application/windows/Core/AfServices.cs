@@ -448,10 +448,20 @@ public sealed class RuntimeDataBuilder
                     return new();
                 }
 
-                if (!result.TryAdd(id, new MachineMasterItem(id, name, bodyPart)))
+                var record = new MachineMasterItem(id, name, bodyPart);
+                if (!result.TryAdd(id, record))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine_id: {id}.", false));
                     return new();
+                }
+
+                foreach (var sourceId in ReadStringArray(item, "source_ids"))
+                {
+                    if (!result.TryAdd(sourceId, record))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine source_id: {sourceId}.", false));
+                        return new();
+                    }
                 }
             }
 
@@ -488,10 +498,20 @@ public sealed class RuntimeDataBuilder
                 }
 
                 TryGetString(item, "short_name", out var shortName);
-                if (!result.TryAdd(id, new GymMasterItem(id, name, shortName)))
+                var record = new GymMasterItem(id, name, shortName);
+                if (!result.TryAdd(id, record))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym_id: {id}.", false));
                     return new();
+                }
+
+                foreach (var sourceId in ReadStringArray(item, "source_ids"))
+                {
+                    if (!result.TryAdd(sourceId, record))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym source_id: {sourceId}.", false));
+                        return new();
+                    }
                 }
             }
 
@@ -626,7 +646,7 @@ public sealed class RuntimeDataBuilder
                 TryGetOptionalString(setItem, "note")));
         }
 
-        return (new WorkoutMachine(machineId, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
+        return (new WorkoutMachine(master.Id, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
     }
 
     private static SessionCondition? ReadCondition(JsonElement root)
@@ -753,6 +773,15 @@ public static class MasterWriteValidator
                     errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate machine_id: {id}.", true));
                     return;
                 }
+
+                foreach (var sourceId in ReadStringArray(machine, "source_ids"))
+                {
+                    if (!ids.Add(sourceId))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate machine source_id: {sourceId}.", true));
+                        return;
+                    }
+                }
             }
         }
         catch (JsonException)
@@ -792,6 +821,15 @@ public static class MasterWriteValidator
                 {
                     errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate gym_id: {id}.", true));
                     return;
+                }
+
+                foreach (var sourceId in ReadStringArray(gym, "source_ids"))
+                {
+                    if (!ids.Add(sourceId))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate gym source_id: {sourceId}.", true));
+                        return;
+                    }
                 }
 
                 if (!main)
@@ -847,6 +885,20 @@ public static class MasterWriteValidator
 
         value = child.GetBoolean();
         return true;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var child) || child.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return child.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString()?.Trim() ?? "")
+            .Where(value => value.Length > 0)
+            .ToArray();
     }
 }
 
@@ -1740,6 +1792,36 @@ public sealed class AtlamentApplication
             : (200, AfResponses.Ok(result.Document));
     }
 
+    public async Task<(int StatusCode, AfResponse<IReadOnlyList<UnresolvedMasterReference>> Response)> GetUnresolvedMasterReferencesAsync(CancellationToken cancellationToken)
+    {
+        if (_configurationStatus != ComponentStatus.available)
+        {
+            return (400, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+        }
+
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            return (401, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
+        }
+
+        var remote = await _github.FetchAsync(_configuration, _token, cancellationToken);
+        if (remote.Errors.Count > 0)
+        {
+            return (MapMasterWriteStatusCode(remote.Errors), new AfResponse<IReadOnlyList<UnresolvedMasterReference>>(false, remote.Errors, null));
+        }
+
+        var machineMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/machines.json", StringComparison.OrdinalIgnoreCase));
+        var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
+        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (machineMaster is null || gymMaster is null)
+        {
+            return (404, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true)));
+        }
+
+        var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
+        return (200, AfResponses.Ok(BuildUnresolvedMasterReferences(build.Errors)));
+    }
+
     public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
         string type,
         MasterDocumentWriteRequest request,
@@ -1839,6 +1921,58 @@ public sealed class AtlamentApplication
         return deleted
             .Select(id => new AfError(AfErrorCodes.MasterWriteInvalid, $"Referenced Gym cannot be deleted: {id}.", true))
             .ToArray();
+    }
+
+    private static IReadOnlyList<UnresolvedMasterReference> BuildUnresolvedMasterReferences(IReadOnlyList<AfError> errors)
+    {
+        var groups = new Dictionary<(string Type, string ReferenceId), List<UnresolvedAffectedWorkout>>();
+        foreach (var error in errors.Where(error => error.Code is AfErrorCodes.MasterMachineNotFound or AfErrorCodes.MasterGymNotFound))
+        {
+            var marker = error.Code == AfErrorCodes.MasterMachineNotFound
+                ? "Machine master is not found: "
+                : "Gym master is not found: ";
+            var markerIndex = error.Message.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex < 0)
+            {
+                continue;
+            }
+
+            var referenceId = error.Message[(markerIndex + marker.Length)..].Trim().TrimEnd('.');
+            if (referenceId.Length == 0)
+            {
+                continue;
+            }
+
+            var (filePath, line) = ParseErrorLocation(error.Message);
+            var key = (error.Code == AfErrorCodes.MasterMachineNotFound ? "MACHINE_MASTER" : "GYM_MASTER", referenceId);
+            if (!groups.TryGetValue(key, out var affected))
+            {
+                affected = new List<UnresolvedAffectedWorkout>();
+                groups[key] = affected;
+            }
+
+            affected.Add(new UnresolvedAffectedWorkout(filePath, line, error.Message));
+        }
+
+        return groups
+            .OrderBy(group => group.Key.Type, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.ReferenceId, StringComparer.Ordinal)
+            .Select(group => new UnresolvedMasterReference(group.Key.Type, group.Key.ReferenceId, group.Value))
+            .ToArray();
+    }
+
+    private static (string FilePath, int? Line) ParseErrorLocation(string message)
+    {
+        var separator = message.IndexOf(": ", StringComparison.Ordinal);
+        var location = separator < 0 ? message : message[..separator];
+        var lineMarker = ": line ";
+        var lineIndex = location.LastIndexOf(lineMarker, StringComparison.Ordinal);
+        if (lineIndex >= 0 && int.TryParse(location[(lineIndex + lineMarker.Length)..], out var line))
+        {
+            return (location[..lineIndex], line);
+        }
+
+        return (location, null);
     }
 
     public (int StatusCode, AfResponse<CredentialUpdateResult> Response) UpdateCredential(CredentialUpdate update)

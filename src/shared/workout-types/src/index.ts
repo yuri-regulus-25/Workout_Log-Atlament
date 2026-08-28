@@ -63,6 +63,7 @@ export type WorkoutStatus = 'complete' | 'partial'
 
 export type MachineMasterItem = {
   machine_id: string
+  source_ids?: string[]
   name: string
   body_part: BodyPart
   aliases?: string[]
@@ -77,6 +78,7 @@ export type MachineMaster = {
 
 export type GymMasterItem = {
   gym_id: string
+  source_ids?: string[]
   name: string
   short_name?: string
   active: boolean

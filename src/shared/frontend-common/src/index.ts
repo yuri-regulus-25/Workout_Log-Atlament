@@ -152,6 +152,18 @@ export type MasterDocumentWriteResult = {
   revision: string
 }
 
+export type UnresolvedAffectedWorkout = {
+  filePath: string
+  line?: number | null
+  message: string
+}
+
+export type UnresolvedMasterReference = {
+  type: MasterDocumentType
+  referenceId: string
+  affectedWorkouts: UnresolvedAffectedWorkout[]
+}
+
 export type MasterDocumentWriteRequest = {
   expectedRevision: string
   content: string
@@ -202,6 +214,10 @@ export async function getMasterDocument(
   type: MasterDocumentType,
 ): Promise<AfCallResult<MasterDocumentSnapshot>> {
   return callAf<MasterDocumentSnapshot>(`/api/v1/common/master-write/documents/${type}`)
+}
+
+export async function getUnresolvedMasterReferences(): Promise<AfCallResult<UnresolvedMasterReference[]>> {
+  return callAf<UnresolvedMasterReference[]>('/api/v1/common/master-write/unresolved')
 }
 
 export async function updateMasterDocument(
