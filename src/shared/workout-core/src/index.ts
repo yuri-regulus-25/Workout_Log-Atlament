@@ -289,6 +289,20 @@ export type MasterReferenceValidationOptions = {
   mode?: MasterValidationMode
 }
 
+export type HistoricalMasterReferenceState = 'active' | 'inactive' | 'deleted' | 'missing'
+
+export type HistoricalMasterReference<TMasterItem> = {
+  referenceId: string
+  state: HistoricalMasterReferenceState
+  record?: TMasterItem
+}
+
+export type HistoricalWorkoutReferenceResolution = {
+  sessionId: string
+  gym: HistoricalMasterReference<GymMasterItem>
+  machines: Array<HistoricalMasterReference<MachineMasterItem> & { index: number }>
+}
+
 const knownBodyParts = new Set<BodyPart>([
   'chest',
   'back',
@@ -846,6 +860,30 @@ export function validateWorkoutMasterReferences(
   return { valid: issues.length === 0, issues }
 }
 
+export function resolveHistoricalWorkoutReferences(
+  masterData: WorkoutMasterData,
+  session: RawWorkoutSession,
+): HistoricalWorkoutReferenceResolution {
+  const machinesById = new Map(masterData.machines.machines.map((machine) => [machine.machine_id, machine]))
+  const gymsById = new Map(masterData.gyms.gyms.map((gym) => [gym.gym_id, gym]))
+
+  return {
+    sessionId: session.session_id,
+    gym: resolveHistoricalMasterReference(session.gym_id, gymsById),
+    machines: session.machines.map((machine, index) => ({
+      ...resolveHistoricalMasterReference(machine.machine_id, machinesById),
+      index,
+    })),
+  }
+}
+
+export function resolveHistoricalWorkoutReferenceReport(
+  masterData: WorkoutMasterData,
+  sessions: RawWorkoutSession[],
+): HistoricalWorkoutReferenceResolution[] {
+  return sessions.map((session) => resolveHistoricalWorkoutReferences(masterData, session))
+}
+
 function validateMasterSchemaVersions(masterData: WorkoutMasterData): MasterValidationIssue[] {
   const issues: MasterValidationIssue[] = []
 
@@ -980,6 +1018,27 @@ function validateMainGymContext(master: GymMaster): MasterValidationIssue[] {
 
 function isNewUseMasterRecord(record: { active: boolean; deleted: boolean }): boolean {
   return record.active && !record.deleted
+}
+
+function resolveHistoricalMasterReference<TMasterItem extends { active: boolean; deleted: boolean }>(
+  referenceId: string,
+  recordsById: Map<string, TMasterItem>,
+): HistoricalMasterReference<TMasterItem> {
+  const record = recordsById.get(referenceId)
+
+  if (!record) {
+    return { referenceId, state: 'missing' }
+  }
+
+  if (record.deleted) {
+    return { referenceId, state: 'deleted', record }
+  }
+
+  if (!record.active) {
+    return { referenceId, state: 'inactive', record }
+  }
+
+  return { referenceId, state: 'active', record }
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{

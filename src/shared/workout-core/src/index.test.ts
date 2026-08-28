@@ -44,6 +44,7 @@ import {
   resolvePeriodRange,
   resolvePreviousMonthRange,
   resolvePreviousPeriod,
+  resolveHistoricalWorkoutReferences,
   resolveMainGymContext,
   resolveUniqueWorkoutByDate,
   resolveWorkoutNeighbors,
@@ -711,6 +712,60 @@ describe('workout-core', () => {
         'unknown-gym-reference',
         'unknown-machine-reference',
       ])
+  })
+
+  it('resolves historical master reference lifecycle states without rewriting workout logs', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('active-history', 'active-gym', ['active-machine']),
+    )).toMatchObject({
+      sessionId: 'active-history',
+      gym: { referenceId: 'active-gym', state: 'active' },
+      machines: [{ referenceId: 'active-machine', state: 'active', index: 0 }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('inactive-history', 'inactive-gym', ['inactive-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'inactive-gym', state: 'inactive' },
+      machines: [{ referenceId: 'inactive-machine', state: 'inactive' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('deleted-history', 'deleted-gym', ['deleted-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'deleted-gym', state: 'deleted' },
+      machines: [{ referenceId: 'deleted-machine', state: 'deleted' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('missing-history', 'missing-gym', ['missing-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'missing-gym', state: 'missing' },
+      machines: [{ referenceId: 'missing-machine', state: 'missing' }],
+    })
   })
 })
 
