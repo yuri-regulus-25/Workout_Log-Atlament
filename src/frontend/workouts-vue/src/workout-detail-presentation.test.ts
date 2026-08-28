@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest'
+import type { BodyPart, WorkoutSession } from '@workout-lab/workout-types'
+import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from './workout-detail-presentation'
+
+describe('workout detail presentation helpers', () => {
+  it('summarizes multiple sessions and gyms with total reps', () => {
+    const result = getWorkoutDaySummary([
+      session('s1', 'North Gym', [
+        machine('pec-deck', 'Pec Deck', 'chest', [[40, 10], [45, 8]]),
+      ]),
+      session('s2', 'South Gym', [
+        machine('lat-pulldown', 'Lat Pulldown', 'back', [[50, 9]]),
+        machine('leg-press', 'Leg Press', 'legs', [[100, 12]]),
+      ]),
+    ])
+
+    expect(result).toEqual({
+      sessionCount: 2,
+      gymNames: 'North Gym / South Gym',
+      totalMachines: 3,
+      totalSets: 4,
+      totalReps: 39,
+      totalVolume: 2410,
+    })
+  })
+
+  it('reports machine reps, volume, and RIR presence for set tables', () => {
+    const item = machine('pec-deck', 'Pec Deck', 'chest', [[40, 10], [45, 8]], 1)
+
+    expect(getMachineReps(item)).toBe(18)
+    expect(getMachinePresentation(item)).toEqual({
+      reps: 18,
+      volume: 760,
+      hasRir: true,
+    })
+  })
+})
+
+function session(
+  sessionId: string,
+  gymName: string,
+  machines: WorkoutSession['machines'],
+): WorkoutSession {
+  return {
+    schema_version: 1,
+    session_id: sessionId,
+    date: '2026-08-24',
+    status: 'complete',
+    gym: { id: gymName.toLocaleLowerCase().replaceAll(' ', '-'), name: gymName },
+    machines,
+    notes: ['note'],
+  }
+}
+
+function machine(
+  machineId: string,
+  name: string,
+  bodyPart: BodyPart,
+  sets: Array<[number, number]>,
+  rir?: number,
+): WorkoutSession['machines'][number] {
+  return {
+    machine_id: machineId,
+    name,
+    body_part: bodyPart,
+    sets: sets.map(([weight_kg, reps], index) => ({
+      set: index + 1,
+      weight_kg,
+      reps,
+      rir: index === 0 ? rir : undefined,
+    })),
+    notes: ['machine note'],
+  }
+}
