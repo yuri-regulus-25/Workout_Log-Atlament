@@ -52,6 +52,8 @@ import {
   getTotalVolume,
   getTrainingFrequencyPerWeek,
   getTrainingStreak,
+  validateWorkoutMasterData,
+  validateWorkoutMasterReferences,
 } from './index'
 
 describe('workout-core', () => {
@@ -650,6 +652,66 @@ describe('workout-core', () => {
       reason: 'inactive-or-deleted-main-gym',
     })
   })
+
+  it('validates master uniqueness and main gym constraints as shared domain rules', () => {
+    const result = validateWorkoutMasterData({
+      machines: {
+        schema_version: 1,
+        machines: [machineMasterItem('a'), machineMasterItem('a')],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      },
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        'duplicate-machine-id',
+        'multiple-main-gyms',
+      ]),
+    )
+  })
+
+  it('distinguishes historical master references from new-write selectable references', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+    const sessions = [
+      rawWorkoutSession('historical-inactive', 'inactive-gym', ['inactive-machine']),
+      rawWorkoutSession('historical-deleted', 'deleted-gym', ['deleted-machine']),
+      rawWorkoutSession('historical-missing', 'missing-gym', ['missing-machine']),
+    ]
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'historical' }).issues.map((issue) => issue.code))
+      .toEqual(['unknown-gym-reference', 'unknown-machine-reference'])
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'new-write' }).issues.map((issue) => issue.code))
+      .toEqual([
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'unknown-gym-reference',
+        'unknown-machine-reference',
+      ])
+  })
 })
 
 function createMinimalSession(sessionId: string, date: string): WorkoutSession {
@@ -711,3 +773,34 @@ function gymMasterItemBase(gymId: string) {
   }
 }
 
+function machineMasterItem(
+  machineId: string,
+  overrides: Partial<ReturnType<typeof machineMasterItemBase>> = {},
+): ReturnType<typeof machineMasterItemBase> {
+  return { ...machineMasterItemBase(machineId), ...overrides }
+}
+
+function machineMasterItemBase(machineId: string) {
+  return {
+    machine_id: machineId,
+    name: `Machine ${machineId}`,
+    body_part: 'chest' as const,
+    aliases: [],
+    active: true,
+    deleted: false,
+  }
+}
+
+function rawWorkoutSession(sessionId: string, gymId: string, machineIds: string[]) {
+  return {
+    schema_version: 1,
+    session_id: sessionId,
+    date: '2026-08-24',
+    status: 'complete' as const,
+    gym_id: gymId,
+    machines: machineIds.map((machineId) => ({
+      machine_id: machineId,
+      sets: [{ set: 1, weight_kg: 20, reps: 10 }],
+    })),
+  }
+}
