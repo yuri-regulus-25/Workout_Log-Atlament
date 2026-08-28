@@ -94,6 +94,17 @@ public sealed record MasterWriteBoundary(
     [property: JsonPropertyName("allowedTargets")] IReadOnlyList<MasterWriteTarget> AllowedTargets,
     [property: JsonPropertyName("security")] MasterWriteSecurity Security);
 
+public sealed record MasterDocumentSnapshot(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("revision")] string Revision,
+    [property: JsonPropertyName("content")] string Content);
+
+public sealed record MasterDocumentWriteResult(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("revision")] string Revision);
+
 public sealed record SyncResult(
     [property: JsonPropertyName("degraded")] bool Degraded);
 

@@ -45,6 +45,9 @@ public static class AfErrorCodes
     public const string RuntimeDataUpdateFailed = "RUNTIME_DATA_UPDATE_FAILED";
     public const string MasterMachineNotFound = "MASTER_MACHINE_NOT_FOUND";
     public const string MasterGymNotFound = "MASTER_GYM_NOT_FOUND";
+    public const string MasterWriteInvalid = "MASTER_WRITE_INVALID";
+    public const string MasterWriteConflict = "MASTER_WRITE_CONFLICT";
+    public const string MasterWriteFailed = "MASTER_WRITE_FAILED";
     public const string HostingArtifactNotFound = "HOSTING_ARTIFACT_NOT_FOUND";
     public const string HostingStartFailed = "HOSTING_START_FAILED";
     public const string HttpPortUnavailable = "HTTP_PORT_UNAVAILABLE";
