@@ -465,6 +465,15 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
       <div class="status-grid">
         <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
         <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
+        <StatusItem label="Windows Package Version" value={props.status?.versions?.nativePackages?.windows.version ?? '-'} />
+        <StatusItem
+          label="Android Package Version"
+          value={
+            props.status?.versions?.nativePackages?.android
+              ? `${props.status.versions.nativePackages.android.versionName} (${props.status.versions.nativePackages.android.versionCode})`
+              : '-'
+          }
+        />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>

@@ -53,6 +53,9 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 
 - `versions.applicationFramework`
 - `versions.frontendFramework`
+- `versions.nativePackages.windows.version`
+- `versions.nativePackages.android.versionName`
+- `versions.nativePackages.android.versionCode`
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`

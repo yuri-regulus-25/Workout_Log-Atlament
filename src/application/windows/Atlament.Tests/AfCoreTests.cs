@@ -344,6 +344,9 @@ public sealed class AfCoreTests
             Assert.Equal(expectedApplicationVersion, status.Data!.Versions.ApplicationFramework);
             Assert.DoesNotContain("+", status.Data.Versions.ApplicationFramework, StringComparison.Ordinal);
             Assert.Equal("1.0.0", status.Data.Versions.FrontendFramework);
+            Assert.Equal("1.0.0", status.Data.Versions.NativePackages.Windows.Version);
+            Assert.Equal("0.1.0", status.Data.Versions.NativePackages.Android.VersionName);
+            Assert.Equal(1, status.Data.Versions.NativePackages.Android.VersionCode);
             Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
             Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);
             Assert.Contains("RUNTIME_DATA_REQUIRED", status.Data.RequiredActions);

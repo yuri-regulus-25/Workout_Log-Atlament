@@ -21,6 +21,15 @@ export type AfStatus = {
   versions: {
     applicationFramework: string
     frontendFramework: string
+    nativePackages: {
+      windows: {
+        version: string
+      }
+      android: {
+        versionName: string
+        versionCode: number
+      }
+    }
   }
   application: {
     status: string
