@@ -7,10 +7,8 @@ import {
   formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
-  getMachineVolume,
-  getSessionSetCount,
-  getSessionVolume,
 } from '@workout-lab/workout-core'
+import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
 
 const props = defineProps<{
   date: string
@@ -19,6 +17,7 @@ const props = defineProps<{
 const workoutSessions = ref<WorkoutSession[]>([])
 const loadError = ref<string | null>(null)
 const sessions = computed(() => workoutSessions.value.filter((workout) => workout.date === props.date))
+const collapsedMachines = ref(new Set<string>())
 
 onMounted(async () => {
   try {
@@ -29,15 +28,27 @@ onMounted(async () => {
     loadError.value = error instanceof Error ? error.message : 'Workout data could not be loaded.'
   }
 })
-const totalMachines = computed(() =>
-  sessions.value.reduce((total, session) => total + session.machines.length, 0),
-)
-const totalSets = computed(() =>
-  sessions.value.reduce((total, session) => total + getSessionSetCount(session), 0),
-)
-const totalVolume = computed(() =>
-  sessions.value.reduce((total, session) => total + getSessionVolume(session), 0),
-)
+const daySummary = computed(() => getWorkoutDaySummary(sessions.value))
+
+function machineKey(session: WorkoutSession, machineId: string): string {
+  return `${session.session_id}:${machineId}`
+}
+
+function isMachineCollapsed(session: WorkoutSession, machineId: string): boolean {
+  return collapsedMachines.value.has(machineKey(session, machineId))
+}
+
+function toggleMachine(session: WorkoutSession, machineId: string) {
+  const next = new Set(collapsedMachines.value)
+  const key = machineKey(session, machineId)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  collapsedMachines.value = next
+}
+
 </script>
 
 <template>
@@ -48,20 +59,28 @@ const totalVolume = computed(() =>
   </section>
 
   <section v-if="sessions.length > 0" class="view-stack">
-    <p>{{ formatDisplayDate(props.date) }} · {{ sessions.length }} session</p>
+    <div class="detail-summary-heading">
+      <p class="eyebrow">{{ formatDisplayDate(props.date) }}</p>
+      <h2>{{ daySummary.gymNames }}</h2>
+      <p class="muted">{{ sessions.length }} {{ sessions.length === 1 ? "session" : "sessions" }}</p>
+    </div>
 
     <section class="summary-grid">
       <article class="metric-card">
         <span>Machines</span>
-        <strong>{{ totalMachines }} {{ totalMachines === 1 ? "Machine": "Machines" }}</strong>
+        <strong>{{ daySummary.totalMachines }} {{ daySummary.totalMachines === 1 ? "Machine": "Machines" }}</strong>
       </article>
       <article class="metric-card">
         <span>Sets</span>
-        <strong>{{ totalSets }} {{ totalSets === 1 ? "Set": "Sets" }}</strong>
+        <strong>{{ daySummary.totalSets }} {{ daySummary.totalSets === 1 ? "Set": "Sets" }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Total Reps</span>
+        <strong>{{ daySummary.totalReps.toLocaleString() }} reps</strong>
       </article>
       <article class="metric-card">
         <span>Volume</span>
-        <strong>{{ totalVolume.toLocaleString() }} kg</strong>
+        <strong>{{ daySummary.totalVolume.toLocaleString() }} kg</strong>
       </article>
       <article class="metric-card">
         <span>Sessions</span>
@@ -85,16 +104,53 @@ const totalVolume = computed(() =>
           <div class="machine-header">
             <div>
               <h3>{{ machine.name }}</h3>
-              <p>{{ formatBodyPart(machine.body_part) }} · {{ formatTotalWeight(getMachineVolume(machine)) }}</p>
+              <p>
+                {{ formatBodyPart(machine.body_part) }} ·
+                {{ machine.sets.length }} {{ machine.sets.length === 1 ? "set" : "sets" }} ·
+                {{ getMachineReps(machine).toLocaleString() }} reps ·
+                {{ formatTotalWeight(getMachinePresentation(machine).volume) }}
+              </p>
             </div>
-            <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">View Performance Detail</a>
+            <div class="machine-actions">
+              <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">
+                <i class="mdi mdi-chart-line" aria-hidden="true" />Performance
+              </a>
+              <button
+                type="button"
+                class="text-action"
+                :aria-expanded="!isMachineCollapsed(session, machine.machine_id)"
+                @click="toggleMachine(session, machine.machine_id)"
+              >
+                {{ isMachineCollapsed(session, machine.machine_id) ? "Expand" : "Collapse" }}
+              </button>
+            </div>
           </div>
-          <ul>
-            <li v-for="set in machine.sets" :key="set.set">
-              Set {{ set.set }} · {{ set.weight_kg }} kg × {{ set.reps }} reps
-              <span v-if="set.rir !== undefined && set.rir !== null"> · RIR {{ set.rir }}</span>
-            </li>
-          </ul>
+          <div v-if="!isMachineCollapsed(session, machine.machine_id)" class="set-table-wrap">
+            <table class="set-table">
+              <thead>
+                <tr>
+                  <th>Set</th>
+                  <th>Weight</th>
+                  <th>Reps</th>
+                  <th v-if="getMachinePresentation(machine).hasRir" class="supporting-cell">RIR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="set in machine.sets" :key="set.set">
+                  <td>{{ set.set }}</td>
+                  <td>{{ set.weight_kg }} kg</td>
+                  <td>{{ set.reps }}</td>
+                  <td v-if="getMachinePresentation(machine).hasRir" class="supporting-cell">
+                    <span v-if="set.rir !== undefined && set.rir !== null">{{ set.rir }}</span>
+                    <span v-else>—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="(machine.notes?.length ?? 0) > 0" class="machine-notes">
+              <p v-for="note in machine.notes ?? []" :key="note" class="note-line">{{ note }}</p>
+            </div>
+          </div>
         </article>
       </div>
 
