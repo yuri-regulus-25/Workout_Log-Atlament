@@ -136,6 +136,33 @@ export type MasterWriteBoundary = {
   security: MasterWriteSecurity
 }
 
+export type MasterDocumentType = 'MACHINE_MASTER' | 'GYM_MASTER'
+
+export type MasterDocumentSnapshot = {
+  type: MasterDocumentType
+  path: string
+  revision: string
+  content: string
+}
+
+export type MasterDocumentWriteResult = {
+  type: MasterDocumentType
+  path: string
+  revision: string
+}
+
+export type MasterWriteErrorCode =
+  | 'MASTER_WRITE_INVALID'
+  | 'MASTER_WRITE_CONFLICT'
+  | 'MASTER_WRITE_FAILED'
+  | 'GITHUB_UNAUTHORIZED'
+  | 'GITHUB_FORBIDDEN'
+  | 'GITHUB_RATE_LIMIT'
+  | 'GITHUB_RESOURCE_NOT_FOUND'
+  | 'GITHUB_CONNECTION_FAILED'
+  | 'GITHUB_TIMEOUT'
+  | 'GITHUB_SERVER_ERROR'
+
 export type SyncResult = {
   degraded: boolean
 }
