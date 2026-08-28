@@ -112,6 +112,30 @@ export type CredentialUpdate = {
 
 export type CredentialUpdateResult = CredentialStatus
 
+export type MasterWriteTarget = {
+  type: 'MACHINE_MASTER' | 'GYM_MASTER'
+  path: string
+  resourceKind: 'file'
+  writeAllowed: boolean
+}
+
+export type MasterWriteSecurity = {
+  configurationAvailable: boolean
+  credentialConfigured: boolean
+  credentialState: CredentialStatus['state']
+  repositoryConfigured: boolean
+  writeEnabled: boolean
+  workoutLogWriteAllowed: boolean
+  rawJsonWriteAllowed: boolean
+  genericGitWriteAllowed: boolean
+}
+
+export type MasterWriteBoundary = {
+  repository: RepositoryConfiguration
+  allowedTargets: MasterWriteTarget[]
+  security: MasterWriteSecurity
+}
+
 export type SyncResult = {
   degraded: boolean
 }
@@ -135,6 +159,10 @@ export async function updateConfiguration(
 
 export async function getCredentialStatus(): Promise<AfCallResult<CredentialStatus>> {
   return callAf<CredentialStatus>('/api/v1/common/credential/status')
+}
+
+export async function getMasterWriteBoundary(): Promise<AfCallResult<MasterWriteBoundary>> {
+  return callAf<MasterWriteBoundary>('/api/v1/common/master-write/boundary')
 }
 
 export async function updateCredential(

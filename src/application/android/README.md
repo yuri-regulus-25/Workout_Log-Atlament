@@ -19,6 +19,7 @@
   - `/api/v1/common/status`
   - `/api/v1/common/configuration`
   - `/api/v1/common/credential/status`
+  - `/api/v1/common/master-write/boundary`
   - `/api/v1/common/credential`
   - `/api/v1/common/sync`
   - `/api/v1/common/runtime/workouts`
