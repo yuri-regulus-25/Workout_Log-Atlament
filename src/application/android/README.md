@@ -31,7 +31,7 @@
   - 起動時にConfiguration / Credentialが利用可能な場合、GitHub同期をバックグラウンドで実行する。
   - Startup Sync中はStatus APIの `operations.startup` が `running` になる。
 - Local Fallbackの最小実装。
-  - Remote同期に失敗しても保存済みRuntime Dataがある場合は `source: local` として継続する。
+  - Remote同期に失敗しても保存済みRuntime Dataがある場合は degraded sync result として継続する。
   - PortalではGitHub degraded + Runtime Data available時にLocal Fallback警告を表示する。
 - Android Application-owned SQLite Logの最小実装。
   - `filesDir/log/atlament-log.sqlite` にAF operation logを保存する。

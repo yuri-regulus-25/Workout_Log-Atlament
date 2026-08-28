@@ -57,7 +57,6 @@ public sealed record TimeoutConfigurationUpdate(
     [property: JsonPropertyName("shutdownTimeoutSec")] int? ShutdownTimeoutSec);
 
 public sealed record ConfigurationUpdateResult(
-    [property: JsonPropertyName("saved")] bool Saved,
     [property: JsonPropertyName("remoteChecked")] bool RemoteChecked);
 
 public sealed record CredentialStatus(
@@ -75,8 +74,6 @@ public sealed record CredentialUpdateResult(
     [property: JsonPropertyName("limitDate")] string? LimitDate);
 
 public sealed record SyncResult(
-    [property: JsonPropertyName("source")] string Source,
-    [property: JsonPropertyName("updated")] bool Updated,
     [property: JsonPropertyName("degraded")] bool Degraded);
 
 public sealed record ShutdownResult(

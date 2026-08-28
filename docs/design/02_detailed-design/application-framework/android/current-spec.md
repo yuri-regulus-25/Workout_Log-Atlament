@@ -84,10 +84,9 @@ Dynamic frontend route fallback は以下にのみ存在する。
 
 ## API
 
-Android は以下の両方を map する。
+Android は以下を map する。
 
 - `/api/v1/common/*`
-- `/api/common/*`
 
 [AF API Contract](../api-contract.md) を参照。
 

@@ -67,8 +67,6 @@ MVP API subset:
 ```text
 GET /api/v1/common/status
 GET /api/v1/common/runtime/workouts
-GET /api/common/status
-GET /api/common/runtime/workouts
 ```
 
 Repository内 `data/` を直接利用する。

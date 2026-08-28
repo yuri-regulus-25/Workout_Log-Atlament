@@ -62,10 +62,9 @@ Unknown API path は 404 を返し、frontend HTML へ fall through しない。
 
 ## API
 
-Windows は以下の両方を map する。
+Windows は以下を map する。
 
 - `/api/v1/common/*`
-- `/api/common/*`
 
 [AF API Contract](../api-contract.md) を参照。
 
