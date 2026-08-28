@@ -77,6 +77,13 @@ Phase 5-A 以降、Workout Domain から再利用可能な `workout-core` logic:
 - session / daily aggregation based on session count, machine count, set count, and rep count
 - calendar month range and daily training marker aggregation
 
+Phase 5-B 以降、Workout Domain から再利用可能な `workout-core` logic:
+
+- previous / next workout resolution by `session_id`
+- date-based workout resolution only when the date maps to exactly one session
+- workout summary based on machine count, set count, and total reps
+- session compare for machine count, set count, total reps, added machines, and removed machines
+
 ## Navigation
 
 Workout Domain は current route ID `workouts` で shared navigation を受け取る。

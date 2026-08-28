@@ -166,6 +166,31 @@ export type CalendarDayAggregate = {
   sessions: SessionAggregate[]
 }
 
+export type WorkoutSummary = {
+  sessionId: string
+  date: string
+  gym: string
+  machineCount: number
+  setCount: number
+  totalReps: number
+}
+
+export type WorkoutNeighborResolution = {
+  current: WorkoutSession
+  previous: WorkoutSession | null
+  next: WorkoutSession | null
+}
+
+export type WorkoutSessionComparison = {
+  current: WorkoutSummary
+  previous: WorkoutSummary
+  machineCountDelta: NumericDelta
+  setCountDelta: NumericDelta
+  totalRepsDelta: NumericDelta
+  addedMachines: Array<{ machineId: string; machineName: string }>
+  removedMachines: Array<{ machineId: string; machineName: string }>
+}
+
 export function resolvePeriodRange(
   preset: PeriodPreset,
   sessions: WorkoutSession[],
@@ -369,6 +394,77 @@ export function getCalendarMonthAggregates(
       sessions: aggregate?.sessions ?? [],
     }
   })
+}
+
+export function getWorkoutSummary(session: WorkoutSession): WorkoutSummary {
+  return {
+    sessionId: session.session_id,
+    date: session.date,
+    gym: session.gym.name,
+    machineCount: session.machines.length,
+    setCount: getTotalSets(session),
+    totalReps: getTotalReps(session),
+  }
+}
+
+export function resolveWorkoutNeighbors(
+  sessions: WorkoutSession[],
+  currentSessionId: string,
+): WorkoutNeighborResolution | null {
+  const sorted = sortSessions(sessions)
+  const currentIndex = sorted.findIndex((session) => session.session_id === currentSessionId)
+
+  if (currentIndex === -1) {
+    return null
+  }
+
+  return {
+    current: sorted[currentIndex],
+    previous: sorted[currentIndex - 1] ?? null,
+    next: sorted[currentIndex + 1] ?? null,
+  }
+}
+
+export function resolveUniqueWorkoutByDate(
+  sessions: WorkoutSession[],
+  date: string,
+): WorkoutSession | null {
+  const matches = sessions.filter((session) => session.date === date)
+  return matches.length === 1 ? matches[0] : null
+}
+
+export function resolveWorkoutNeighborsByDate(
+  sessions: WorkoutSession[],
+  currentDate: string,
+): WorkoutNeighborResolution | null {
+  const current = resolveUniqueWorkoutByDate(sessions, currentDate)
+  return current ? resolveWorkoutNeighbors(sessions, current.session_id) : null
+}
+
+export function compareWorkoutSessions(
+  current: WorkoutSession,
+  previous: WorkoutSession,
+): WorkoutSessionComparison {
+  const currentSummary = getWorkoutSummary(current)
+  const previousSummary = getWorkoutSummary(previous)
+  const currentMachines = getMachinesById(current)
+  const previousMachines = getMachinesById(previous)
+
+  return {
+    current: currentSummary,
+    previous: previousSummary,
+    machineCountDelta: getNumericDelta(currentSummary.machineCount, previousSummary.machineCount),
+    setCountDelta: getNumericDelta(currentSummary.setCount, previousSummary.setCount),
+    totalRepsDelta: getNumericDelta(currentSummary.totalReps, previousSummary.totalReps),
+    addedMachines: Array.from(currentMachines.entries())
+      .filter(([machineId]) => !previousMachines.has(machineId))
+      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
+    removedMachines: Array.from(previousMachines.entries())
+      .filter(([machineId]) => !currentMachines.has(machineId))
+      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
+  }
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
@@ -672,6 +768,16 @@ function getWeekStartDate(date: string): string {
 
 function sortSessions(sessions: WorkoutSession[]): WorkoutSession[] {
   return [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id))
+}
+
+function getMachinesById(session: WorkoutSession): Map<string, WorkoutMachine> {
+  const machines = new Map<string, WorkoutMachine>()
+
+  for (const machine of session.machines) {
+    machines.set(machine.machine_id, machine)
+  }
+
+  return machines
 }
 
 function sumAggregate<T extends Record<K, number>, K extends keyof T>(items: T[], key: K): number {
