@@ -71,6 +71,12 @@ Workout Domain は `workout-core` を以下に使用する。
 - set count
 - total weight label formatting
 
+Phase 5-A 以降、Workout Domain から再利用可能な `workout-core` logic:
+
+- inclusive period filtering
+- session / daily aggregation based on session count, machine count, set count, and rep count
+- calendar month range and daily training marker aggregation
+
 ## Navigation
 
 Workout Domain は current route ID `workouts` で shared navigation を受け取る。

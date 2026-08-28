@@ -26,6 +26,14 @@ export function getTotalSets(session: WorkoutSession): number {
   return session.machines.reduce((total, machine) => total + machine.sets.length, 0)
 }
 
+export function getTotalReps(session: WorkoutSession): number {
+  return session.machines.reduce(
+    (sessionTotal, machine) =>
+      sessionTotal + machine.sets.reduce((machineTotal, set) => machineTotal + set.reps, 0),
+    0,
+  )
+}
+
 export const getSessionVolume = getTotalVolume
 export const getSessionSetCount = getTotalSets
 
@@ -94,6 +102,272 @@ export function getRecentSessions(
   return sessions.filter((session) => {
     const date = toUtcDate(session.date)
     return date >= start && date <= end
+  })
+}
+
+export type PeriodPreset = '7d' | '28d' | 'month' | '3m' | '6m' | 'all'
+
+export type DateRange = {
+  startDate: string
+  endDate: string
+}
+
+export type PeriodComparison = {
+  current: DateRange
+  previous: DateRange | null
+}
+
+export type NumericDelta = {
+  current: number
+  previous: number
+  absolute: number
+  percentage: number | null
+}
+
+export type SessionAggregate = {
+  sessionId: string
+  date: string
+  gym: string
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type DateAggregate = {
+  date: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+  sessions: SessionAggregate[]
+}
+
+export type WeekAggregate = {
+  weekStartDate: string
+  weekEndDate: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type MonthAggregate = {
+  month: string
+  sessionCount: number
+  machineCount: number
+  setCount: number
+  repCount: number
+}
+
+export type CalendarDayAggregate = {
+  date: string
+  trainingDay: boolean
+  sessionCount: number
+  sessions: SessionAggregate[]
+}
+
+export function resolvePeriodRange(
+  preset: PeriodPreset,
+  sessions: WorkoutSession[],
+  referenceDate = sessions.at(-1)?.date ?? toIsoDate(new Date()),
+): DateRange {
+  if (preset === 'all') {
+    const dates = sessions.map((session) => session.date).sort()
+    return {
+      startDate: dates[0] ?? referenceDate,
+      endDate: dates.at(-1) ?? referenceDate,
+    }
+  }
+
+  const endDate = toUtcDate(referenceDate)
+
+  if (preset === 'month') {
+    return getMonthRange(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1)
+  }
+
+  if (preset === '3m' || preset === '6m') {
+    const monthCount = preset === '3m' ? 3 : 6
+    const startDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - (monthCount - 1), 1))
+    const rangeEnd = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, 0))
+    return {
+      startDate: toIsoDate(startDate),
+      endDate: toIsoDate(rangeEnd),
+    }
+  }
+
+  const days = preset === '7d' ? 7 : 28
+  const startDate = new Date(endDate)
+  startDate.setUTCDate(startDate.getUTCDate() - (days - 1))
+
+  return {
+    startDate: toIsoDate(startDate),
+    endDate: toIsoDate(endDate),
+  }
+}
+
+export function filterSessionsByDateRange(
+  sessions: WorkoutSession[],
+  range: DateRange,
+): WorkoutSession[] {
+  return sortSessions(
+    sessions.filter((session) => session.date >= range.startDate && session.date <= range.endDate),
+  )
+}
+
+export function resolvePreviousPeriod(range: DateRange): DateRange {
+  const startDate = toUtcDate(range.startDate)
+  const endDate = toUtcDate(range.endDate)
+  const inclusiveDays = getInclusiveDayCount(range)
+  const previousEnd = new Date(startDate)
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1)
+  const previousStart = new Date(previousEnd)
+  previousStart.setUTCDate(previousStart.getUTCDate() - (inclusiveDays - 1))
+
+  if (endDate < startDate) {
+    return { startDate: range.startDate, endDate: range.startDate }
+  }
+
+  return {
+    startDate: toIsoDate(previousStart),
+    endDate: toIsoDate(previousEnd),
+  }
+}
+
+export function resolvePreviousMonthRange(year: number, month: number): DateRange {
+  const date = new Date(Date.UTC(year, month - 2, 1))
+  return getMonthRange(date.getUTCFullYear(), date.getUTCMonth() + 1)
+}
+
+export function resolvePeriodComparison(
+  preset: PeriodPreset,
+  sessions: WorkoutSession[],
+  referenceDate?: string,
+): PeriodComparison {
+  const current = resolvePeriodRange(preset, sessions, referenceDate)
+  return {
+    current,
+    previous: preset === 'all' ? null : resolvePreviousPeriod(current),
+  }
+}
+
+export function getNumericDelta(current: number, previous: number): NumericDelta {
+  return {
+    current,
+    previous,
+    absolute: current - previous,
+    percentage: previous === 0 ? null : ((current - previous) / previous) * 100,
+  }
+}
+
+export function getSessionAggregates(sessions: WorkoutSession[]): SessionAggregate[] {
+  return sortSessions(sessions).map((session) => ({
+    sessionId: session.session_id,
+    date: session.date,
+    gym: session.gym.name,
+    machineCount: session.machines.length,
+    setCount: getTotalSets(session),
+    repCount: getTotalReps(session),
+  }))
+}
+
+export function getDailyAggregates(sessions: WorkoutSession[]): DateAggregate[] {
+  const byDate = new Map<string, SessionAggregate[]>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    byDate.set(session.date, [...(byDate.get(session.date) ?? []), session])
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, daySessions]) => ({
+      date,
+      sessionCount: daySessions.length,
+      machineCount: sumAggregate(daySessions, 'machineCount'),
+      setCount: sumAggregate(daySessions, 'setCount'),
+      repCount: sumAggregate(daySessions, 'repCount'),
+      sessions: daySessions,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export function getWeeklyAggregates(sessions: WorkoutSession[]): WeekAggregate[] {
+  const byWeek = new Map<string, WeekAggregate>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    const weekStartDate = getWeekStartDate(session.date)
+    const weekEnd = toUtcDate(weekStartDate)
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+    const current = byWeek.get(weekStartDate) ?? {
+      weekStartDate,
+      weekEndDate: toIsoDate(weekEnd),
+      sessionCount: 0,
+      machineCount: 0,
+      setCount: 0,
+      repCount: 0,
+    }
+
+    current.sessionCount += 1
+    current.machineCount += session.machineCount
+    current.setCount += session.setCount
+    current.repCount += session.repCount
+    byWeek.set(weekStartDate, current)
+  }
+
+  return Array.from(byWeek.values()).sort((a, b) => a.weekStartDate.localeCompare(b.weekStartDate))
+}
+
+export function getMonthlyAggregates(sessions: WorkoutSession[]): MonthAggregate[] {
+  const byMonth = new Map<string, MonthAggregate>()
+
+  for (const session of getSessionAggregates(sessions)) {
+    const month = session.date.slice(0, 7)
+    const current = byMonth.get(month) ?? {
+      month,
+      sessionCount: 0,
+      machineCount: 0,
+      setCount: 0,
+      repCount: 0,
+    }
+
+    current.sessionCount += 1
+    current.machineCount += session.machineCount
+    current.setCount += session.setCount
+    current.repCount += session.repCount
+    byMonth.set(month, current)
+  }
+
+  return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month))
+}
+
+export function resolveCalendarMonthRange(year: number, month: number): DateRange {
+  return getMonthRange(year, month)
+}
+
+export function getCalendarMonthAggregates(
+  sessions: WorkoutSession[],
+  year: number,
+  month: number,
+): CalendarDayAggregate[] {
+  const range = resolveCalendarMonthRange(year, month)
+  const dailyAggregates = new Map(
+    getDailyAggregates(filterSessionsByDateRange(sessions, range)).map((aggregate) => [
+      aggregate.date,
+      aggregate,
+    ]),
+  )
+  const days = getInclusiveDayCount(range)
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = toUtcDate(range.startDate)
+    date.setUTCDate(date.getUTCDate() + index)
+    const isoDate = toIsoDate(date)
+    const aggregate = dailyAggregates.get(isoDate)
+
+    return {
+      date: isoDate,
+      trainingDay: Boolean(aggregate),
+      sessionCount: aggregate?.sessionCount ?? 0,
+      sessions: aggregate?.sessions ?? [],
+    }
   })
 }
 
@@ -368,6 +642,40 @@ function updateRecord(records: Map<string, PersonalRecord>, candidate: PersonalR
 
 function toUtcDate(date: string): Date {
   return new Date(`${date}T00:00:00Z`)
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function getMonthRange(year: number, month: number): DateRange {
+  const startDate = new Date(Date.UTC(year, month - 1, 1))
+  const endDate = new Date(Date.UTC(year, month, 0))
+
+  return {
+    startDate: toIsoDate(startDate),
+    endDate: toIsoDate(endDate),
+  }
+}
+
+function getInclusiveDayCount(range: DateRange): number {
+  return Math.floor((toUtcDate(range.endDate).getTime() - toUtcDate(range.startDate).getTime()) / 86_400_000) + 1
+}
+
+function getWeekStartDate(date: string): string {
+  const day = toUtcDate(date)
+  const dayOfWeek = day.getUTCDay()
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  day.setUTCDate(day.getUTCDate() + mondayOffset)
+  return toIsoDate(day)
+}
+
+function sortSessions(sessions: WorkoutSession[]): WorkoutSession[] {
+  return [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id))
+}
+
+function sumAggregate<T extends Record<K, number>, K extends keyof T>(items: T[], key: K): number {
+  return items.reduce((total, item) => total + item[key], 0)
 }
 
 function getBestSetValue(sets: MachineSet[], selectValue: (set: MachineSet) => number): number {
