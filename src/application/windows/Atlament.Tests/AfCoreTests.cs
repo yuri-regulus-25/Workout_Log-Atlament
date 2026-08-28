@@ -590,10 +590,20 @@ public sealed class AfCoreTests
             requests.Add(CloneRequest(request));
             if (request.Method == HttpMethod.Get)
             {
+                if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "gym-sha",
+                          "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                        }
+                        """);
+                }
+
                 return JsonResponse($$"""
                     {
                       "sha": "current-sha",
-                      "content": "{{Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"schema_version\":1,\"machines\":[]}"))}}"
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m0\",\"name\":\"Machine 0\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
                     }
                     """);
             }
@@ -604,7 +614,7 @@ public sealed class AfCoreTests
             Assert.Equal("current-sha", payload["sha"]!.GetValue<string>());
             Assert.Equal("master", payload["branch"]!.GetValue<string>());
             Assert.Equal(
-                "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\"}]}",
+                "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"back\",\"aliases\":[],\"active\":true,\"deleted\":false}]}",
                 Encoding.UTF8.GetString(Convert.FromBase64String(payload["content"]!.GetValue<string>())));
             return JsonResponse("""
                 {
@@ -621,18 +631,20 @@ public sealed class AfCoreTests
             "github-token",
             "MACHINE_MASTER",
             "current-sha",
-            "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\"}]}",
+            "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"back\",\"aliases\":[],\"active\":true,\"deleted\":false}]}",
             CancellationToken.None);
 
         Assert.Empty(result.Errors);
         Assert.NotNull(result.Result);
         Assert.Equal("saved-sha", result.Result!.Revision);
         Assert.Equal("master/machines.json", result.Result.Path);
-        Assert.Equal(2, requests.Count);
+        Assert.Equal(3, requests.Count);
         Assert.Equal(HttpMethod.Get, requests[0].Method);
         Assert.Contains("/contents/data/master/machines.json?ref=master", requests[0].RequestUri!.AbsoluteUri);
-        Assert.Equal(HttpMethod.Put, requests[1].Method);
-        Assert.Contains("/contents/data/master/machines.json", requests[1].RequestUri!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Get, requests[1].Method);
+        Assert.Contains("/contents/data/master/gyms.json?ref=master", requests[1].RequestUri!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Put, requests[2].Method);
+        Assert.Contains("/contents/data/master/machines.json", requests[2].RequestUri!.AbsoluteUri);
     }
 
     [Fact]
@@ -679,6 +691,45 @@ public sealed class AfCoreTests
 
         Assert.Null(result.Result);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteValidatesWholeMasterBeforePut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            if (request.RequestUri!.AbsoluteUri.Contains("/data/master/machines.json", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""
+                    {
+                      "sha": "machine-sha",
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
+                    }
+                    """);
+            }
+
+            return JsonResponse($$"""
+                {
+                  "sha": "gym-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":false}]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "gym-sha",
+            "{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":true},{\"gym_id\":\"g2\",\"name\":\"Gym 2\",\"active\":false,\"deleted\":false,\"main\":true}]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+        Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Get }, methods);
     }
 
     private static async Task WaitForStartupAsync(AtlamentApplication application)
@@ -731,6 +782,8 @@ public sealed class AfCoreTests
     {
         Content = new StringContent(json)
     };
+
+    private static string EncodeContent(string content) => Convert.ToBase64String(Encoding.UTF8.GetBytes(content));
 
     private static HttpRequestMessage CloneRequest(HttpRequestMessage request)
     {

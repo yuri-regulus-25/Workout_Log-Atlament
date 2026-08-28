@@ -80,6 +80,7 @@ Top-level structure:
 Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMasterData` と `validateWorkoutMasterReferences` を使用する。
 
 `validateWorkoutMasterData` は typed Master Data に対して schema version、required domain fields、unique ID、Machine `body_part`、Main Gym constraint を validation する。
+Master write pipeline では AF が同等の whole-master validation を最終防衛線として実行する。Logical deleted record も ID unique 判定対象であり、deleted ID の再利用は禁止する。Write 前には対象 document と相手側 Master document の current revision を揃えて検証し、Main Gym は最大 1 件、かつ `active:true` / `deleted:false` の Gym だけを許可する。
 
 `validateWorkoutMasterReferences` は Workout Log の actual references だけを扱う。
 
