@@ -15,6 +15,7 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 const apiRoutes = new Set([
   '/api/v1/common/status',
   '/api/v1/common/master-write/boundary',
+  '/api/v1/common/master-write/unresolved',
   '/api/v1/common/master-write/documents/MACHINE_MASTER',
   '/api/v1/common/master-write/documents/GYM_MASTER',
   '/api/v1/common/runtime/workouts',
@@ -45,6 +46,11 @@ createServer(async (request, response) => {
       return
     }
 
+    if (url.pathname.endsWith('/master-write/unresolved')) {
+      await respondUnresolvedMasterReferences(response)
+      return
+    }
+
     if (url.pathname.includes('/master-write/documents/')) {
       await respondMasterDocument(request, response, url.pathname)
       return
@@ -63,6 +69,7 @@ createServer(async (request, response) => {
   console.log('API:')
   console.log('  GET /api/v1/common/status')
   console.log('  GET /api/v1/common/master-write/boundary')
+  console.log('  GET /api/v1/common/master-write/unresolved')
   console.log('  GET|PUT /api/v1/common/master-write/documents/MACHINE_MASTER')
   console.log('  GET|PUT /api/v1/common/master-write/documents/GYM_MASTER')
   console.log('  GET /api/v1/common/runtime/workouts')
@@ -207,6 +214,39 @@ async function respondMasterWriteBoundary(response) {
       genericGitWriteAllowed: false,
     },
   }))
+}
+
+async function respondUnresolvedMasterReferences(response) {
+  const runtime = await loadRuntimeWorkoutData()
+  const groups = new Map()
+  for (const error of runtime.errors) {
+    const machinePrefix = 'Unknown machine_id: '
+    const gymPrefix = 'Unknown gym_id: '
+    const isMachine = error.message.includes(machinePrefix)
+    const isGym = error.message.includes(gymPrefix)
+    if (!isMachine && !isGym) continue
+
+    const prefix = isMachine ? machinePrefix : gymPrefix
+    const referenceId = error.message.slice(error.message.indexOf(prefix) + prefix.length).trim().replace(/\.$/, '')
+    const type = isMachine ? 'MACHINE_MASTER' : 'GYM_MASTER'
+    const key = `${type}:${referenceId}`
+    const affected = groups.get(key) ?? {
+      type,
+      referenceId,
+      affectedWorkouts: [],
+    }
+    const location = error.message.split(': ')[0] ?? ''
+    affected.affectedWorkouts.push({
+      filePath: location,
+      line: null,
+      message: error.message,
+    })
+    groups.set(key, affected)
+  }
+
+  writeJson(response, 200, ok(Array.from(groups.values()).sort((a, b) =>
+    a.type.localeCompare(b.type) || a.referenceId.localeCompare(b.referenceId),
+  )))
 }
 
 async function respondLegacyWorkoutData(response) {

@@ -59,4 +59,6 @@ Write sequence:
 
 Stale SHA は PUT せず `MASTER_WRITE_CONFLICT` を返す。GitHub PUT が 409 を返した場合も同じ code へ map する。PUT response に new SHA がない場合は `MASTER_WRITE_FAILED` とする。
 
+Unresolved Master resolution も Master write として処理する。既存 record への解決は `source_ids` の追加、新規 record への解決は通常 Create flow であり、Workout Data file は GitHub に PUT しない。
+
 Master write は Production Repository を直接触る integration test を前提にしない。Windows unit/integration tests は fake `HttpMessageHandler` で GitHub status、network error、timeout、ambiguous write response を再現する。

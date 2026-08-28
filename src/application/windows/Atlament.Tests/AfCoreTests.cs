@@ -68,6 +68,35 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void SourceIdsResolveUnresolvedWorkoutReferencesWithoutRawWorkoutRewrite()
+    {
+        var builder = new RuntimeDataBuilder();
+        var machineMaster = new RuntimeSourceFile("master/machines.json", """
+            {
+              "schema_version": 1,
+              "machines": [
+                { "machine_id": "known-machine", "source_ids": ["legacy-machine"], "name": "Known Machine", "body_part": "chest", "active": true }
+              ]
+            }
+            """);
+        var gymMaster = new RuntimeSourceFile("master/gyms.json", """
+            {
+              "schema_version": 1,
+              "gyms": [
+                { "gym_id": "known-gym", "source_ids": ["legacy-gym"], "name": "Known Gym", "short_name": "KG", "active": true }
+              ]
+            }
+            """);
+
+        var result = builder.Build(new[] { Workout("workouts/legacy.json", "legacy-gym", "legacy-machine") }, machineMaster, gymMaster);
+
+        var session = Assert.Single(result.Sessions);
+        Assert.Empty(result.Errors);
+        Assert.Equal("known-gym", session.Gym.Id);
+        Assert.Equal("known-machine", Assert.Single(session.Machines).MachineId);
+    }
+
+    [Fact]
     public void CurrentRuntimeDataCanStoreCleanBuildOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));

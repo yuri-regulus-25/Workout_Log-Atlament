@@ -377,4 +377,24 @@ describe('workout-data', () => {
     expect(result.master).toBeUndefined()
     expect(result.issues.some((issue) => issue.message.includes('Duplicate gym_id'))).toBe(true)
   })
+
+  it('normalizes source_ids as master reference aliases', async () => {
+    const result = loadWorkoutSessionsFromFiles([
+      { path: 'workouts/legacy.json', content: '{"schema_version":1,"session_id":"legacy","date":"2026-08-22","status":"complete","gym_id":"legacy-gym","machines":[{"machine_id":"legacy-machine","sets":[{"set":1,"weight_kg":10,"reps":10}]}]}' },
+    ], {
+      machines: {
+        schema_version: 1,
+        machines: [{ machine_id: 'known-machine', source_ids: ['legacy-machine'], name: 'Known Machine', body_part: 'chest', aliases: [], active: true, deleted: false }],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [{ gym_id: 'known-gym', source_ids: ['legacy-gym'], name: 'Known Gym', active: true, deleted: false, main: false }],
+      },
+    })
+
+    const session = result.sessions[0]
+    expect(result.issues).toEqual([])
+    expect(session.gym.id).toBe('known-gym')
+    expect(session.machines[0].machine_id).toBe('known-machine')
+  })
 })
