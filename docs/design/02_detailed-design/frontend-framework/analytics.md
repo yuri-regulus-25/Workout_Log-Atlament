@@ -71,6 +71,13 @@ Phase 5-A 以降、`workout-core` は以下の factual derived logic も提供�
 - session / daily / weekly / monthly aggregation based on session count, machine count, set count, and rep count
 - calendar month range and daily training marker aggregation
 
+Phase 5-C 以降、`workout-core` は以下の training distribution logic も提供する。
+
+- weekday distribution and monthly training days
+- sets, frequency, share, trend, and last trained date by body part
+- machine frequency ranking by factual execution count
+- sessions by gym
+
 ## Navigation
 
 Analytics は current route ID `analytics` で shared navigation を受け取る。

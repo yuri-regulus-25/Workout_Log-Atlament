@@ -191,6 +191,60 @@ export type WorkoutSessionComparison = {
   removedMachines: Array<{ machineId: string; machineName: string }>
 }
 
+export type WeekdayDistribution = {
+  weekday: number
+  sessionCount: number
+  trainingDayCount: number
+}
+
+export type MonthlyTrainingDays = {
+  month: string
+  trainingDayCount: number
+  sessionCount: number
+}
+
+export type BodyPartSetDistribution = {
+  bodyPart: BodyPart
+  setCount: number
+}
+
+export type BodyPartFrequency = {
+  bodyPart: BodyPart
+  sessionCount: number
+}
+
+export type BodyPartShare = {
+  bodyPart: BodyPart
+  setCount: number
+  share: number
+}
+
+export type BodyPartTrend = {
+  month: string
+  bodyPart: BodyPart
+  setCount: number
+  sessionCount: number
+}
+
+export type BodyPartLastTrained = {
+  bodyPart: BodyPart
+  lastTrainedDate: string
+}
+
+export type MachineFrequencyRanking = {
+  machineId: string
+  machineName: string
+  bodyPart: BodyPart
+  sessionCount: number
+  occurrenceCount: number
+}
+
+export type GymSessionDistribution = {
+  gymId: string
+  gymName: string
+  sessionCount: number
+}
+
 export function resolvePeriodRange(
   preset: PeriodPreset,
   sessions: WorkoutSession[],
@@ -465,6 +519,186 @@ export function compareWorkoutSessions(
       .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
       .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
   }
+}
+
+export function getWeekdayDistribution(sessions: WorkoutSession[]): WeekdayDistribution[] {
+  const trainingDatesByWeekday = new Map<number, Set<string>>()
+  const sessionCounts = new Map<number, number>()
+
+  for (const session of sessions) {
+    const weekday = toUtcDate(session.date).getUTCDay()
+    sessionCounts.set(weekday, (sessionCounts.get(weekday) ?? 0) + 1)
+    const trainingDates = trainingDatesByWeekday.get(weekday) ?? new Set<string>()
+    trainingDates.add(session.date)
+    trainingDatesByWeekday.set(weekday, trainingDates)
+  }
+
+  return Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    sessionCount: sessionCounts.get(weekday) ?? 0,
+    trainingDayCount: trainingDatesByWeekday.get(weekday)?.size ?? 0,
+  }))
+}
+
+export function getMonthlyTrainingDays(sessions: WorkoutSession[]): MonthlyTrainingDays[] {
+  const datesByMonth = new Map<string, Set<string>>()
+  const sessionsByMonth = new Map<string, number>()
+
+  for (const session of sessions) {
+    const month = session.date.slice(0, 7)
+    const dates = datesByMonth.get(month) ?? new Set<string>()
+    dates.add(session.date)
+    datesByMonth.set(month, dates)
+    sessionsByMonth.set(month, (sessionsByMonth.get(month) ?? 0) + 1)
+  }
+
+  return Array.from(datesByMonth.entries())
+    .map(([month, dates]) => ({
+      month,
+      trainingDayCount: dates.size,
+      sessionCount: sessionsByMonth.get(month) ?? 0,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month))
+}
+
+export function getSetsByBodyPart(sessions: WorkoutSession[]): BodyPartSetDistribution[] {
+  const setCounts = new Map<BodyPart, number>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      setCounts.set(machine.body_part, (setCounts.get(machine.body_part) ?? 0) + machine.sets.length)
+    }
+  }
+
+  return sortBodyPartRows(
+    Array.from(setCounts.entries()).map(([bodyPart, setCount]) => ({ bodyPart, setCount })),
+  )
+}
+
+export function getBodyPartFrequency(sessions: WorkoutSession[]): BodyPartFrequency[] {
+  const sessionIdsByBodyPart = new Map<BodyPart, Set<string>>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const sessionIds = sessionIdsByBodyPart.get(machine.body_part) ?? new Set<string>()
+      sessionIds.add(session.session_id)
+      sessionIdsByBodyPart.set(machine.body_part, sessionIds)
+    }
+  }
+
+  return sortBodyPartRows(
+    Array.from(sessionIdsByBodyPart.entries()).map(([bodyPart, sessionIds]) => ({
+      bodyPart,
+      sessionCount: sessionIds.size,
+    })),
+  )
+}
+
+export function getBodyPartShare(sessions: WorkoutSession[]): BodyPartShare[] {
+  const sets = getSetsByBodyPart(sessions)
+  const totalSets = sets.reduce((total, item) => total + item.setCount, 0)
+
+  return sets.map((item) => ({
+    ...item,
+    share: totalSets === 0 ? 0 : item.setCount / totalSets,
+  }))
+}
+
+export function getBodyPartTrend(sessions: WorkoutSession[]): BodyPartTrend[] {
+  const trend = new Map<string, BodyPartTrend>()
+  const sessionIdsByTrend = new Map<string, Set<string>>()
+
+  for (const session of sessions) {
+    const month = session.date.slice(0, 7)
+    for (const machine of session.machines) {
+      const key = `${month}:${machine.body_part}`
+      const current = trend.get(key) ?? {
+        month,
+        bodyPart: machine.body_part,
+        setCount: 0,
+        sessionCount: 0,
+      }
+      const sessionIds = sessionIdsByTrend.get(key) ?? new Set<string>()
+
+      current.setCount += machine.sets.length
+      sessionIds.add(session.session_id)
+      current.sessionCount = sessionIds.size
+      trend.set(key, current)
+      sessionIdsByTrend.set(key, sessionIds)
+    }
+  }
+
+  return Array.from(trend.values()).sort(
+    (a, b) => a.month.localeCompare(b.month) || a.bodyPart.localeCompare(b.bodyPart),
+  )
+}
+
+export function getLastTrainedDateByBodyPart(sessions: WorkoutSession[]): BodyPartLastTrained[] {
+  const lastDateByBodyPart = new Map<BodyPart, string>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const current = lastDateByBodyPart.get(machine.body_part)
+      if (!current || session.date > current) {
+        lastDateByBodyPart.set(machine.body_part, session.date)
+      }
+    }
+  }
+
+  return Array.from(lastDateByBodyPart.entries())
+    .map(([bodyPart, lastTrainedDate]) => ({ bodyPart, lastTrainedDate }))
+    .sort((a, b) => b.lastTrainedDate.localeCompare(a.lastTrainedDate) || a.bodyPart.localeCompare(b.bodyPart))
+}
+
+export function getMachineFrequencyRanking(sessions: WorkoutSession[]): MachineFrequencyRanking[] {
+  const rows = new Map<string, MachineFrequencyRanking>()
+  const sessionIdsByMachine = new Map<string, Set<string>>()
+
+  for (const session of sessions) {
+    for (const machine of session.machines) {
+      const row = rows.get(machine.machine_id) ?? {
+        machineId: machine.machine_id,
+        machineName: machine.name,
+        bodyPart: machine.body_part,
+        sessionCount: 0,
+        occurrenceCount: 0,
+      }
+      const sessionIds = sessionIdsByMachine.get(machine.machine_id) ?? new Set<string>()
+
+      row.occurrenceCount += 1
+      sessionIds.add(session.session_id)
+      row.sessionCount = sessionIds.size
+      rows.set(machine.machine_id, row)
+      sessionIdsByMachine.set(machine.machine_id, sessionIds)
+    }
+  }
+
+  return Array.from(rows.values()).sort(
+    (a, b) =>
+      b.sessionCount - a.sessionCount ||
+      b.occurrenceCount - a.occurrenceCount ||
+      a.machineName.localeCompare(b.machineName) ||
+      a.machineId.localeCompare(b.machineId),
+  )
+}
+
+export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribution[] {
+  const rows = new Map<string, GymSessionDistribution>()
+
+  for (const session of sessions) {
+    const row = rows.get(session.gym.id) ?? {
+      gymId: session.gym.id,
+      gymName: session.gym.name,
+      sessionCount: 0,
+    }
+
+    row.sessionCount += 1
+    rows.set(session.gym.id, row)
+  }
+
+  return Array.from(rows.values()).sort(
+    (a, b) => b.sessionCount - a.sessionCount || a.gymName.localeCompare(b.gymName) || a.gymId.localeCompare(b.gymId),
+  )
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
@@ -778,6 +1012,10 @@ function getMachinesById(session: WorkoutSession): Map<string, WorkoutMachine> {
   }
 
   return machines
+}
+
+function sortBodyPartRows<T extends { bodyPart: BodyPart }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.bodyPart.localeCompare(b.bodyPart))
 }
 
 function sumAggregate<T extends Record<K, number>, K extends keyof T>(items: T[], key: K): number {
