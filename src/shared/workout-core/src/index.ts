@@ -889,8 +889,8 @@ export function validateWorkoutMasterReferences(
   options: MasterReferenceValidationOptions = {},
 ): MasterValidationResult {
   const mode = options.mode ?? 'historical'
-  const machinesById = new Map(masterData.machines.machines.map((machine) => [machine.machine_id, machine]))
-  const gymsById = new Map(masterData.gyms.gyms.map((gym) => [gym.gym_id, gym]))
+  const machinesById = createMachineLookup(masterData.machines.machines)
+  const gymsById = createGymLookup(masterData.gyms.gyms)
   const issues: MasterValidationIssue[] = []
 
   sessions.forEach((session, sessionIndex) => {
@@ -945,8 +945,8 @@ export function resolveHistoricalWorkoutReferences(
   masterData: WorkoutMasterData,
   session: RawWorkoutSession,
 ): HistoricalWorkoutReferenceResolution {
-  const machinesById = new Map(masterData.machines.machines.map((machine) => [machine.machine_id, machine]))
-  const gymsById = new Map(masterData.gyms.gyms.map((gym) => [gym.gym_id, gym]))
+  const machinesById = createMachineLookup(masterData.machines.machines)
+  const gymsById = createGymLookup(masterData.gyms.gyms)
 
   return {
     sessionId: session.session_id,
@@ -963,6 +963,28 @@ export function resolveHistoricalWorkoutReferenceReport(
   sessions: RawWorkoutSession[],
 ): HistoricalWorkoutReferenceResolution[] {
   return sessions.map((session) => resolveHistoricalWorkoutReferences(masterData, session))
+}
+
+function createMachineLookup(machines: MachineMasterItem[]): Map<string, MachineMasterItem> {
+  const lookup = new Map<string, MachineMasterItem>()
+  for (const machine of machines) {
+    lookup.set(machine.machine_id, machine)
+    for (const sourceId of machine.source_ids ?? []) {
+      lookup.set(sourceId, machine)
+    }
+  }
+  return lookup
+}
+
+function createGymLookup(gyms: GymMasterItem[]): Map<string, GymMasterItem> {
+  const lookup = new Map<string, GymMasterItem>()
+  for (const gym of gyms) {
+    lookup.set(gym.gym_id, gym)
+    for (const sourceId of gym.source_ids ?? []) {
+      lookup.set(sourceId, gym)
+    }
+  }
+  return lookup
 }
 
 function validateMasterSchemaVersions(masterData: WorkoutMasterData): MasterValidationIssue[] {
@@ -1029,6 +1051,18 @@ function validateMachineMasterItems(machines: MachineMasterItem[]): MasterValida
     if (machine.machine_id) {
       seenIds.add(machine.machine_id)
     }
+
+    for (const sourceId of machine.source_ids ?? []) {
+      if (seenIds.has(sourceId)) {
+        issues.push({
+          code: 'duplicate-machine-id',
+          message: `Duplicate machine source_id: ${sourceId}.`,
+          path: `${path}.source_ids`,
+          referenceId: sourceId,
+        })
+      }
+      seenIds.add(sourceId)
+    }
   })
 
   return issues
@@ -1067,6 +1101,18 @@ function validateGymMasterItems(gyms: GymMasterItem[]): MasterValidationIssue[] 
 
     if (gym.gym_id) {
       seenIds.add(gym.gym_id)
+    }
+
+    for (const sourceId of gym.source_ids ?? []) {
+      if (seenIds.has(sourceId)) {
+        issues.push({
+          code: 'duplicate-gym-id',
+          message: `Duplicate gym source_id: ${sourceId}.`,
+          path: `${path}.source_ids`,
+          referenceId: sourceId,
+        })
+      }
+      seenIds.add(sourceId)
     }
   })
 

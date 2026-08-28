@@ -55,6 +55,7 @@ export type AfStatus = {
       machines: string
       analytics: string
       settings: string
+      maintenance: string
     }
   }
   requiredActions: string[]
@@ -112,6 +113,74 @@ export type CredentialUpdate = {
 
 export type CredentialUpdateResult = CredentialStatus
 
+export type MasterWriteTarget = {
+  type: 'MACHINE_MASTER' | 'GYM_MASTER'
+  path: string
+  resourceKind: 'file'
+  writeAllowed: boolean
+}
+
+export type MasterWriteSecurity = {
+  configurationAvailable: boolean
+  credentialConfigured: boolean
+  credentialState: CredentialStatus['state']
+  repositoryConfigured: boolean
+  writeEnabled: boolean
+  workoutLogWriteAllowed: boolean
+  rawJsonWriteAllowed: boolean
+  genericGitWriteAllowed: boolean
+}
+
+export type MasterWriteBoundary = {
+  repository: RepositoryConfiguration
+  allowedTargets: MasterWriteTarget[]
+  security: MasterWriteSecurity
+}
+
+export type MasterDocumentType = 'MACHINE_MASTER' | 'GYM_MASTER'
+
+export type MasterDocumentSnapshot = {
+  type: MasterDocumentType
+  path: string
+  revision: string
+  content: string
+}
+
+export type MasterDocumentWriteResult = {
+  type: MasterDocumentType
+  path: string
+  revision: string
+}
+
+export type UnresolvedAffectedWorkout = {
+  filePath: string
+  line?: number | null
+  message: string
+}
+
+export type UnresolvedMasterReference = {
+  type: MasterDocumentType
+  referenceId: string
+  affectedWorkouts: UnresolvedAffectedWorkout[]
+}
+
+export type MasterDocumentWriteRequest = {
+  expectedRevision: string
+  content: string
+}
+
+export type MasterWriteErrorCode =
+  | 'MASTER_WRITE_INVALID'
+  | 'MASTER_WRITE_CONFLICT'
+  | 'MASTER_WRITE_FAILED'
+  | 'GITHUB_UNAUTHORIZED'
+  | 'GITHUB_FORBIDDEN'
+  | 'GITHUB_RATE_LIMIT'
+  | 'GITHUB_RESOURCE_NOT_FOUND'
+  | 'GITHUB_CONNECTION_FAILED'
+  | 'GITHUB_TIMEOUT'
+  | 'GITHUB_SERVER_ERROR'
+
 export type SyncResult = {
   degraded: boolean
 }
@@ -135,6 +204,30 @@ export async function updateConfiguration(
 
 export async function getCredentialStatus(): Promise<AfCallResult<CredentialStatus>> {
   return callAf<CredentialStatus>('/api/v1/common/credential/status')
+}
+
+export async function getMasterWriteBoundary(): Promise<AfCallResult<MasterWriteBoundary>> {
+  return callAf<MasterWriteBoundary>('/api/v1/common/master-write/boundary')
+}
+
+export async function getMasterDocument(
+  type: MasterDocumentType,
+): Promise<AfCallResult<MasterDocumentSnapshot>> {
+  return callAf<MasterDocumentSnapshot>(`/api/v1/common/master-write/documents/${type}`)
+}
+
+export async function getUnresolvedMasterReferences(): Promise<AfCallResult<UnresolvedMasterReference[]>> {
+  return callAf<UnresolvedMasterReference[]>('/api/v1/common/master-write/unresolved')
+}
+
+export async function updateMasterDocument(
+  type: MasterDocumentType,
+  request: MasterDocumentWriteRequest,
+): Promise<AfCallResult<MasterDocumentWriteResult>> {
+  return callAf<MasterDocumentWriteResult>(`/api/v1/common/master-write/documents/${type}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  })
 }
 
 export async function updateCredential(

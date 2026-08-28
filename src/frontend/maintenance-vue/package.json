@@ -1,0 +1,25 @@
+{
+  "name": "@workout-lab/maintenance-vue",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "prod": "vite preview --host 127.0.0.1",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "@workout-lab/frontend-common": "file:../../shared/frontend-common",
+    "vue": "^3.5.40",
+    "vuetify": "^3.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/tsconfig": "^0.9.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vue-tsc": "^3.3.8"
+  }
+}

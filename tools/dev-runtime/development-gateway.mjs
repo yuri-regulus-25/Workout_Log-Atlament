@@ -53,6 +53,14 @@ const routes = [
     },
   },
   {
+    name: 'maintenance',
+    prefixes: ['/maintenance'],
+    target: {
+      host: '127.0.0.1',
+      port: 5181,
+    },
+  },
+  {
     name: 'portal',
     prefixes: ['/'],
     target: {

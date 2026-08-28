@@ -51,6 +51,13 @@ export const applications = [
     iconClass: 'mdi-cog-outline',
     drawer: true,
   },
+  {
+    id: 'maintenance',
+    route: applicationRoutes.maintenance,
+    displayName: 'Master Maintenance',
+    iconClass: 'mdi-database-edit-outline',
+    drawer: true,
+  },
 ] as const satisfies readonly ApplicationMetadata[]
 
 export function getApplicationMetadata(id: ApplicationRouteId): ApplicationMetadata {

@@ -1,6 +1,8 @@
 using Atlament.Core;
 using System.Net;
 using System.Reflection;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Atlament.Tests;
 
@@ -63,6 +65,35 @@ public sealed class AfCoreTests
         Assert.Empty(result.Sessions);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterMachineNotFound);
         Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterGymNotFound);
+    }
+
+    [Fact]
+    public void SourceIdsResolveUnresolvedWorkoutReferencesWithoutRawWorkoutRewrite()
+    {
+        var builder = new RuntimeDataBuilder();
+        var machineMaster = new RuntimeSourceFile("master/machines.json", """
+            {
+              "schema_version": 1,
+              "machines": [
+                { "machine_id": "known-machine", "source_ids": ["legacy-machine"], "name": "Known Machine", "body_part": "chest", "active": true }
+              ]
+            }
+            """);
+        var gymMaster = new RuntimeSourceFile("master/gyms.json", """
+            {
+              "schema_version": 1,
+              "gyms": [
+                { "gym_id": "known-gym", "source_ids": ["legacy-gym"], "name": "Known Gym", "short_name": "KG", "active": true }
+              ]
+            }
+            """);
+
+        var result = builder.Build(new[] { Workout("workouts/legacy.json", "legacy-gym", "legacy-machine") }, machineMaster, gymMaster);
+
+        var session = Assert.Single(result.Sessions);
+        Assert.Empty(result.Errors);
+        Assert.Equal("known-gym", session.Gym.Id);
+        Assert.Equal("known-machine", Assert.Single(session.Machines).MachineId);
     }
 
     [Fact]
@@ -442,6 +473,479 @@ public sealed class AfCoreTests
         }
     }
 
+    [Fact]
+    public async Task MasterWriteBoundaryAllowsOnlyMasterResources()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            var saved = configurationStore.Save(Configuration("data"));
+            Assert.Empty(saved);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.Equal("owner", boundary.Repository.Owner);
+            Assert.Equal("repo", boundary.Repository.Repository);
+            Assert.Equal("master", boundary.Repository.Ref);
+            Assert.All(boundary.AllowedTargets, target => Assert.True(target.WriteAllowed));
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "MACHINE_MASTER" && target.Path == "master/machines.json");
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "GYM_MASTER" && target.Path == "master/gyms.json");
+            Assert.DoesNotContain(boundary.AllowedTargets, target => target.Type == "WORKOUT");
+            Assert.True(boundary.Security.ConfigurationAvailable);
+            Assert.False(boundary.Security.WriteEnabled);
+            Assert.False(boundary.Security.WorkoutLogWriteAllowed);
+            Assert.False(boundary.Security.RawJsonWriteAllowed);
+            Assert.False(boundary.Security.GenericGitWriteAllowed);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterWriteBoundaryRequiresAvailableCredential()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            var credential = credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31"));
+            Assert.Equal("available", credential.State);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.True(boundary.Security.CredentialConfigured);
+            Assert.Equal("available", boundary.Security.CredentialState);
+            Assert.True(boundary.Security.RepositoryConfigured);
+            Assert.True(boundary.Security.WriteEnabled);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterWriteBoundaryDoesNotTrustConfiguredArbitraryMasterPath()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            var configuration = new AfConfiguration(
+                1,
+                new RepositoryConfiguration("owner", "repo", "master", "data"),
+                new[]
+                {
+                    new ResourceConfiguration("WORKOUT", "workouts/", "directory", true, false),
+                    new ResourceConfiguration("MACHINE_MASTER", "master/other-machines.json", "file", true, false),
+                    new ResourceConfiguration("GYM_MASTER", "master/gyms.json", "file", true, false)
+                },
+                new TimeoutConfiguration(10, 60, 30, 10));
+            Assert.Empty(configurationStore.Save(configuration));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "MACHINE_MASTER" && target.Path == "master/machines.json");
+            Assert.DoesNotContain(boundary.AllowedTargets, target => target.Path == "master/other-machines.json");
+            Assert.False(boundary.Security.WriteEnabled);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteUsesExpectedRevisionAndFixedCommitMessage()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var http = new RecordingAsyncHttpMessageHandler(async request =>
+        {
+            requests.Add(CloneRequest(request));
+            if (request.Method == HttpMethod.Get)
+            {
+                if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "gym-sha",
+                          "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                        }
+                        """);
+                }
+
+                return JsonResponse($$"""
+                    {
+                      "sha": "current-sha",
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m0\",\"name\":\"Machine 0\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
+                    }
+                    """);
+            }
+
+            var body = request.Content is null ? "{}" : await request.Content.ReadAsStringAsync();
+            var payload = JsonNode.Parse(body)!;
+            Assert.Equal("Update machine master", payload["message"]!.GetValue<string>());
+            Assert.Equal("current-sha", payload["sha"]!.GetValue<string>());
+            Assert.Equal("master", payload["branch"]!.GetValue<string>());
+            Assert.Equal(
+                "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"back\",\"aliases\":[],\"active\":true,\"deleted\":false}]}",
+                Encoding.UTF8.GetString(Convert.FromBase64String(payload["content"]!.GetValue<string>())));
+            return JsonResponse("""
+                {
+                  "content": {
+                    "sha": "saved-sha"
+                  }
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"back\",\"aliases\":[],\"active\":true,\"deleted\":false}]}",
+            CancellationToken.None);
+
+        Assert.Empty(result.Errors);
+        Assert.NotNull(result.Result);
+        Assert.Equal("saved-sha", result.Result!.Revision);
+        Assert.Equal("master/machines.json", result.Result.Path);
+        Assert.Equal(3, requests.Count);
+        Assert.Equal(HttpMethod.Get, requests[0].Method);
+        Assert.Contains("/contents/data/master/machines.json?ref=master", requests[0].RequestUri!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Get, requests[1].Method);
+        Assert.Contains("/contents/data/master/gyms.json?ref=master", requests[1].RequestUri!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Put, requests[2].Method);
+        Assert.Contains("/contents/data/master/machines.json", requests[2].RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsStaleRevisionWithoutPut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            return JsonResponse("""
+                {
+                  "sha": "newer-sha",
+                  "content": "e30="
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "stale-sha",
+            "{\"schema_version\":1,\"gyms\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteConflict);
+        Assert.Equal(new[] { HttpMethod.Get }, methods);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsUnknownTarget()
+    {
+        var github = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
+
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "WORKOUT",
+            "sha",
+            "{}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteValidatesWholeMasterBeforePut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            if (request.RequestUri!.AbsoluteUri.Contains("/data/master/machines.json", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""
+                    {
+                      "sha": "machine-sha",
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\",\"name\":\"Machine 1\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
+                    }
+                    """);
+            }
+
+            return JsonResponse($$"""
+                {
+                  "sha": "gym-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":false}]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "gym-sha",
+            "{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":true},{\"gym_id\":\"g2\",\"name\":\"Gym 2\",\"active\":false,\"deleted\":false,\"main\":true}]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+        Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Get }, methods);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsClearingConfiguredMainGymBeforePut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            return JsonResponse($$"""
+                {
+                  "sha": "gym-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "gym-sha",
+            "{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":false}]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+        Assert.Equal(new[] { HttpMethod.Get }, methods);
+    }
+
+    [Theory]
+    [InlineData(401, AfErrorCodes.GithubUnauthorized)]
+    [InlineData(403, AfErrorCodes.GithubForbidden)]
+    [InlineData(404, AfErrorCodes.GithubResourceNotFound)]
+    [InlineData(429, AfErrorCodes.GithubRateLimit)]
+    [InlineData(500, AfErrorCodes.GithubServerError)]
+    public async Task MasterDocumentWriteMapsGithubReadFailureCodes(int statusCode, string expectedCode)
+    {
+        var github = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage((HttpStatusCode)statusCode))));
+
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == expectedCode);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteReportsAmbiguousGithubWriteResult()
+    {
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Put)
+            {
+                return JsonResponse("{}");
+            }
+
+            if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""
+                    {
+                      "sha": "gym-sha",
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[]}")}}"
+                    }
+                    """);
+            }
+
+            return JsonResponse($$"""
+                {
+                  "sha": "machine-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "machine-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteFailed);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteMapsNetworkAndCanceledOperations()
+    {
+        var networkGithub = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => throw new HttpRequestException())));
+        var network = await networkGithub.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        using var canceled = new CancellationTokenSource();
+        await canceled.CancelAsync();
+        var timeoutGithub = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
+        var timeout = await timeoutGithub.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            canceled.Token);
+
+        Assert.Null(network.Result);
+        Assert.Contains(network.Errors, error => error.Code == AfErrorCodes.GithubConnectionFailed);
+        Assert.Null(timeout.Result);
+        Assert.Contains(timeout.Errors, error => error.Code == AfErrorCodes.GithubTimeout);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsDeletingReferencedMachineBeforeGithubWrite()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+
+            var runtimeStore = new RuntimeDataStore(paths);
+            var session = new WorkoutSession(
+                1,
+                "valid",
+                "2026-08-24",
+                "complete",
+                new Gym("known-gym", "Known Gym", "KG"),
+                null,
+                new[]
+                {
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                },
+                Array.Empty<string>());
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+
+            var http = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                runtimeStore,
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+            http.RequestedUrls.Clear();
+
+            var result = await application.WriteMasterDocumentAsync(
+                "MACHINE_MASTER",
+                new MasterDocumentWriteRequest(
+                    "current-sha",
+                    "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":false,\"deleted\":true}]}"),
+                CancellationToken.None);
+
+            Assert.Equal(400, result.StatusCode);
+            Assert.False(result.Response.Success);
+            Assert.Contains(result.Response.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+            Assert.Empty(http.RequestedUrls);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
     private static async Task WaitForStartupAsync(AtlamentApplication application)
     {
         for (var attempt = 0; attempt < 20; attempt++)
@@ -493,6 +997,13 @@ public sealed class AfCoreTests
         Content = new StringContent(json)
     };
 
+    private static string EncodeContent(string content) => Convert.ToBase64String(Encoding.UTF8.GetBytes(content));
+
+    private static HttpRequestMessage CloneRequest(HttpRequestMessage request)
+    {
+        return new HttpRequestMessage(request.Method, request.RequestUri);
+    }
+
     private sealed class RecordingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         public List<string> RequestedUrls { get; } = new();
@@ -501,6 +1012,14 @@ public sealed class AfCoreTests
         {
             RequestedUrls.Add(request.RequestUri?.AbsoluteUri ?? "");
             return Task.FromResult(respond(request));
+        }
+    }
+
+    private sealed class RecordingAsyncHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return await respond(request);
         }
     }
 }

@@ -49,7 +49,7 @@ class AndroidLocalhostServer(
     private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String)
     private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
     private class AfException(val code: String, override val message: String) : Exception(message)
-    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings")
+    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -168,6 +168,7 @@ class AndroidLocalhostServer(
             method == "GET" && route == "/status" -> sendJson(output, 200, statusJson())
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
             method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
+            method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
             method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
             method == "POST" && route == "/configuration" -> sendConfigurationUpdate(output, body)
             method == "POST" && route == "/credential" -> sendCredentialUpdate(output, body)
@@ -293,7 +294,8 @@ class AndroidLocalhostServer(
           "workouts": "${assetStatus("frontend/workouts/index.html")}",
           "machines": "${assetStatus("frontend/machines/index.html")}",
           "analytics": "${assetStatus("frontend/analytics/index.html")}",
-          "settings": "${assetStatus("frontend/settings/index.html")}"
+          "settings": "${assetStatus("frontend/settings/index.html")}",
+          "maintenance": "${assetStatus("frontend/maintenance/index.html")}"
         }
     """.trimIndent()
 
@@ -327,6 +329,56 @@ class AndroidLocalhostServer(
         configurationFile.readText(StandardCharsets.UTF_8)
     } else {
         defaultConfigurationJson()
+    }
+
+    private fun masterWriteBoundaryJson(): String {
+        val configuration = JSONObject(loadConfigurationJson())
+        val repository = configuration.getJSONObject("repository")
+        val allowedTargets = JSONArray()
+        allowedTargets.put(JSONObject()
+            .put("type", "MACHINE_MASTER")
+            .put("path", "master/machines.json")
+            .put("resourceKind", "file")
+            .put("writeAllowed", true))
+        allowedTargets.put(JSONObject()
+            .put("type", "GYM_MASTER")
+            .put("path", "master/gyms.json")
+            .put("resourceKind", "file")
+            .put("writeAllowed", true))
+        val repositoryConfigured = repository.optString("owner").trim().isNotBlank() &&
+            repository.optString("repository").trim().isNotBlank() &&
+            repository.optString("ref", "main").trim().isNotBlank()
+        val resources = configuration.optJSONArray("resources") ?: JSONArray()
+        val configuredTargetKeys = mutableSetOf<String>()
+        for (index in 0 until resources.length()) {
+            val resource = resources.optJSONObject(index) ?: continue
+            if (resource.optString("resourceKind") == "file") {
+                configuredTargetKeys.add("${resource.optString("type")}:${resource.optString("path")}")
+            }
+        }
+        val allTargetsConfigured = configuredTargetKeys.contains("MACHINE_MASTER:master/machines.json") &&
+            configuredTargetKeys.contains("GYM_MASTER:master/gyms.json")
+        val credential = JSONObject(credentialStatusJson())
+        val credentialState = credential.optString("state", "unknown")
+        val writeEnabled = configurationStatus() == "available" &&
+            credential.optBoolean("configured", false) &&
+            credentialState == "available" &&
+            repositoryConfigured &&
+            allTargetsConfigured
+
+        return JSONObject()
+            .put("repository", repository)
+            .put("allowedTargets", allowedTargets)
+            .put("security", JSONObject()
+                .put("configurationAvailable", configurationStatus() == "available")
+                .put("credentialConfigured", credential.optBoolean("configured", false))
+                .put("credentialState", credentialState)
+                .put("repositoryConfigured", repositoryConfigured)
+                .put("writeEnabled", writeEnabled)
+                .put("workoutLogWriteAllowed", false)
+                .put("rawJsonWriteAllowed", false)
+                .put("genericGitWriteAllowed", false))
+            .toString(2)
     }
 
     private fun sendConfigurationUpdate(output: OutputStream, updateJson: String) {

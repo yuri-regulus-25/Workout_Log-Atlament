@@ -85,6 +85,8 @@ Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-w
 ```
 
 主要APIは `/api/v1/common/` 配下です。
+Master Data書込境界は `/api/v1/common/master-write/boundary` で公開し、AFが設定由来のRepository/Branchと固定Master allowlistだけを返します。Workout Log write、Raw JSON write、Generic Git writeは公開しません。
+Master Document persistenceはDocument単位でGitHub Contents APIに保存し、read時のSHAとwrite時のcurrent SHAが一致しない場合はConflictとして拒否します。Commit messageはMaster種別ごとにAF固定文言を使用し、画面入力値として受け取りません。
 
 ## 配布時の注意
 

@@ -773,6 +773,35 @@ describe('workout-core', () => {
     })
   })
 
+  it('resolves source_ids to existing master records without changing raw workout ids', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [machineMasterItem('known-machine', { source_ids: ['legacy-machine'] })],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [gymMasterItem('known-gym', { source_ids: ['legacy-gym'] })],
+      },
+    }
+
+    const result = resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('legacy-history', 'legacy-gym', ['legacy-machine']),
+    )
+
+    expect(result.gym).toMatchObject({
+      referenceId: 'legacy-gym',
+      state: 'active',
+      record: { gym_id: 'known-gym' },
+    })
+    expect(result.machines[0]).toMatchObject({
+      referenceId: 'legacy-machine',
+      state: 'active',
+      record: { machine_id: 'known-machine' },
+    })
+  })
+
   it('calculates weight and volume metrics only from configured main gym sessions', () => {
     const context = resolveMainGymContext({
       schema_version: 1,

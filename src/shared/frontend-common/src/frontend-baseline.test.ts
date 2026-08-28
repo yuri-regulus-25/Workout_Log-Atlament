@@ -21,6 +21,7 @@ const sourceDocuments = [
   'src/frontend/errors/src/503.html',
   'src/frontend/errors/src/common.html',
   'src/frontend/machines-angular/src/index.html',
+  'src/frontend/maintenance-vue/index.html',
   'src/frontend/portal/src/index.html',
   'src/frontend/settings-solid/index.html',
   'src/frontend/workouts-vue/index.html',
@@ -86,6 +87,17 @@ const existingFrontendApps = [
       error: /tone: 'error'/,
     },
   },
+  {
+    id: 'maintenance',
+    sourceFiles: ['src/frontend/maintenance-vue/src/App.vue'],
+    cssFiles: ['src/frontend/maintenance-vue/src/style.css'],
+    stateMarkers: {
+      loading: /:loading="loading"/,
+      warning: /type: 'success' \| 'error' \| 'warning'/,
+      empty: /displayMode/,
+      error: /type: 'error'/,
+    },
+  },
 ] as const satisfies ReadonlyArray<{
   id: Exclude<ApplicationRouteId, 'portal'>
   sourceFiles: readonly string[]
@@ -128,7 +140,7 @@ describe('cross-frontend test baseline', () => {
 
   it('keeps cross-app navigation metadata stable and smoke-tested by each existing app', () => {
     const drawerRouteIds = drawerApplications.map((application) => application.id)
-    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'settings'])
+    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'])
 
     const routes = Object.values(applicationRoutes)
     expect(new Set(routes).size).toBe(routes.length)
@@ -181,5 +193,18 @@ describe('cross-frontend test baseline', () => {
     expect(source).toContain('tabindex="-1"')
     expect(source).toContain('"$route.fullPath"')
     expect(source).toContain('this.$refs.pageHeading?.focus()')
+  })
+
+  it('keeps Master Maintenance writes constrained to reviewed operations', () => {
+    const source = readSource('src/frontend/maintenance-vue/src/App.vue')
+
+    expect(source).toContain('requestLifecycleToggle')
+    expect(source).toContain('requestMainGym')
+    expect(source).toContain('confirmOpen')
+    expect(source).toContain('saveRecords')
+    expect(source).toContain('source_ids')
+    expect(source).not.toContain('v-textarea')
+    expect(source).not.toMatch(/bulk/i)
+    expect(source).not.toMatch(/raw json/i)
   })
 })
