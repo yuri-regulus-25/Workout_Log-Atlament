@@ -287,7 +287,17 @@
   padding: 10px 14px;
 }
 
+.field input,
+.field textarea {
+  border: 1px solid var(--wl-input-border);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-text-strong);
+  padding: 10px 14px;
+}
+
 .field input:focus,
+.field textarea:focus,
 .field select:focus,
 .primary-action:focus-visible,
 .text-link:focus-visible,
