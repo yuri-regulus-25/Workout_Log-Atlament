@@ -1124,6 +1124,12 @@ public sealed class OperationGate
 
 public sealed class AtlamentApplication
 {
+    private static readonly IReadOnlyList<MasterWriteTarget> MasterWriteTargets = new[]
+    {
+        new MasterWriteTarget("MACHINE_MASTER", "master/machines.json", "file", true),
+        new MasterWriteTarget("GYM_MASTER", "master/gyms.json", "file", true)
+    };
+
     private static readonly string ApplicationFrameworkVersion =
         typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(AtlamentApplication).Assembly.GetName().Version?.ToString()
@@ -1286,6 +1292,38 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<CredentialStatus> GetCredentialStatus() => AfResponses.Ok(_credentialStatus);
+
+    public AfResponse<MasterWriteBoundary> GetMasterWriteBoundary()
+    {
+        var repositoryConfigured =
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Owner) &&
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Repository) &&
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Ref);
+        var configuredTargetKeys = _configuration.Resources
+            .Where(resource => resource.ResourceKind == "file")
+            .Select(resource => $"{resource.Type}:{resource.Path}")
+            .ToHashSet(StringComparer.Ordinal);
+        var allTargetsConfigured = MasterWriteTargets.All(target => configuredTargetKeys.Contains($"{target.Type}:{target.Path}"));
+        var writeEnabled =
+            _configurationStatus == ComponentStatus.available &&
+            _credentialStatus.Configured &&
+            _credentialStatus.State == CredentialState.available.ToString() &&
+            repositoryConfigured &&
+            allTargetsConfigured;
+
+        return AfResponses.Ok(new MasterWriteBoundary(
+            _configuration.Repository,
+            MasterWriteTargets,
+            new MasterWriteSecurity(
+                _configurationStatus == ComponentStatus.available,
+                _credentialStatus.Configured,
+                _credentialStatus.State,
+                repositoryConfigured,
+                writeEnabled,
+                false,
+                false,
+                false)));
+    }
 
     public (int StatusCode, AfResponse<CredentialUpdateResult> Response) UpdateCredential(CredentialUpdate update)
     {

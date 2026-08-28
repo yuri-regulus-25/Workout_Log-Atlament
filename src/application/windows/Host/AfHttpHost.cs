@@ -99,6 +99,7 @@ public sealed class AfHttpHost : IAsyncDisposable
             return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
         });
         app.MapGet($"{prefix}/credential/status", () => Results.Json(_application.GetCredentialStatus(), AfJson.Options));
+        app.MapGet($"{prefix}/master-write/boundary", () => Results.Json(_application.GetMasterWriteBoundary(), AfJson.Options));
         app.MapPost($"{prefix}/credential", async (HttpContext context) =>
         {
             var update = await context.Request.ReadFromJsonAsync<CredentialUpdate>(AfJson.Options, context.RequestAborted)

@@ -14,6 +14,7 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 
 const apiRoutes = new Set([
   '/api/v1/common/status',
+  '/api/v1/common/master-write/boundary',
   '/api/v1/common/runtime/workouts',
   '/api/workout-data',
 ])
@@ -37,6 +38,11 @@ createServer(async (request, response) => {
       return
     }
 
+    if (url.pathname.endsWith('/master-write/boundary')) {
+      await respondMasterWriteBoundary(response)
+      return
+    }
+
     await respondLegacyWorkoutData(response)
   } catch (error) {
     writeJson(response, 500, fail(
@@ -49,6 +55,7 @@ createServer(async (request, response) => {
   console.log(`Atlament Node Development Runtime: http://127.0.0.1:${port}/`)
   console.log('API:')
   console.log('  GET /api/v1/common/status')
+  console.log('  GET /api/v1/common/master-write/boundary')
   console.log('  GET /api/v1/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
@@ -116,6 +123,31 @@ async function respondRuntimeWorkouts(response) {
   }
 
   writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors))
+}
+
+async function respondMasterWriteBoundary(response) {
+  writeJson(response, 200, ok({
+    repository: {
+      owner: '',
+      repository: '',
+      ref: 'main',
+      rootPath: '',
+    },
+    allowedTargets: [
+      { type: 'MACHINE_MASTER', path: 'master/machines.json', resourceKind: 'file', writeAllowed: true },
+      { type: 'GYM_MASTER', path: 'master/gyms.json', resourceKind: 'file', writeAllowed: true },
+    ],
+    security: {
+      configurationAvailable: false,
+      credentialConfigured: false,
+      credentialState: 'unknown',
+      repositoryConfigured: false,
+      writeEnabled: false,
+      workoutLogWriteAllowed: false,
+      rawJsonWriteAllowed: false,
+      genericGitWriteAllowed: false,
+    },
+  }))
 }
 
 async function respondLegacyWorkoutData(response) {

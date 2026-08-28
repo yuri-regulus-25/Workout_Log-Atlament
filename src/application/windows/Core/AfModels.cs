@@ -73,6 +73,27 @@ public sealed record CredentialUpdateResult(
     [property: JsonPropertyName("state")] string State,
     [property: JsonPropertyName("limitDate")] string? LimitDate);
 
+public sealed record MasterWriteTarget(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("resourceKind")] string ResourceKind,
+    [property: JsonPropertyName("writeAllowed")] bool WriteAllowed);
+
+public sealed record MasterWriteSecurity(
+    [property: JsonPropertyName("configurationAvailable")] bool ConfigurationAvailable,
+    [property: JsonPropertyName("credentialConfigured")] bool CredentialConfigured,
+    [property: JsonPropertyName("credentialState")] string CredentialState,
+    [property: JsonPropertyName("repositoryConfigured")] bool RepositoryConfigured,
+    [property: JsonPropertyName("writeEnabled")] bool WriteEnabled,
+    [property: JsonPropertyName("workoutLogWriteAllowed")] bool WorkoutLogWriteAllowed,
+    [property: JsonPropertyName("rawJsonWriteAllowed")] bool RawJsonWriteAllowed,
+    [property: JsonPropertyName("genericGitWriteAllowed")] bool GenericGitWriteAllowed);
+
+public sealed record MasterWriteBoundary(
+    [property: JsonPropertyName("repository")] RepositoryConfiguration Repository,
+    [property: JsonPropertyName("allowedTargets")] IReadOnlyList<MasterWriteTarget> AllowedTargets,
+    [property: JsonPropertyName("security")] MasterWriteSecurity Security);
+
 public sealed record SyncResult(
     [property: JsonPropertyName("degraded")] bool Degraded);
 

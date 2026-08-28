@@ -442,6 +442,143 @@ public sealed class AfCoreTests
         }
     }
 
+    [Fact]
+    public async Task MasterWriteBoundaryAllowsOnlyMasterResources()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            var saved = configurationStore.Save(Configuration("data"));
+            Assert.Empty(saved);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.Equal("owner", boundary.Repository.Owner);
+            Assert.Equal("repo", boundary.Repository.Repository);
+            Assert.Equal("master", boundary.Repository.Ref);
+            Assert.All(boundary.AllowedTargets, target => Assert.True(target.WriteAllowed));
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "MACHINE_MASTER" && target.Path == "master/machines.json");
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "GYM_MASTER" && target.Path == "master/gyms.json");
+            Assert.DoesNotContain(boundary.AllowedTargets, target => target.Type == "WORKOUT");
+            Assert.True(boundary.Security.ConfigurationAvailable);
+            Assert.False(boundary.Security.WriteEnabled);
+            Assert.False(boundary.Security.WorkoutLogWriteAllowed);
+            Assert.False(boundary.Security.RawJsonWriteAllowed);
+            Assert.False(boundary.Security.GenericGitWriteAllowed);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterWriteBoundaryRequiresAvailableCredential()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            var credential = credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31"));
+            Assert.Equal("available", credential.State);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.True(boundary.Security.CredentialConfigured);
+            Assert.Equal("available", boundary.Security.CredentialState);
+            Assert.True(boundary.Security.RepositoryConfigured);
+            Assert.True(boundary.Security.WriteEnabled);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterWriteBoundaryDoesNotTrustConfiguredArbitraryMasterPath()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            var configuration = new AfConfiguration(
+                1,
+                new RepositoryConfiguration("owner", "repo", "master", "data"),
+                new[]
+                {
+                    new ResourceConfiguration("WORKOUT", "workouts/", "directory", true, false),
+                    new ResourceConfiguration("MACHINE_MASTER", "master/other-machines.json", "file", true, false),
+                    new ResourceConfiguration("GYM_MASTER", "master/gyms.json", "file", true, false)
+                },
+                new TimeoutConfiguration(10, 60, 30, 10));
+            Assert.Empty(configurationStore.Save(configuration));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var boundary = application.GetMasterWriteBoundary().Data!;
+
+            Assert.Contains(boundary.AllowedTargets, target => target.Type == "MACHINE_MASTER" && target.Path == "master/machines.json");
+            Assert.DoesNotContain(boundary.AllowedTargets, target => target.Path == "master/other-machines.json");
+            Assert.False(boundary.Security.WriteEnabled);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
     private static async Task WaitForStartupAsync(AtlamentApplication application)
     {
         for (var attempt = 0; attempt < 20; attempt++)
