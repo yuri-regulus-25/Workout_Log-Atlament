@@ -62,6 +62,15 @@ Analytics は `workout-core` を以下に使用する。
 - body part machine variety
 - date/body part formatting
 
+Phase 5-A 以降、`workout-core` は以下の factual derived logic も提供する。
+
+- `7d` / `28d` / `month` / `3m` / `6m` / `all` period range resolution
+- inclusive period filtering
+- previous period and previous month range resolution
+- absolute delta and percentage delta when previous value is non-zero
+- session / daily / weekly / monthly aggregation based on session count, machine count, set count, and rep count
+- calendar month range and daily training marker aggregation
+
 ## Navigation
 
 Analytics は current route ID `analytics` で shared navigation を受け取る。

@@ -62,6 +62,13 @@ Dashboard は `workout-core` を以下に使用する。
 - display date formatting
 - workout rows
 
+Phase 5-A 以降、Dashboard から再利用可能な `workout-core` logic:
+
+- period range resolution for `7d` / `28d` / `month` / `3m` / `6m` / `all`
+- previous period and previous month range resolution
+- factual delta calculation for count-based values
+- daily / weekly / monthly aggregation based on session count, machine count, set count, and rep count
+
 ## Navigation
 
 Dashboard は current route ID `dashboard` で shared navigation を受け取る。

@@ -14,13 +14,25 @@ import {
   getAverageSessionIntervalDays,
   getBodyPartMachineVariety,
   getBodyPartSummary,
+  getCalendarMonthAggregates,
   getCurrentLocalYearMonth,
+  getDailyAggregates,
   getEstimated1RM,
   getMachineHistory,
   getMonthlySessions,
   getMonthlyVolume,
+  getMonthlyAggregates,
+  getNumericDelta,
   getPersonalRecords,
   getRecentSessions,
+  getSessionAggregates,
+  getWeeklyAggregates,
+  filterSessionsByDateRange,
+  resolveCalendarMonthRange,
+  resolvePeriodComparison,
+  resolvePeriodRange,
+  resolvePreviousMonthRange,
+  resolvePreviousPeriod,
   getTotalSets,
   getTotalVolume,
   getTrainingFrequencyPerWeek,
@@ -180,6 +192,189 @@ describe('workout-core', () => {
       '2026-07-20-01',
       '2026-08-16-01',
     ])
+  })
+
+  it('resolves period presets without relying on frontend date logic', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-01-10-01', '2026-01-10'),
+      createMinimalSession('2026-07-31-01', '2026-07-31'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-28-01', '2026-08-28'),
+    ]
+
+    expect(resolvePeriodRange('7d', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-22',
+      endDate: '2026-08-28',
+    })
+    expect(resolvePeriodRange('28d', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-28',
+    })
+    expect(resolvePeriodRange('month', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    })
+    expect(resolvePeriodRange('3m', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-06-01',
+      endDate: '2026-08-31',
+    })
+    expect(resolvePeriodRange('6m', sourceSessions, '2026-01-15')).toEqual({
+      startDate: '2025-08-01',
+      endDate: '2026-01-31',
+    })
+    expect(resolvePeriodRange('all', sourceSessions)).toEqual({
+      startDate: '2026-01-10',
+      endDate: '2026-08-28',
+    })
+  })
+
+  it('filters sessions by inclusive period ranges and resolves previous periods', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-07-31-01', '2026-07-31'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-28-01', '2026-08-28'),
+      createMinimalSession('2026-08-29-01', '2026-08-29'),
+    ]
+
+    expect(
+      filterSessionsByDateRange(sourceSessions, { startDate: '2026-08-01', endDate: '2026-08-28' })
+        .map((session) => session.session_id),
+    ).toEqual(['2026-08-01-01', '2026-08-28-01'])
+    expect(resolvePreviousPeriod({ startDate: '2026-08-01', endDate: '2026-08-28' })).toEqual({
+      startDate: '2026-07-04',
+      endDate: '2026-07-31',
+    })
+    expect(resolvePreviousMonthRange(2026, 1)).toEqual({
+      startDate: '2025-12-01',
+      endDate: '2025-12-31',
+    })
+    expect(resolvePeriodComparison('all', sourceSessions).previous).toBeNull()
+    expect(resolvePeriodComparison('month', sourceSessions, '2026-08-28').previous).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+    })
+  })
+
+  it('calculates factual numeric deltas only when percentages are defined', () => {
+    expect(getNumericDelta(15, 10)).toEqual({
+      current: 15,
+      previous: 10,
+      absolute: 5,
+      percentage: 50,
+    })
+    expect(getNumericDelta(3, 0)).toEqual({
+      current: 3,
+      previous: 0,
+      absolute: 3,
+      percentage: null,
+    })
+  })
+
+  it('aggregates sessions by session, day, week, and month without volume comparisons', () => {
+    const aggregateSessions: WorkoutSession[] = [
+      createSessionWithMachines('2026-08-02-02', '2026-08-02', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 12 }] },
+      ]),
+      createSessionWithMachines('2026-08-02-01', '2026-08-02', [
+        { machine_id: 'lat-pulldown', name: 'Lat Pulldown', body_part: 'back', sets: [{ set: 1, weight_kg: 45, reps: 10 }] },
+      ]),
+      createSessionWithMachines('2026-08-03-01', '2026-08-03', [
+        {
+          machine_id: 'leg-press',
+          name: 'Leg Press',
+          body_part: 'legs',
+          sets: [
+            { set: 1, weight_kg: 100, reps: 10 },
+            { set: 2, weight_kg: 100, reps: 8 },
+          ],
+        },
+      ]),
+      createSessionWithMachines('2026-09-01-01', '2026-09-01', [
+        { machine_id: 'abdominal', name: 'Abdominal', body_part: 'core', sets: [{ set: 1, weight_kg: 35, reps: 15 }] },
+      ]),
+    ]
+
+    expect(getSessionAggregates(aggregateSessions).map((session) => session.sessionId)).toEqual([
+      '2026-08-02-01',
+      '2026-08-02-02',
+      '2026-08-03-01',
+      '2026-09-01-01',
+    ])
+    expect(getDailyAggregates(aggregateSessions)[0]).toMatchObject({
+      date: '2026-08-02',
+      sessionCount: 2,
+      machineCount: 2,
+      setCount: 2,
+      repCount: 22,
+    })
+    expect(getWeeklyAggregates(aggregateSessions)).toEqual([
+      {
+        weekStartDate: '2026-07-27',
+        weekEndDate: '2026-08-02',
+        sessionCount: 2,
+        machineCount: 2,
+        setCount: 2,
+        repCount: 22,
+      },
+      {
+        weekStartDate: '2026-08-03',
+        weekEndDate: '2026-08-09',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 2,
+        repCount: 18,
+      },
+      {
+        weekStartDate: '2026-08-31',
+        weekEndDate: '2026-09-06',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 1,
+        repCount: 15,
+      },
+    ])
+    expect(getMonthlyAggregates(aggregateSessions)).toEqual([
+      {
+        month: '2026-08',
+        sessionCount: 3,
+        machineCount: 3,
+        setCount: 4,
+        repCount: 40,
+      },
+      {
+        month: '2026-09',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 1,
+        repCount: 15,
+      },
+    ])
+  })
+
+  it('resolves calendar month ranges and daily training markers', () => {
+    const calendarSessions = [
+      createMinimalSession('2026-02-01-01', '2026-02-01'),
+      createMinimalSession('2026-02-01-02', '2026-02-01'),
+      createMinimalSession('2026-03-01-01', '2026-03-01'),
+    ]
+    const calendar = getCalendarMonthAggregates(calendarSessions, 2026, 2)
+
+    expect(resolveCalendarMonthRange(2026, 2)).toEqual({
+      startDate: '2026-02-01',
+      endDate: '2026-02-28',
+    })
+    expect(calendar).toHaveLength(28)
+    expect(calendar[0]).toMatchObject({
+      date: '2026-02-01',
+      trainingDay: true,
+      sessionCount: 2,
+    })
+    expect(calendar[1]).toEqual({
+      date: '2026-02-02',
+      trainingDay: false,
+      sessionCount: 0,
+      sessions: [],
+    })
   })
 
   it('counts unique machines by body part for a period', () => {
