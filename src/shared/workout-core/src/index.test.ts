@@ -25,6 +25,11 @@ import {
   getMachineHistory,
   getMonthlySessions,
   getMonthlyVolume,
+  getMainGymAverageSetWeightMetric,
+  getMainGymMaxWeightMetric,
+  getMainGymMonthlyVolumeMetric,
+  getMainGymTotalVolumeMetric,
+  getMainGymVolumeTrendMetric,
   getMonthlyAggregates,
   getNumericDelta,
   getLastTrainedDateByBodyPart,
@@ -44,6 +49,8 @@ import {
   resolvePeriodRange,
   resolvePreviousMonthRange,
   resolvePreviousPeriod,
+  resolveHistoricalWorkoutReferences,
+  resolveMainGymContext,
   resolveUniqueWorkoutByDate,
   resolveWorkoutNeighbors,
   resolveWorkoutNeighborsByDate,
@@ -51,6 +58,8 @@ import {
   getTotalVolume,
   getTrainingFrequencyPerWeek,
   getTrainingStreak,
+  validateWorkoutMasterData,
+  validateWorkoutMasterReferences,
 } from './index'
 
 describe('workout-core', () => {
@@ -621,6 +630,207 @@ describe('workout-core', () => {
       { gymId: 'second-gym', gymName: 'Second Gym', sessionCount: 1 },
     ])
   })
+
+  it('resolves main gym context from gym master lifecycle state', () => {
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a'), gymMasterItem('b')] })).toEqual({
+      state: 'unconfigured',
+    })
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a', { main: true })] })).toMatchObject({
+      state: 'configured',
+      gym: { gym_id: 'a' },
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'multiple-main-gyms',
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { active: false, main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'inactive-or-deleted-main-gym',
+    })
+  })
+
+  it('validates master uniqueness and main gym constraints as shared domain rules', () => {
+    const result = validateWorkoutMasterData({
+      machines: {
+        schema_version: 1,
+        machines: [machineMasterItem('a'), machineMasterItem('a')],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      },
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        'duplicate-machine-id',
+        'multiple-main-gyms',
+      ]),
+    )
+  })
+
+  it('distinguishes historical master references from new-write selectable references', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+    const sessions = [
+      rawWorkoutSession('historical-inactive', 'inactive-gym', ['inactive-machine']),
+      rawWorkoutSession('historical-deleted', 'deleted-gym', ['deleted-machine']),
+      rawWorkoutSession('historical-missing', 'missing-gym', ['missing-machine']),
+    ]
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'historical' }).issues.map((issue) => issue.code))
+      .toEqual(['unknown-gym-reference', 'unknown-machine-reference'])
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'new-write' }).issues.map((issue) => issue.code))
+      .toEqual([
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'unknown-gym-reference',
+        'unknown-machine-reference',
+      ])
+  })
+
+  it('resolves historical master reference lifecycle states without rewriting workout logs', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('active-history', 'active-gym', ['active-machine']),
+    )).toMatchObject({
+      sessionId: 'active-history',
+      gym: { referenceId: 'active-gym', state: 'active' },
+      machines: [{ referenceId: 'active-machine', state: 'active', index: 0 }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('inactive-history', 'inactive-gym', ['inactive-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'inactive-gym', state: 'inactive' },
+      machines: [{ referenceId: 'inactive-machine', state: 'inactive' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('deleted-history', 'deleted-gym', ['deleted-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'deleted-gym', state: 'deleted' },
+      machines: [{ referenceId: 'deleted-machine', state: 'deleted' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('missing-history', 'missing-gym', ['missing-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'missing-gym', state: 'missing' },
+      machines: [{ referenceId: 'missing-machine', state: 'missing' }],
+    })
+  })
+
+  it('calculates weight and volume metrics only from configured main gym sessions', () => {
+    const context = resolveMainGymContext({
+      schema_version: 1,
+      gyms: [gymMasterItem('main-gym', { main: true }), gymMasterItem('other-gym')],
+    })
+    const sourceSessions = [
+      {
+        ...createSessionWithMachines('2026-08-01-01', '2026-08-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-08-02-01', '2026-08-02', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        ]),
+        gym: { id: 'other-gym', name: 'Other Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-09-01-01', '2026-09-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 30, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+    ]
+
+    expect(getMainGymTotalVolumeMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: 500,
+      sessions: [{ session_id: '2026-08-01-01' }, { session_id: '2026-09-01-01' }],
+    })
+    expect(getMainGymMonthlyVolumeMetric(context, sourceSessions, 2026, 8)).toMatchObject({
+      state: 'available',
+      value: 200,
+      sessions: [{ session_id: '2026-08-01-01' }],
+    })
+    expect(getMainGymVolumeTrendMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: [
+        { sessionId: '2026-08-01-01', date: '2026-08-01', volume: 200 },
+        { sessionId: '2026-09-01-01', date: '2026-09-01', volume: 300 },
+      ],
+    })
+    expect(getMainGymMaxWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 30,
+    })
+    expect(getMainGymAverageSetWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 25,
+    })
+  })
+
+  it('returns explicit unavailable state for main gym metrics when context is not configured', () => {
+    const context = resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a')] })
+
+    expect(getMainGymTotalVolumeMetric(context, sessions)).toEqual({ state: 'unconfigured' })
+  })
 })
 
 function createMinimalSession(sessionId: string, date: string): WorkoutSession {
@@ -665,3 +875,51 @@ function createDistributionSessions(): WorkoutSession[] {
   ]
 }
 
+function gymMasterItem(
+  gymId: string,
+  overrides: Partial<ReturnType<typeof gymMasterItemBase>> = {},
+): ReturnType<typeof gymMasterItemBase> {
+  return { ...gymMasterItemBase(gymId), ...overrides }
+}
+
+function gymMasterItemBase(gymId: string) {
+  return {
+    gym_id: gymId,
+    name: `Gym ${gymId}`,
+    active: true,
+    deleted: false,
+    main: false,
+  }
+}
+
+function machineMasterItem(
+  machineId: string,
+  overrides: Partial<ReturnType<typeof machineMasterItemBase>> = {},
+): ReturnType<typeof machineMasterItemBase> {
+  return { ...machineMasterItemBase(machineId), ...overrides }
+}
+
+function machineMasterItemBase(machineId: string) {
+  return {
+    machine_id: machineId,
+    name: `Machine ${machineId}`,
+    body_part: 'chest' as const,
+    aliases: [],
+    active: true,
+    deleted: false,
+  }
+}
+
+function rawWorkoutSession(sessionId: string, gymId: string, machineIds: string[]) {
+  return {
+    schema_version: 1,
+    session_id: sessionId,
+    date: '2026-08-24',
+    status: 'complete' as const,
+    gym_id: gymId,
+    machines: machineIds.map((machineId) => ({
+      machine_id: machineId,
+      sets: [{ set: 1, weight_kg: 20, reps: 10 }],
+    })),
+  }
+}

@@ -23,7 +23,7 @@ data/
 - `data/master/gyms.json`
 - `data/master/machines.json`
 
-現行には Machine entity file、Body Part entity file、Main Gym setting、logical-delete-specific field は存在しない。現行 record は `active` を使用する。
+現行には Machine entity file、Body Part entity file は存在しない。Gym/Machine record は `active` と logical delete field `deleted` を使用する。Main Gym は Gym Master record の `main` field で表す。
 
 ## Workout Data
 
@@ -34,5 +34,9 @@ Workout file は `gym_id` と `machine_id` reference を持つ raw session を�
 ## Runtime Data
 
 AF と Node development runtime は raw data を `WorkoutSession[]` へ normalize する。Normalized model は resolved `gym` と machine display field を埋め込むため、frontend application は Master JSON を直接読む必要がない。
+
+Master Data の domain/reference validation は shared core contract として提供する。Historical reference は inactive/deleted record を解決対象として維持し、履歴解決では active、inactive、deleted、missing を区別する。新規 write candidate は `active:true` かつ `deleted:false` の record のみに制限する。
+
+Weight/Volume 系の比較 metric は Main Gym context に依存する。Main Gym が未設定または invalid の場合、Dashboard、Analytics、Machines は Main Gym dependent kg metric を unavailable state として扱う。
 
 Frontend 視点では Runtime Data は read-only である。

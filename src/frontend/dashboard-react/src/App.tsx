@@ -12,10 +12,12 @@ import {
   formatDisplayDate,
   getCurrentLocalYearMonth,
   getBodyPartSummary,
+  getMainGymMonthlyVolumeMetric,
+  getMainGymVolumeTrendMetric,
   getNumericDelta,
   getMonthlySessions,
-  getMonthlyVolume,
   getRecentSessions,
+  resolveMainGymContext,
   resolvePreviousMonthRange,
   filterSessionsByDateRange,
   getTotalSets,
@@ -27,6 +29,9 @@ import './App.css'
 
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
+  const [mainGymContext, setMainGymContext] = useState<ReturnType<typeof resolveMainGymContext>>({
+    state: 'unconfigured',
+  })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [, setThemeRevision] = useState(0)
   const shellRef = useRef<HTMLElement | null>(null)
@@ -59,6 +64,7 @@ function App() {
         }
 
         setSessions(result.sessions)
+        setMainGymContext(result.masterData ? resolveMainGymContext(result.masterData.gyms) : { state: 'unconfigured' })
         setLoadError(result.issues.length > 0 ? result.issues.map((issue) => issue.message).join(' / ') : null)
       })
       .catch((error) => {
@@ -79,7 +85,7 @@ function App() {
   const latestWorkout = sessions.at(-1)
   const latestWorkoutRoute = latestWorkout ? getWorkoutDetailRoute(latestWorkout.date) : getWorkoutListRoute()
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
-  const monthlyVolume = getMonthlyVolume(sessions, currentMonth.year, currentMonth.month)
+  const monthlyVolume = getMainGymMonthlyVolumeMetric(mainGymContext, sessions, currentMonth.year, currentMonth.month)
   const previousMonthRange = resolvePreviousMonthRange(currentMonth.year, currentMonth.month)
   const previousMonthSessions = filterSessionsByDateRange(sessions, previousMonthRange)
   const monthlyWorkoutDelta = getNumericDelta(monthlySessions.length, previousMonthSessions.length)
@@ -90,6 +96,8 @@ function App() {
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
   const bodyBalanceRows = getDashboardBodyBalanceRows(monthlySessions)
   const recent28Sessions = getRecentSessions(sessions, 28)
+  const mainGymVolumeTrend = getMainGymVolumeTrendMetric(mainGymContext, recent28Sessions)
+  const mainGymVolumeTrendPoints = mainGymVolumeTrend.state === 'available' ? mainGymVolumeTrend.value : []
   const chartTheme = getChartTheme()
 
   const volumeChartOptions: ApexOptions = {
@@ -114,7 +122,7 @@ function App() {
     stroke: { curve: 'smooth', width: 3 },
     theme: { mode: chartTheme.mode },
     xaxis: {
-      categories: recent28Sessions.map((session) => formatDisplayDate(session.date)),
+      categories: mainGymVolumeTrendPoints.map((point) => formatDisplayDate(point.date)),
       axisBorder: { color: chartTheme.border },
       axisTicks: { color: chartTheme.border },
       labels: { show: false, style: { colors: chartTheme.textMuted } },
@@ -135,11 +143,11 @@ function App() {
 
   const volumeChartSeries = [
     {
-      name: 'Total Weight',
-      data: recent28Sessions.map((session) => getTotalVolume(session)),
+      name: 'Main Gym Total Weight',
+      data: mainGymVolumeTrendPoints.map((point) => point.volume),
     },
   ]
-  const volumeChartKey = recent28Sessions.map((session) => session.session_id).join('|')
+  const volumeChartKey = mainGymVolumeTrendPoints.map((point) => point.sessionId).join('|')
 
   const frequencyChartOptions: ApexOptions = {
     chart: {
@@ -259,7 +267,7 @@ function App() {
       <section className="metric-grid" aria-label="Monthly summary">
         <MetricCard label="Monthly workouts" value={`${monthlySessions.length} Sessions`} />
         <MetricCard label="Monthly sets" value={`${totalSets} Sets`} />
-        <MetricCard label="Monthly volume" value={`${monthlyVolume.toLocaleString()} kg`} />
+        <MetricCard label="Main Gym volume" value={formatMainGymMetric(monthlyVolume)} />
         <MetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
       </section>
 
@@ -284,12 +292,12 @@ function App() {
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-chart-areaspline" aria-hidden="true"></i></div>
               <div className="card-heading__text">
-                <p className="eyebrow">Volume Trends</p>
+                <p className="eyebrow">Main Gym Volume Trends</p>
                 <h2>ボリューム推移</h2>
               </div>
             </div>
           </div>
-          {recent28Sessions.length > 0 ? (
+          {mainGymVolumeTrend.state === 'available' && mainGymVolumeTrendPoints.length > 0 ? (
             <ReactApexChart
               key={volumeChartKey}
               type="area"
@@ -298,7 +306,7 @@ function App() {
               series={volumeChartSeries}
             />
           ) : (
-            <p className="muted">No workout data loaded.</p>
+            <p className="muted">{formatMainGymMetricState(mainGymVolumeTrend)}</p>
           )}
         </article>
 
@@ -413,6 +421,22 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function formatDelta(value: number, unit: string): string {
   const prefix = value > 0 ? '+' : ''
   return `${prefix}${value.toLocaleString()} ${unit}`
+}
+
+function formatMainGymMetric(metric: ReturnType<typeof getMainGymMonthlyVolumeMetric>): string {
+  return metric.state === 'available' ? `${metric.value.toLocaleString()} kg` : formatMainGymMetricState(metric)
+}
+
+function formatMainGymMetricState(metric: { state: string }): string {
+  if (metric.state === 'unconfigured') {
+    return 'Not configured'
+  }
+
+  if (metric.state === 'invalid') {
+    return 'Unavailable'
+  }
+
+  return 'No workout data loaded.'
 }
 
 const dashboardBodyPartOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs']

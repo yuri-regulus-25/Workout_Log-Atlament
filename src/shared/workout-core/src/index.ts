@@ -1,10 +1,15 @@
 import type {
   BodyPart,
   BodyPartSummary,
+  GymMaster,
+  GymMasterItem,
+  MachineMasterItem,
   MachineHistoryRow,
   MachineSet,
   PersonalRecord,
+  RawWorkoutSession,
   WorkoutMachine,
+  WorkoutMasterData,
   WorkoutRow,
   WorkoutSession,
   WorkoutStatus,
@@ -244,6 +249,82 @@ export type GymSessionDistribution = {
   gymName: string
   sessionCount: number
 }
+
+export type MainGymContext =
+  | { state: 'configured'; gym: GymMasterItem }
+  | { state: 'unconfigured' }
+  | { state: 'invalid'; reason: 'multiple-main-gyms' | 'inactive-or-deleted-main-gym'; gyms: GymMasterItem[] }
+
+export type MasterValidationMode = 'historical' | 'new-write'
+
+export type MasterValidationIssueCode =
+  | 'invalid-machine-master-schema-version'
+  | 'invalid-gym-master-schema-version'
+  | 'duplicate-machine-id'
+  | 'duplicate-gym-id'
+  | 'invalid-machine-required-field'
+  | 'invalid-gym-required-field'
+  | 'invalid-machine-body-part'
+  | 'multiple-main-gyms'
+  | 'inactive-or-deleted-main-gym'
+  | 'unknown-gym-reference'
+  | 'unknown-machine-reference'
+  | 'inactive-or-deleted-gym-reference'
+  | 'inactive-or-deleted-machine-reference'
+
+export type MasterValidationIssue = {
+  code: MasterValidationIssueCode
+  message: string
+  path: string
+  sessionId?: string
+  referenceId?: string
+}
+
+export type MasterValidationResult = {
+  valid: boolean
+  issues: MasterValidationIssue[]
+}
+
+export type MasterReferenceValidationOptions = {
+  mode?: MasterValidationMode
+}
+
+export type HistoricalMasterReferenceState = 'active' | 'inactive' | 'deleted' | 'missing'
+
+export type HistoricalMasterReference<TMasterItem> = {
+  referenceId: string
+  state: HistoricalMasterReferenceState
+  record?: TMasterItem
+}
+
+export type HistoricalWorkoutReferenceResolution = {
+  sessionId: string
+  gym: HistoricalMasterReference<GymMasterItem>
+  machines: Array<HistoricalMasterReference<MachineMasterItem> & { index: number }>
+}
+
+export type MainGymScopedMetric<TValue> =
+  | { state: 'available'; mainGym: GymMasterItem; sessions: WorkoutSession[]; value: TValue }
+  | { state: 'unconfigured' }
+  | { state: 'invalid'; reason: 'multiple-main-gyms' | 'inactive-or-deleted-main-gym'; gyms: GymMasterItem[] }
+
+export type MainGymVolumeTrendPoint = {
+  sessionId: string
+  date: string
+  volume: number
+}
+
+const knownBodyParts = new Set<BodyPart>([
+  'chest',
+  'back',
+  'legs',
+  'shoulders',
+  'arms',
+  'glutes',
+  'core',
+  'cardio',
+  'other',
+])
 
 export function resolvePeriodRange(
   preset: PeriodPreset,
@@ -699,6 +780,369 @@ export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribu
   return Array.from(rows.values()).sort(
     (a, b) => b.sessionCount - a.sessionCount || a.gymName.localeCompare(b.gymName) || a.gymId.localeCompare(b.gymId),
   )
+}
+
+export function resolveMainGymContext(master: GymMaster): MainGymContext {
+  const mainGyms = master.gyms.filter((gym) => gym.main)
+
+  if (mainGyms.length === 0) {
+    return { state: 'unconfigured' }
+  }
+
+  if (mainGyms.length > 1) {
+    return { state: 'invalid', reason: 'multiple-main-gyms', gyms: mainGyms }
+  }
+
+  const [mainGym] = mainGyms
+
+  if (!mainGym.active || mainGym.deleted) {
+    return { state: 'invalid', reason: 'inactive-or-deleted-main-gym', gyms: mainGyms }
+  }
+
+  return { state: 'configured', gym: mainGym }
+}
+
+export function getMainGymSessionsMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<WorkoutSession[]> {
+  return createMainGymMetric(context, sessions, (mainGymSessions) => mainGymSessions)
+}
+
+export function getMainGymTotalVolumeMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => mainGymSessions.reduce((total, session) => total + getTotalVolume(session), 0),
+  )
+}
+
+export function getMainGymMonthlyVolumeMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  year: number,
+  month: number,
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    getMonthlySessions(sessions, year, month),
+    (mainGymSessions) => mainGymSessions.reduce((total, session) => total + getTotalVolume(session), 0),
+  )
+}
+
+export function getMainGymVolumeTrendMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+): MainGymScopedMetric<MainGymVolumeTrendPoint[]> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => mainGymSessions.map((session) => ({
+      sessionId: session.session_id,
+      date: session.date,
+      volume: getTotalVolume(session),
+    })),
+  )
+}
+
+export function getMainGymMaxWeightMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  machineId: string,
+): MainGymScopedMetric<number> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => getMaxWeight(mainGymSessions, machineId),
+  )
+}
+
+export function getMainGymAverageSetWeightMetric(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  machineId: string,
+): MainGymScopedMetric<number | null> {
+  return createMainGymMetric(
+    context,
+    sessions,
+    (mainGymSessions) => getAverageSetWeight(mainGymSessions, machineId),
+  )
+}
+
+export function validateWorkoutMasterData(masterData: WorkoutMasterData): MasterValidationResult {
+  const issues: MasterValidationIssue[] = [
+    ...validateMasterSchemaVersions(masterData),
+    ...validateMachineMasterItems(masterData.machines.machines),
+    ...validateGymMasterItems(masterData.gyms.gyms),
+    ...validateMainGymContext(masterData.gyms),
+  ]
+
+  return { valid: issues.length === 0, issues }
+}
+
+export function validateWorkoutMasterReferences(
+  masterData: WorkoutMasterData,
+  sessions: RawWorkoutSession[],
+  options: MasterReferenceValidationOptions = {},
+): MasterValidationResult {
+  const mode = options.mode ?? 'historical'
+  const machinesById = new Map(masterData.machines.machines.map((machine) => [machine.machine_id, machine]))
+  const gymsById = new Map(masterData.gyms.gyms.map((gym) => [gym.gym_id, gym]))
+  const issues: MasterValidationIssue[] = []
+
+  sessions.forEach((session, sessionIndex) => {
+    const sessionPath = `sessions[${sessionIndex}]`
+    const gym = gymsById.get(session.gym_id)
+
+    if (!gym) {
+      issues.push({
+        code: 'unknown-gym-reference',
+        message: `Unknown gym_id reference: ${session.gym_id}.`,
+        path: `${sessionPath}.gym_id`,
+        sessionId: session.session_id,
+        referenceId: session.gym_id,
+      })
+    } else if (mode === 'new-write' && !isNewUseMasterRecord(gym)) {
+      issues.push({
+        code: 'inactive-or-deleted-gym-reference',
+        message: `Gym reference is not available for new writes: ${session.gym_id}.`,
+        path: `${sessionPath}.gym_id`,
+        sessionId: session.session_id,
+        referenceId: session.gym_id,
+      })
+    }
+
+    session.machines.forEach((workoutMachine, machineIndex) => {
+      const machine = machinesById.get(workoutMachine.machine_id)
+
+      if (!machine) {
+        issues.push({
+          code: 'unknown-machine-reference',
+          message: `Unknown machine_id reference: ${workoutMachine.machine_id}.`,
+          path: `${sessionPath}.machines[${machineIndex}].machine_id`,
+          sessionId: session.session_id,
+          referenceId: workoutMachine.machine_id,
+        })
+      } else if (mode === 'new-write' && !isNewUseMasterRecord(machine)) {
+        issues.push({
+          code: 'inactive-or-deleted-machine-reference',
+          message: `Machine reference is not available for new writes: ${workoutMachine.machine_id}.`,
+          path: `${sessionPath}.machines[${machineIndex}].machine_id`,
+          sessionId: session.session_id,
+          referenceId: workoutMachine.machine_id,
+        })
+      }
+    })
+  })
+
+  return { valid: issues.length === 0, issues }
+}
+
+export function resolveHistoricalWorkoutReferences(
+  masterData: WorkoutMasterData,
+  session: RawWorkoutSession,
+): HistoricalWorkoutReferenceResolution {
+  const machinesById = new Map(masterData.machines.machines.map((machine) => [machine.machine_id, machine]))
+  const gymsById = new Map(masterData.gyms.gyms.map((gym) => [gym.gym_id, gym]))
+
+  return {
+    sessionId: session.session_id,
+    gym: resolveHistoricalMasterReference(session.gym_id, gymsById),
+    machines: session.machines.map((machine, index) => ({
+      ...resolveHistoricalMasterReference(machine.machine_id, machinesById),
+      index,
+    })),
+  }
+}
+
+export function resolveHistoricalWorkoutReferenceReport(
+  masterData: WorkoutMasterData,
+  sessions: RawWorkoutSession[],
+): HistoricalWorkoutReferenceResolution[] {
+  return sessions.map((session) => resolveHistoricalWorkoutReferences(masterData, session))
+}
+
+function validateMasterSchemaVersions(masterData: WorkoutMasterData): MasterValidationIssue[] {
+  const issues: MasterValidationIssue[] = []
+
+  if (!Number.isFinite(masterData.machines.schema_version)) {
+    issues.push({
+      code: 'invalid-machine-master-schema-version',
+      message: 'Machine master schema_version must be a finite number.',
+      path: 'machines.schema_version',
+    })
+  }
+
+  if (!Number.isFinite(masterData.gyms.schema_version)) {
+    issues.push({
+      code: 'invalid-gym-master-schema-version',
+      message: 'Gym master schema_version must be a finite number.',
+      path: 'gyms.schema_version',
+    })
+  }
+
+  return issues
+}
+
+function validateMachineMasterItems(machines: MachineMasterItem[]): MasterValidationIssue[] {
+  const issues: MasterValidationIssue[] = []
+  const seenIds = new Set<string>()
+
+  machines.forEach((machine, index) => {
+    const path = `machines.machines[${index}]`
+
+    if (
+      !machine.machine_id ||
+      !machine.name ||
+      typeof machine.active !== 'boolean' ||
+      typeof machine.deleted !== 'boolean'
+    ) {
+      issues.push({
+        code: 'invalid-machine-required-field',
+        message: `Machine master item at index ${index} has invalid required fields.`,
+        path,
+        referenceId: machine.machine_id,
+      })
+    }
+
+    if (!knownBodyParts.has(machine.body_part)) {
+      issues.push({
+        code: 'invalid-machine-body-part',
+        message: `Machine master item at index ${index} has invalid body_part: ${machine.body_part}.`,
+        path: `${path}.body_part`,
+        referenceId: machine.machine_id,
+      })
+    }
+
+    if (machine.machine_id && seenIds.has(machine.machine_id)) {
+      issues.push({
+        code: 'duplicate-machine-id',
+        message: `Duplicate machine_id: ${machine.machine_id}.`,
+        path: `${path}.machine_id`,
+        referenceId: machine.machine_id,
+      })
+    }
+
+    if (machine.machine_id) {
+      seenIds.add(machine.machine_id)
+    }
+  })
+
+  return issues
+}
+
+function validateGymMasterItems(gyms: GymMasterItem[]): MasterValidationIssue[] {
+  const issues: MasterValidationIssue[] = []
+  const seenIds = new Set<string>()
+
+  gyms.forEach((gym, index) => {
+    const path = `gyms.gyms[${index}]`
+
+    if (
+      !gym.gym_id ||
+      !gym.name ||
+      typeof gym.active !== 'boolean' ||
+      typeof gym.deleted !== 'boolean' ||
+      typeof gym.main !== 'boolean'
+    ) {
+      issues.push({
+        code: 'invalid-gym-required-field',
+        message: `Gym master item at index ${index} has invalid required fields.`,
+        path,
+        referenceId: gym.gym_id,
+      })
+    }
+
+    if (gym.gym_id && seenIds.has(gym.gym_id)) {
+      issues.push({
+        code: 'duplicate-gym-id',
+        message: `Duplicate gym_id: ${gym.gym_id}.`,
+        path: `${path}.gym_id`,
+        referenceId: gym.gym_id,
+      })
+    }
+
+    if (gym.gym_id) {
+      seenIds.add(gym.gym_id)
+    }
+  })
+
+  return issues
+}
+
+function validateMainGymContext(master: GymMaster): MasterValidationIssue[] {
+  const context = resolveMainGymContext(master)
+
+  if (context.state !== 'invalid') {
+    return []
+  }
+
+  if (context.reason === 'multiple-main-gyms') {
+    return [{
+      code: 'multiple-main-gyms',
+      message: 'Gym master must have at most one main gym.',
+      path: 'gyms.gyms',
+      referenceId: context.gyms.map((gym) => gym.gym_id).join(','),
+    }]
+  }
+
+  return [{
+    code: 'inactive-or-deleted-main-gym',
+    message: 'Main gym must be active and not logically deleted.',
+    path: 'gyms.gyms',
+    referenceId: context.gyms[0]?.gym_id,
+  }]
+}
+
+function isNewUseMasterRecord(record: { active: boolean; deleted: boolean }): boolean {
+  return record.active && !record.deleted
+}
+
+function createMainGymMetric<TValue>(
+  context: MainGymContext,
+  sessions: WorkoutSession[],
+  compute: (mainGymSessions: WorkoutSession[]) => TValue,
+): MainGymScopedMetric<TValue> {
+  if (context.state === 'unconfigured') {
+    return { state: 'unconfigured' }
+  }
+
+  if (context.state === 'invalid') {
+    return { state: 'invalid', reason: context.reason, gyms: context.gyms }
+  }
+
+  const mainGymSessions = sessions.filter((session) => session.gym.id === context.gym.gym_id)
+
+  return {
+    state: 'available',
+    mainGym: context.gym,
+    sessions: mainGymSessions,
+    value: compute(mainGymSessions),
+  }
+}
+
+function resolveHistoricalMasterReference<TMasterItem extends { active: boolean; deleted: boolean }>(
+  referenceId: string,
+  recordsById: Map<string, TMasterItem>,
+): HistoricalMasterReference<TMasterItem> {
+  const record = recordsById.get(referenceId)
+
+  if (!record) {
+    return { referenceId, state: 'missing' }
+  }
+
+  if (record.deleted) {
+    return { referenceId, state: 'deleted', record }
+  }
+
+  if (!record.active) {
+    return { referenceId, state: 'inactive', record }
+  }
+
+  return { referenceId, state: 'active', record }
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{

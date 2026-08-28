@@ -72,13 +72,14 @@ const allowedBodyParts = new Set<BodyPart>([
 export const sampleMachineMaster: MachineMaster = {
   schema_version: 1,
   machines: [
-    { machine_id: 'abdominal', name: 'アブドミナル', body_part: 'core', aliases: [], active: true },
+    { machine_id: 'abdominal', name: 'アブドミナル', body_part: 'core', aliases: [], active: true, deleted: false },
     {
       machine_id: 'shoulder-press',
       name: 'ショルダープレス',
       body_part: 'shoulders',
       aliases: [],
       active: true,
+      deleted: false,
     },
     {
       machine_id: 'lat-pulldown',
@@ -86,14 +87,16 @@ export const sampleMachineMaster: MachineMaster = {
       body_part: 'back',
       aliases: [],
       active: true,
+      deleted: false,
     },
-    { machine_id: 'hack-squat', name: 'ハックスクワット', body_part: 'legs', aliases: [], active: true },
+    { machine_id: 'hack-squat', name: 'ハックスクワット', body_part: 'legs', aliases: [], active: true, deleted: false },
     {
       machine_id: 'hip-abduction',
       name: 'ヒップアブダクション',
       body_part: 'glutes',
       aliases: [],
       active: true,
+      deleted: false,
     },
   ],
 }
@@ -106,18 +109,24 @@ export const sampleGymMaster: GymMaster = {
       name: 'エニタイムフィットネス 横須賀汐入店',
       short_name: 'AF横須賀汐入',
       active: true,
+      deleted: false,
+      main: false,
     },
     {
       gym_id: 'af-akihabara',
       name: 'エニタイムフィットネス 秋葉原店',
       short_name: 'AF秋葉原',
       active: true,
+      deleted: false,
+      main: false,
     },
     {
       gym_id: 'af-minatomirai',
       name: 'エニタイムフィットネス みなとみらい店',
       short_name: 'AFみなとみらい',
       active: true,
+      deleted: false,
+      main: false,
     },
   ],
 }
@@ -226,7 +235,7 @@ export function loadWorkoutSessionsFromFiles(
   files: WorkoutFile[],
   masterData = sampleMasterData,
 ): WorkoutLoadResult {
-  const result: WorkoutLoadResult = { sessions: [], issues: [] }
+  const result: WorkoutLoadResult = { sessions: [], issues: [], masterData }
   const masterLookup = createMasterLookup(masterData, result.issues)
 
   for (const file of files) {
@@ -673,6 +682,7 @@ function normalizeMachineMasterItem(
   const bodyPart = readString(value, 'body_part')
   const aliases = readStringArray(value, 'aliases') ?? []
   const active = readBoolean(value, 'active')
+  const deleted = readBoolean(value, 'deleted') ?? false
 
   if (!machineId) {
     issues.push({ filePath, message: `Machine master item at index ${index} is missing machine_id.` })
@@ -699,7 +709,7 @@ function normalizeMachineMasterItem(
   }
 
   return machineId && name && bodyPart && isBodyPart(bodyPart) && active !== null
-    ? { machine_id: machineId, name, body_part: bodyPart, aliases, active }
+    ? { machine_id: machineId, name, body_part: bodyPart, aliases, active, deleted }
     : null
 }
 
@@ -719,6 +729,8 @@ function normalizeGymMasterItem(
   const name = readString(value, 'name')
   const shortName = readString(value, 'short_name')
   const active = readBoolean(value, 'active')
+  const deleted = readBoolean(value, 'deleted') ?? false
+  const main = readBoolean(value, 'main') ?? false
 
   if (!gymId) {
     issues.push({ filePath, message: `Gym master item at index ${index} is missing gym_id.` })
@@ -745,8 +757,8 @@ function normalizeGymMasterItem(
   }
 
   return shortName
-    ? { gym_id: gymId, name, short_name: shortName, active }
-    : { gym_id: gymId, name, active }
+    ? { gym_id: gymId, name, short_name: shortName, active, deleted, main }
+    : { gym_id: gymId, name, active, deleted, main }
 }
 
 function createMasterLookup(

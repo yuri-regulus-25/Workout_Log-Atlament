@@ -67,6 +67,7 @@ export type MachineMasterItem = {
   body_part: BodyPart
   aliases?: string[]
   active: boolean
+  deleted: boolean
 }
 
 export type MachineMaster = {
@@ -79,6 +80,8 @@ export type GymMasterItem = {
   name: string
   short_name?: string
   active: boolean
+  deleted: boolean
+  main: boolean
 }
 
 export type GymMaster = {
@@ -148,4 +151,5 @@ export type WorkoutParseIssue = {
 export type WorkoutLoadResult = {
   sessions: WorkoutSession[]
   issues: WorkoutParseIssue[]
+  masterData?: WorkoutMasterData
 }

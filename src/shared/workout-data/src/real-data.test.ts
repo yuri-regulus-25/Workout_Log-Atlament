@@ -16,11 +16,15 @@ describe('real workout data', () => {
     expect(masterResult.masterData).toBeDefined()
     expect(masterResult.masterData?.machines.machines).toHaveLength(19)
     expect(masterResult.masterData?.gyms.gyms).toHaveLength(4)
+    expect(masterResult.masterData?.machines.machines.every((machine) => machine.deleted === false)).toBe(true)
+    expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.deleted === false)).toBe(true)
+    expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.main === false)).toBe(true)
 
     const result = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
     const rawSessionCount = await countRawWorkoutSessions(workoutsDirectory)
 
     expect(result.issues).toEqual([])
+    expect(result.masterData).toEqual(masterResult.masterData)
     expect(result.sessions).toHaveLength(rawSessionCount)
     expect(new Set(result.sessions.map((session) => session.session_id)).size).toBe(
       result.sessions.length,
