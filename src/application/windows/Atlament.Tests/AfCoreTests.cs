@@ -341,9 +341,8 @@ public sealed class AfCoreTests
                 typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
             Assert.True(status.Success);
-            Assert.Equal(expectedApplicationVersion, status.Data!.Version);
-            Assert.DoesNotContain("+", status.Data.Version, StringComparison.Ordinal);
-            Assert.Equal(status.Data!.Version, status.Data.Versions.ApplicationFramework);
+            Assert.Equal(expectedApplicationVersion, status.Data!.Versions.ApplicationFramework);
+            Assert.DoesNotContain("+", status.Data.Versions.ApplicationFramework, StringComparison.Ordinal);
             Assert.Equal("1.0.0", status.Data.Versions.FrontendFramework);
             Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
             Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);

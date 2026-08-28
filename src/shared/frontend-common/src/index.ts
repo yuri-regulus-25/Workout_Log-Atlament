@@ -18,7 +18,6 @@ export type AfCallResult<T> = AfResponse<T> & {
 }
 
 export type AfStatus = {
-  version: string
   versions: {
     applicationFramework: string
     frontendFramework: string

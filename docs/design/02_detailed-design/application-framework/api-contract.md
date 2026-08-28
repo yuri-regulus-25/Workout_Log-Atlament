@@ -49,9 +49,8 @@ Legacy `/api/common/*` alias は現行 contract では公開しない。Unknown 
 
 ## Status Data
 
-Status は以下を含む。
+Status は以下を含む。Version 情報は `versions` object に集約し、top-level `version` は公開しない。
 
-- `version`
 - `versions.applicationFramework`
 - `versions.frontendFramework`
 - `application.status`

@@ -242,7 +242,6 @@ class AndroidLocalhostServer(
           "success": true,
           "errors": [],
           "data": {
-            "version": "${BuildConfig.VERSION_NAME}",
             "versions": {
               "applicationFramework": "${BuildConfig.VERSION_NAME}",
               "frontendFramework": "${frontendFrameworkVersion()}"

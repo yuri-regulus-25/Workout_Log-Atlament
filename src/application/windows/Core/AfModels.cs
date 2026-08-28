@@ -129,7 +129,6 @@ public sealed record SessionCondition(
     [property: JsonPropertyName("notes")] IReadOnlyList<string>? Notes);
 
 public sealed record AfStatus(
-    [property: JsonPropertyName("version")] string Version,
     [property: JsonPropertyName("versions")] StatusVersions Versions,
     [property: JsonPropertyName("application")] ApplicationState Application,
     [property: JsonPropertyName("operations")] OperationStateSnapshot Operations,

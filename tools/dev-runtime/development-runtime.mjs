@@ -59,7 +59,6 @@ async function respondStatus(response) {
   const runtimeAvailable = runtime.success
 
   writeJson(response, 200, ok({
-    version: versions.applicationFramework,
     versions,
     application: {
       status: runtimeAvailable ? 'ready' : 'degraded',
