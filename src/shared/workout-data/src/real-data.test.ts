@@ -18,6 +18,7 @@ describe('real workout data', () => {
     expect(masterResult.masterData?.gyms.gyms).toHaveLength(4)
     expect(masterResult.masterData?.machines.machines.every((machine) => machine.deleted === false)).toBe(true)
     expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.deleted === false)).toBe(true)
+    expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.main === false)).toBe(true)
 
     const result = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
     const rawSessionCount = await countRawWorkoutSessions(workoutsDirectory)

@@ -1,6 +1,8 @@
 import type {
   BodyPart,
   BodyPartSummary,
+  GymMaster,
+  GymMasterItem,
   MachineHistoryRow,
   MachineSet,
   PersonalRecord,
@@ -244,6 +246,11 @@ export type GymSessionDistribution = {
   gymName: string
   sessionCount: number
 }
+
+export type MainGymContext =
+  | { state: 'configured'; gym: GymMasterItem }
+  | { state: 'unconfigured' }
+  | { state: 'invalid'; reason: 'multiple-main-gyms' | 'inactive-or-deleted-main-gym'; gyms: GymMasterItem[] }
 
 export function resolvePeriodRange(
   preset: PeriodPreset,
@@ -699,6 +706,26 @@ export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribu
   return Array.from(rows.values()).sort(
     (a, b) => b.sessionCount - a.sessionCount || a.gymName.localeCompare(b.gymName) || a.gymId.localeCompare(b.gymId),
   )
+}
+
+export function resolveMainGymContext(master: GymMaster): MainGymContext {
+  const mainGyms = master.gyms.filter((gym) => gym.main)
+
+  if (mainGyms.length === 0) {
+    return { state: 'unconfigured' }
+  }
+
+  if (mainGyms.length > 1) {
+    return { state: 'invalid', reason: 'multiple-main-gyms', gyms: mainGyms }
+  }
+
+  const [mainGym] = mainGyms
+
+  if (!mainGym.active || mainGym.deleted) {
+    return { state: 'invalid', reason: 'inactive-or-deleted-main-gym', gyms: mainGyms }
+  }
+
+  return { state: 'configured', gym: mainGym }
 }
 
 export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{

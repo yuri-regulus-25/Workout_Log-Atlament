@@ -44,6 +44,7 @@ import {
   resolvePeriodRange,
   resolvePreviousMonthRange,
   resolvePreviousPeriod,
+  resolveMainGymContext,
   resolveUniqueWorkoutByDate,
   resolveWorkoutNeighbors,
   resolveWorkoutNeighborsByDate,
@@ -621,6 +622,34 @@ describe('workout-core', () => {
       { gymId: 'second-gym', gymName: 'Second Gym', sessionCount: 1 },
     ])
   })
+
+  it('resolves main gym context from gym master lifecycle state', () => {
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a'), gymMasterItem('b')] })).toEqual({
+      state: 'unconfigured',
+    })
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a', { main: true })] })).toMatchObject({
+      state: 'configured',
+      gym: { gym_id: 'a' },
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'multiple-main-gyms',
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { active: false, main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'inactive-or-deleted-main-gym',
+    })
+  })
 })
 
 function createMinimalSession(sessionId: string, date: string): WorkoutSession {
@@ -663,5 +692,22 @@ function createDistributionSessions(): WorkoutSession[] {
       { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
     ]),
   ]
+}
+
+function gymMasterItem(
+  gymId: string,
+  overrides: Partial<ReturnType<typeof gymMasterItemBase>> = {},
+): ReturnType<typeof gymMasterItemBase> {
+  return { ...gymMasterItemBase(gymId), ...overrides }
+}
+
+function gymMasterItemBase(gymId: string) {
+  return {
+    gym_id: gymId,
+    name: `Gym ${gymId}`,
+    active: true,
+    deleted: false,
+    main: false,
+  }
 }
 
