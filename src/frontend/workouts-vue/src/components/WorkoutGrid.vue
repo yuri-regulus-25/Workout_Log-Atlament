@@ -5,6 +5,7 @@ import { formatDisplayDate, toWorkoutRows } from '@workout-lab/workout-core'
 
 const props = defineProps<{
   sessions: WorkoutSession[]
+  dateSortDirection?: SortDirection
 }>()
 
 const emit = defineEmits<{
@@ -17,7 +18,7 @@ type SortDirection = 'asc' | 'desc'
 const pageSize = ref(10)
 const currentPage = ref(1)
 const sortKey = ref<SortKey>('date')
-const sortDirection = ref<SortDirection>('desc')
+const sortDirection = ref<SortDirection>(props.dateSortDirection ?? 'desc')
 
 const rowData = computed(() => {
   const rows = toWorkoutRows(props.sessions)
@@ -45,6 +46,15 @@ watch(rowData, () => {
   if (currentPage.value > pageCount.value) {
     currentPage.value = pageCount.value
   }
+})
+watch(() => props.dateSortDirection, (direction) => {
+  if (!direction) {
+    return
+  }
+
+  sortKey.value = 'date'
+  sortDirection.value = direction
+  currentPage.value = 1
 })
 
 function setSort(key: SortKey) {

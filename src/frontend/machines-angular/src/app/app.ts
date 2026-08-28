@@ -51,11 +51,30 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly loadError = signal<string | null>(null);
   private readonly themeRevision = signal(0);
   protected readonly machineOptions = computed(() => getMachineOptions(this.sessions()));
+  protected readonly machineSearchQuery = signal('');
+  protected readonly bodyPartFilter = signal('');
   private readonly pathMachineId = this.getPathMachineId();
 
   protected readonly hasInvalidMachineIdParameter = signal(false);
   protected readonly invalidMachineId = signal(this.pathMachineId ?? '');
   protected readonly selectedMachineId = signal<string>('abdominal');
+  protected readonly bodyPartOptions = computed(() =>
+    Array.from(new Set(this.machineOptions().map((machine) => machine.body_part))).sort(),
+  );
+  protected readonly filteredMachineOptions = computed(() => {
+    const query = this.machineSearchQuery().trim().toLocaleLowerCase();
+    const bodyPart = this.bodyPartFilter();
+
+    return this.machineOptions().filter((machine) => {
+      const matchesQuery =
+        query.length === 0 ||
+        machine.name.toLocaleLowerCase().includes(query) ||
+        machine.machine_id.toLocaleLowerCase().includes(query);
+      const matchesBodyPart = bodyPart.length === 0 || machine.body_part === bodyPart;
+
+      return matchesQuery && matchesBodyPart;
+    });
+  });
 
   ngAfterViewInit(): void {
     this.navigation = initializeAppNavigation({
@@ -192,9 +211,33 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   protected selectMachine(machineId: string) {
+    if (!this.machineOptions().some((machine) => machine.machine_id === machineId)) {
+      return;
+    }
+
     this.selectedMachineId.set(machineId);
     this.hasInvalidMachineIdParameter.set(false);
     window.history.pushState(null, '', `${applicationRoutes.machines}${machineId}/`);
+  }
+
+  protected updateMachineSearch(query: string) {
+    this.machineSearchQuery.set(query);
+    this.reconcileSelectedMachineWithFilters();
+  }
+
+  protected updateBodyPartFilter(bodyPart: string) {
+    this.bodyPartFilter.set(bodyPart);
+    this.reconcileSelectedMachineWithFilters();
+  }
+
+  protected clearMachineFilters() {
+    this.machineSearchQuery.set('');
+    this.bodyPartFilter.set('');
+    this.reconcileSelectedMachineWithFilters();
+  }
+
+  protected formatBodyPartLabel(bodyPart: string): string {
+    return formatBodyPart(bodyPart);
   }
 
   private getPathMachineId(): string | undefined {
@@ -216,6 +259,15 @@ export class App implements AfterViewInit, OnDestroy {
     if (window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
       window.history.replaceState(null, '', `${applicationRoutes.machines}${nextMachineId}/`);
     }
+  }
+
+  private reconcileSelectedMachineWithFilters() {
+    const filtered = this.filteredMachineOptions();
+    if (filtered.length === 0 || filtered.some((machine) => machine.machine_id === this.selectedMachineId())) {
+      return;
+    }
+
+    this.selectMachine(filtered[0].machine_id);
   }
 }
 
