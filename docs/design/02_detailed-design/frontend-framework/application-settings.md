@@ -74,7 +74,7 @@ Setup Assistant は新しい永続状態を持たず、既存の Settings operat
 
 Setup完了条件は step 表示ではなく AF status の `readiness.state === "ready"` で判定する。Main Gym は任意Contextであり、未設定でも Setup 完了を妨げない。
 
-Settings は shared frontend client の Application Access Policy を使用して recovery action を表示する。`degraded` fallback 中は通常Application継続利用とRemote取得失敗を区別して表示し、Retry Sync、Reload、Credential更新など既存操作へ接続する。
+Settings は shared frontend client の Application Access Policy を使用して recovery action を表示する。`runtimeData.fallbackActive` により、`degraded` fallback 中は通常Application継続利用とRemote取得/validation失敗を区別して表示し、Retry Sync、Reload、Credential更新など既存操作へ接続する。
 
 現行 source は app-wide setup gate、Master Data editor、diagnostics export を実装していない。
 

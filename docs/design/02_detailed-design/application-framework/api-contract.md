@@ -64,6 +64,11 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 - `readiness.requiredActions`
 - `readiness.unavailableComponents`
 - `readiness.degradedComponents`
+- `runtimeData.currentAvailable`
+- `runtimeData.currentGeneratedAt`
+- `runtimeData.latestRemoteRetrieval`: `unknown`, `succeeded`, `failed`, or `skipped`
+- `runtimeData.latestValidation`: `unknown`, `succeeded`, `failed`, or `skipped`
+- `runtimeData.fallbackActive`
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`
@@ -92,7 +97,7 @@ Readiness は frontend が個別に初期設定/利用可能/障害状態を推�
 
 Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。Credential が設定済みで期限切れ/無効になった場合は setup 未完了へ戻さず、credential component の runtime failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
 
-Shared frontend client は `readiness` から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。GitHub degraded かつ Runtime Data available の場合は fallback operation として扱い、Remote取得失敗と既存正常Dataで継続利用中であることを区別する。
+Shared frontend client は `readiness` と `runtimeData` facts から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。`runtimeData.fallbackActive` が `true` の場合は Remote取得またはvalidationに失敗したが、既存正常Runtime Dataで継続利用中である。
 
 ## Configuration Data
 

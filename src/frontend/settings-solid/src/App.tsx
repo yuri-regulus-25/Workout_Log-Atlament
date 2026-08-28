@@ -92,8 +92,8 @@ function App() {
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
   const accessPolicy = createMemo(() => {
-    const readiness = status()?.readiness
-    return readiness ? deriveApplicationAccessPolicy(readiness) : null
+    const currentStatus = status()
+    return currentStatus ? deriveApplicationAccessPolicy(currentStatus.readiness, currentStatus.runtimeData) : null
   })
   const setupSteps = createMemo(() => buildSetupSteps({
     status: status(),
@@ -605,6 +605,7 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
           }
         />
         <StatusItem label="Readiness" value={displayStatus(props.status?.readiness?.state)} />
+        <StatusItem label="Runtime Data" value={runtimeDataSummary(props.status)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>
@@ -661,6 +662,13 @@ function recoveryActionLabel(action: ApplicationRecoveryAction) {
   if (action === 'retry-sync') return 'Retry Sync'
   if (action === 'reload') return 'Reload'
   return 'Settings'
+}
+
+function runtimeDataSummary(status: AfStatus | null) {
+  if (!status) return '-'
+  if (status.runtimeData.fallbackActive) return `Fallback / ${status.runtimeData.currentGeneratedAt ?? '-'}`
+  if (status.runtimeData.currentAvailable) return `Available / ${status.runtimeData.currentGeneratedAt ?? '-'}`
+  return displayStatus(status.components.runtimeData)
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

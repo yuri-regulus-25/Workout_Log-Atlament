@@ -83,6 +83,22 @@ async function respondStatus(response) {
 
   writeJson(response, 200, ok({
     versions,
+    readiness: readinessJson({
+      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
+      acceptingRequests: true,
+      configurationStatus: 'unknown',
+      credentialStatus: 'unknown',
+      githubStatus: 'unknown',
+      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
+      requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
+    }),
+    runtimeData: {
+      currentAvailable: runtimeAvailable,
+      currentGeneratedAt: null,
+      latestRemoteRetrieval: 'skipped',
+      latestValidation: runtimeAvailable ? 'succeeded' : 'failed',
+      fallbackActive: false,
+    },
     application: {
       status: runtimeAvailable ? 'ready' : 'degraded',
       degraded: !runtimeAvailable,
@@ -111,15 +127,6 @@ async function respondStatus(response) {
       },
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
-    readiness: readinessJson({
-      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
-      acceptingRequests: true,
-      configurationStatus: 'unknown',
-      credentialStatus: 'unknown',
-      githubStatus: 'unknown',
-      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
-      requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
-    }),
   }, runtime.errors))
 }
 

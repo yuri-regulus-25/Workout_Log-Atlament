@@ -49,6 +49,7 @@ Retained fields:
 - `versions.nativePackages.android.versionName`: Settings display for Android package version.
 - `versions.nativePackages.android.versionCode`: Settings display for Android package code.
 - `readiness.state`, `readiness.requiredActions`, `readiness.unavailableComponents`, `readiness.degradedComponents`: shared setup/readiness/runtime state contract for frontend gating.
+- `runtimeData.currentAvailable`, `runtimeData.currentGeneratedAt`, `runtimeData.latestRemoteRetrieval`, `runtimeData.latestValidation`, `runtimeData.fallbackActive`: minimum runtime-data freshness and fallback facts for shared recovery policy.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
 - `operations.manualSync`: Portal manual sync state display.
@@ -106,3 +107,7 @@ The legacy `/api/common/*` alias is removed from producers and documentation. Un
 Shared frontend clients derive Application Access Policy from `readiness`. `unconfigured` blocks normal applications while keeping Settings/Setup recovery available. `ready` allows normal applications. `degraded` keeps normal applications available and restricts only affected components. `unavailable` blocks unsafe normal application access and exposes recovery actions such as Settings, credential update, retry sync, or reload.
 
 Configured credential failures are runtime failures rather than setup absence. Remote fetch failure with existing Runtime Data remains a degraded fallback state: GitHub is degraded, Runtime Data stays available, and normal applications may continue using the previous successful data.
+
+## Phase8-D Unified Status and Credential Lifecycle
+
+Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, and active fallback. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.

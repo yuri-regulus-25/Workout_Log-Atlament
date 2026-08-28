@@ -103,6 +103,12 @@ describe('AF read contract refinement', () => {
       requiredActions: [],
       unavailableComponents: [],
       degradedComponents: ['github'],
+    }, {
+      currentAvailable: true,
+      currentGeneratedAt: '2026-08-28T00:00:00Z',
+      latestRemoteRetrieval: 'failed',
+      latestValidation: 'skipped',
+      fallbackActive: true,
     })).toMatchObject({
       normalApplicationsAvailable: true,
       recoveryActions: ['retry-sync', 'open-settings', 'reload'],

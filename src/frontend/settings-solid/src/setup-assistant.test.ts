@@ -42,6 +42,13 @@ const status: AfStatus = {
     unavailableComponents: [],
     degradedComponents: [],
   },
+  runtimeData: {
+    currentAvailable: true,
+    currentGeneratedAt: '2026-08-28T00:00:00Z',
+    latestRemoteRetrieval: 'succeeded',
+    latestValidation: 'succeeded',
+    fallbackActive: false,
+  },
   application: {
     status: 'ready',
     degraded: false,

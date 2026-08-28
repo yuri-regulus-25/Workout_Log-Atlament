@@ -1584,6 +1584,8 @@ public sealed class AtlamentApplication
     private ComponentStatus _githubStatus = ComponentStatus.unknown;
     private ComponentStatus _runtimeStatus = ComponentStatus.unknown;
     private ApplicationStatus _applicationStatus = ApplicationStatus.starting;
+    private string _latestRemoteRetrieval = "unknown";
+    private string _latestValidation = "unknown";
     private readonly List<string> _requiredActions = new();
 
     public AtlamentApplication(
@@ -1632,6 +1634,7 @@ public sealed class AtlamentApplication
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
         new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions()),
         DetermineReadiness(),
+        DetermineRuntimeDataStatus(),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1641,6 +1644,18 @@ public sealed class AtlamentApplication
             _runtimeStatus.ToString(),
             _hosting.GetStatus()),
         _requiredActions.ToArray()));
+
+    private RuntimeDataStatusFacts DetermineRuntimeDataStatus()
+    {
+        var (data, _) = _runtimeDataStore.LoadCurrent();
+        var currentAvailable = data is not null && _runtimeStatus == ComponentStatus.available;
+        return new RuntimeDataStatusFacts(
+            currentAvailable,
+            data?.GeneratedAt,
+            _latestRemoteRetrieval,
+            _latestValidation,
+            (_latestRemoteRetrieval == "failed" || _latestValidation == "failed") && currentAvailable);
+    }
 
     private ApplicationReadiness DetermineReadiness()
     {
@@ -2114,6 +2129,8 @@ public sealed class AtlamentApplication
         var remote = await _github.FetchAsync(_configuration, _token, cancellationToken);
         if (remote.Errors.Count > 0)
         {
+            _latestRemoteRetrieval = "failed";
+            _latestValidation = "skipped";
             _githubStatus = ComponentStatus.degraded;
             ValidateLocalRuntime();
             if (_runtimeStatus == ComponentStatus.available)
@@ -2126,12 +2143,14 @@ public sealed class AtlamentApplication
             return (503, new AfResponse<SyncResult>(false, remote.Errors, null));
         }
 
+        _latestRemoteRetrieval = "succeeded";
         _githubStatus = ComponentStatus.available;
         var machineMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/machines.json", StringComparison.OrdinalIgnoreCase));
         var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
         var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
         if (machineMaster is null || gymMaster is null)
         {
+            _latestValidation = "failed";
             var error = new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true);
             return RuntimeBuildFailure(new[] { error });
         }
@@ -2139,6 +2158,7 @@ public sealed class AtlamentApplication
         var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
         if (build.TechnicalInvalid || build.Errors.Count > 0)
         {
+            _latestValidation = "failed";
             return RuntimeBuildFailure(build.Errors);
         }
 
@@ -2150,6 +2170,7 @@ public sealed class AtlamentApplication
         }
 
         _runtimeStatus = ComponentStatus.available;
+        _latestValidation = "succeeded";
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
         return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors));
