@@ -24,6 +24,7 @@ describe('real workout data', () => {
     const rawSessionCount = await countRawWorkoutSessions(workoutsDirectory)
 
     expect(result.issues).toEqual([])
+    expect(result.masterData).toEqual(masterResult.masterData)
     expect(result.sessions).toHaveLength(rawSessionCount)
     expect(new Set(result.sessions.map((session) => session.session_id)).size).toBe(
       result.sessions.length,

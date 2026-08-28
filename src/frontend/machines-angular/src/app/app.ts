@@ -23,13 +23,15 @@ import {
   formatDisplayDate,
   formatMachineTitleFromId,
   formatWeightKg,
-  getAverageSetWeight,
   getEstimated1RM,
   getMachineHistory,
   getMachineOptions,
+  getMainGymAverageSetWeightMetric,
+  getMainGymMaxWeightMetric,
+  getMainGymSessionsMetric,
   getMaxReps,
-  getMaxWeight,
   getRecentSessions,
+  resolveMainGymContext,
 } from '@workout-lab/workout-core';
 
 @Component({
@@ -48,6 +50,7 @@ export class App implements AfterViewInit, OnDestroy {
   private characterEasterEgg: { dispose(): void } | null = null;
   private disposeThemeObserver: (() => void) | null = null;
   protected readonly sessions = signal<WorkoutSession[]>([]);
+  protected readonly mainGymContext = signal<ReturnType<typeof resolveMainGymContext>>({ state: 'unconfigured' });
   protected readonly loadError = signal<string | null>(null);
   private readonly themeRevision = signal(0);
   protected readonly machineOptions = computed(() => getMachineOptions(this.sessions()));
@@ -101,6 +104,7 @@ export class App implements AfterViewInit, OnDestroy {
     void loadRuntimeWorkoutSessions()
       .then((result) => {
         this.sessions.set(result.sessions);
+        this.mainGymContext.set(result.masterData ? resolveMainGymContext(result.masterData.gyms) : { state: 'unconfigured' });
         this.loadError.set(result.issues.length > 0 ? result.issues.map((issue) => issue.message).join(' / ') : null);
         this.selectMachineIdFromPath();
       })
@@ -130,8 +134,15 @@ export class App implements AfterViewInit, OnDestroy {
     return machine ? formatBodyPart(machine.body_part) : '—';
   });
 
+  protected readonly mainGymSessions = computed(() =>
+    getMainGymSessionsMetric(this.mainGymContext(), this.sessions()),
+  );
+  protected readonly comparableSessions = computed(() => {
+    const metric = this.mainGymSessions();
+    return metric.state === 'available' ? metric.value : [];
+  });
   protected readonly history = computed(() =>
-    getMachineHistory(this.sessions(), this.selectedMachineId()),
+    getMachineHistory(this.comparableSessions(), this.selectedMachineId()),
   );
 
   protected readonly latest = computed(() => this.history().at(-1));
@@ -142,15 +153,33 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly totalSets = computed(() =>
     this.history().reduce((total, row) => total + row.sets, 0),
   );
-  protected readonly bestWeight = computed(() => getMaxWeight(this.sessions(), this.selectedMachineId()));
-  protected readonly bestReps = computed(() => getMaxReps(this.sessions(), this.selectedMachineId()));
-  protected readonly estimatedOneRepMax = computed(() =>
-    getEstimated1RM(this.bestWeight(), this.bestReps()),
+  protected readonly bestWeightMetric = computed(() =>
+    getMainGymMaxWeightMetric(this.mainGymContext(), this.sessions(), this.selectedMachineId()),
   );
-  protected readonly recent28Sessions = computed(() => getRecentSessions(this.sessions(), 28));
-  protected readonly averageSetWeight28d = computed(() =>
-    getAverageSetWeight(this.recent28Sessions(), this.selectedMachineId()),
-  );
+  protected readonly bestWeight = computed(() => {
+    const metric = this.bestWeightMetric();
+    return metric.state === 'available' ? metric.value : 0;
+  });
+  protected readonly bestWeightLabel = computed(() => {
+    const metric = this.bestWeightMetric();
+    return metric.state === 'available' ? formatWeightKg(metric.value) : this.formatMainGymMetricState(metric);
+  });
+  protected readonly bestReps = computed(() => getMaxReps(this.comparableSessions(), this.selectedMachineId()));
+  protected readonly estimatedOneRepMaxLabel = computed(() => {
+    const metric = this.bestWeightMetric();
+    return metric.state === 'available'
+      ? formatWeightKg(getEstimated1RM(metric.value, this.bestReps()))
+      : this.formatMainGymMetricState(metric);
+  });
+  protected readonly recent28Sessions = computed(() => getRecentSessions(this.comparableSessions(), 28));
+  protected readonly averageSetWeight28d = computed(() => {
+    const metric = getMainGymAverageSetWeightMetric(
+      this.mainGymContext(),
+      this.recent28Sessions(),
+      this.selectedMachineId(),
+    );
+    return metric.state === 'available' ? metric.value : null;
+  });
   protected readonly averageSetWeight28dLabel = computed(() => {
     const value = this.averageSetWeight28d();
     return value === null ? '—' : formatWeightKg(Math.round(value * 10) / 10);
@@ -208,6 +237,18 @@ export class App implements AfterViewInit, OnDestroy {
 
   protected formatDate(date: string): string {
     return formatDisplayDate(date);
+  }
+
+  protected formatMainGymMetricState(metric: { state: string }): string {
+    if (metric.state === 'unconfigured') {
+      return 'Not configured';
+    }
+
+    if (metric.state === 'invalid') {
+      return 'Unavailable';
+    }
+
+    return 'No workout data loaded.';
   }
 
   protected selectMachine(machineId: string) {

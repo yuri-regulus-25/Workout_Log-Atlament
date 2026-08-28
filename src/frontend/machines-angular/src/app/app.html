@@ -99,12 +99,12 @@
       <strong>{{ latestDate() }}</strong>
     </article>
     <article class="metric-card">
-      <span>Best Weight</span>
-      <strong>{{ bestWeight() }} kg</strong>
+      <span>Main Gym Best Weight</span>
+      <strong>{{ bestWeightLabel() }}</strong>
     </article>
     <article class="metric-card">
-      <span>Estimated 1RM</span>
-      <strong>{{ estimatedOneRepMax() }} kg</strong>
+      <span>Main Gym Estimated 1RM</span>
+      <strong>{{ estimatedOneRepMaxLabel() }}</strong>
     </article>
     <article class="metric-card">
       <span>Total Sets</span>
@@ -122,7 +122,7 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-chart-line" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">{{ selectedMachineTitle() }} progress - Best Weight</p>
+            <p class="eyebrow">{{ selectedMachineTitle() }} progress - Main Gym Best Weight</p>
             <h2>{{ selectedMachineJapaneseName() }} 進捗 - 最大荷重</h2>
           </div>
         </div>
@@ -157,7 +157,7 @@
       <p class="muted">Session</p>
       <p class="large-number-right">{{ history().length }} sessions</p>
       <p class="muted">Best Volume</p>
-      <p class="large-number-right">{{ bestWeight() }} kg </p>
+      <p class="large-number-right">{{ bestWeightLabel() }}</p>
       <p class="muted">Max reps</p>
       <p class="large-number-right">{{ bestReps() }} Reps</p>
     </article>

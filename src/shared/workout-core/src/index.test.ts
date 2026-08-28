@@ -25,6 +25,11 @@ import {
   getMachineHistory,
   getMonthlySessions,
   getMonthlyVolume,
+  getMainGymAverageSetWeightMetric,
+  getMainGymMaxWeightMetric,
+  getMainGymMonthlyVolumeMetric,
+  getMainGymTotalVolumeMetric,
+  getMainGymVolumeTrendMetric,
   getMonthlyAggregates,
   getNumericDelta,
   getLastTrainedDateByBodyPart,
@@ -766,6 +771,65 @@ describe('workout-core', () => {
       gym: { referenceId: 'missing-gym', state: 'missing' },
       machines: [{ referenceId: 'missing-machine', state: 'missing' }],
     })
+  })
+
+  it('calculates weight and volume metrics only from configured main gym sessions', () => {
+    const context = resolveMainGymContext({
+      schema_version: 1,
+      gyms: [gymMasterItem('main-gym', { main: true }), gymMasterItem('other-gym')],
+    })
+    const sourceSessions = [
+      {
+        ...createSessionWithMachines('2026-08-01-01', '2026-08-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-08-02-01', '2026-08-02', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        ]),
+        gym: { id: 'other-gym', name: 'Other Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-09-01-01', '2026-09-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 30, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+    ]
+
+    expect(getMainGymTotalVolumeMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: 500,
+      sessions: [{ session_id: '2026-08-01-01' }, { session_id: '2026-09-01-01' }],
+    })
+    expect(getMainGymMonthlyVolumeMetric(context, sourceSessions, 2026, 8)).toMatchObject({
+      state: 'available',
+      value: 200,
+      sessions: [{ session_id: '2026-08-01-01' }],
+    })
+    expect(getMainGymVolumeTrendMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: [
+        { sessionId: '2026-08-01-01', date: '2026-08-01', volume: 200 },
+        { sessionId: '2026-09-01-01', date: '2026-09-01', volume: 300 },
+      ],
+    })
+    expect(getMainGymMaxWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 30,
+    })
+    expect(getMainGymAverageSetWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 25,
+    })
+  })
+
+  it('returns explicit unavailable state for main gym metrics when context is not configured', () => {
+    const context = resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a')] })
+
+    expect(getMainGymTotalVolumeMetric(context, sessions)).toEqual({ state: 'unconfigured' })
   })
 })
 

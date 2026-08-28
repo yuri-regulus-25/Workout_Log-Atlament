@@ -151,4 +151,5 @@ export type WorkoutParseIssue = {
 export type WorkoutLoadResult = {
   sessions: WorkoutSession[]
   issues: WorkoutParseIssue[]
+  masterData?: WorkoutMasterData
 }
