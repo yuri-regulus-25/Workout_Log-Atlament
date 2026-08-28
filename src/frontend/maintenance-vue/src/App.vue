@@ -48,13 +48,23 @@
         </template>
         <template #item.actions="{ item }">
           <div class="row-actions" @click.stop>
+            <v-btn
+              v-if="isGym(item)"
+              :icon="item.main ? 'mdi-star' : 'mdi-star-outline'"
+              variant="text"
+              size="small"
+              :disabled="item.deleted || !item.active"
+              aria-label="Set Main Gym"
+              @click="requestMainGym(item)"
+            />
             <v-btn icon="mdi-content-copy" variant="text" size="small" aria-label="Copy" @click="openCopy(item)" />
             <v-btn
               :icon="item.deleted ? 'mdi-restore' : 'mdi-delete-outline'"
               variant="text"
               size="small"
               :aria-label="item.deleted ? 'Restore' : 'Delete'"
-              @click="toggleDeleted(item)"
+              :disabled="isGym(item) && item.main && !item.deleted"
+              @click="requestLifecycleToggle(item)"
             />
           </div>
         </template>
@@ -71,15 +81,15 @@
                 <v-select v-model="machineDraft.body_part" label="Body Part" :items="bodyParts" />
                 <v-text-field v-model="aliasText" label="Aliases" />
                 <v-switch v-model="machineDraft.active" label="Active" color="primary" />
-                <v-switch v-model="machineDraft.deleted" label="Deleted" color="error" />
+                <v-chip v-if="machineDraft.deleted" color="error" variant="tonal">Deleted</v-chip>
               </template>
               <template v-if="gymDraft">
                 <v-text-field v-model.trim="gymDraft.gym_id" label="Gym ID" :error-messages="idError" :disabled="dialogMode === 'edit'" />
                 <v-text-field v-model.trim="gymDraft.name" label="Name" />
                 <v-text-field v-model.trim="gymDraft.short_name" label="Short Name" />
                 <v-switch v-model="gymDraft.active" label="Active" color="primary" />
-                <v-switch v-model="gymDraft.deleted" label="Deleted" color="error" />
-                <v-switch v-model="gymDraft.main" label="Main Gym" color="primary" />
+                <v-chip v-if="gymDraft.deleted" color="error" variant="tonal">Deleted</v-chip>
+                <v-chip v-if="gymDraft.main" color="primary" variant="tonal">Main Gym</v-chip>
               </template>
             </v-form>
           </v-card-text>
@@ -100,6 +110,18 @@
             <v-spacer />
             <v-btn variant="text" @click="discardOpen = false">Cancel</v-btn>
             <v-btn color="error" @click="discardDraft">Discard</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmOpen" max-width="460">
+        <v-card>
+          <v-card-title>{{ confirmTitle }}</v-card-title>
+          <v-card-text>{{ confirmText }}</v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn variant="text" @click="confirmOpen = false">Cancel</v-btn>
+            <v-btn color="primary" :loading="saving" @click="confirmOperation">Confirm</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -141,11 +163,15 @@ const machineRevision = ref('')
 const gymRevision = ref('')
 const machines = ref<MachineRecord[]>([])
 const gyms = ref<GymRecord[]>([])
+const referencedGyms = ref(new Set<string>())
+const referencedMachines = ref(new Set<string>())
 const dialogOpen = ref(false)
 const discardOpen = ref(false)
+const confirmOpen = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const machineDraft = ref<MachineRecord | null>(null)
 const gymDraft = ref<GymRecord | null>(null)
+const pendingOperation = ref<{ kind: 'lifecycle' | 'main-gym'; record: RecordDraft } | null>(null)
 const originalDraft = ref('')
 const aliasText = ref('')
 const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
@@ -169,6 +195,20 @@ const activeDraft = computed<RecordDraft | null>(() => machineDraft.value ?? gym
 const currentRevisionLabel = computed(() => {
   const revision = selectedType.value === 'MACHINE_MASTER' ? machineRevision.value : gymRevision.value
   return revision ? `revision ${revision.slice(0, 10)}` : 'no revision'
+})
+
+const confirmTitle = computed(() => {
+  if (!pendingOperation.value) return ''
+  if (pendingOperation.value.kind === 'main-gym') return 'Change Main Gym?'
+  return pendingOperation.value.record.deleted ? 'Restore record?' : 'Delete record?'
+})
+
+const confirmText = computed(() => {
+  if (!pendingOperation.value) return ''
+  if (pendingOperation.value.kind === 'main-gym') return 'The selected active Gym will become Main Gym and the current Main Gym will be cleared.'
+  return pendingOperation.value.record.deleted
+    ? 'This record will be restored and validated before saving.'
+    : 'This record will be logically deleted after validation.'
 })
 
 const records = computed(() => selectedType.value === 'MACHINE_MASTER' ? machines.value : gyms.value)
@@ -223,10 +263,32 @@ async function loadAll() {
     gyms.value = gymDocument.gyms
     machineRevision.value = machineResult.data.revision
     gymRevision.value = gymResult.data.revision
+    await loadRuntimeReferences()
   } catch (error) {
     message.value = { type: 'error', text: error instanceof Error ? error.message : 'Master load failed.' }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadRuntimeReferences() {
+  try {
+    const response = await fetch('/api/v1/common/runtime/workouts')
+    const payload = await response.json() as { success: boolean; data?: { sessions?: Array<{ gym?: { id?: string }; machines?: Array<{ machineId?: string; machine_id?: string }> }> } }
+    if (!payload.success) return
+    const gymsInUse = new Set<string>()
+    const machinesInUse = new Set<string>()
+    for (const session of payload.data?.sessions ?? []) {
+      if (session.gym?.id) gymsInUse.add(session.gym.id)
+      for (const machine of session.machines ?? []) {
+        const id = machine.machineId ?? machine.machine_id
+        if (id) machinesInUse.add(id)
+      }
+    }
+    referencedGyms.value = gymsInUse
+    referencedMachines.value = machinesInUse
+  } catch {
+    message.value = { type: 'warning', text: 'Runtime references are unavailable.' }
   }
 }
 
@@ -274,11 +336,47 @@ function openCopy(record: RecordDraft) {
   dialogOpen.value = true
 }
 
+function requestLifecycleToggle(record: RecordDraft) {
+  if (!record.deleted && isReferenced(record)) {
+    message.value = { type: 'error', text: 'Referenced records cannot be deleted.' }
+    return
+  }
+  if (!record.deleted && isGym(record) && record.main) {
+    message.value = { type: 'error', text: 'Main Gym cannot be deleted.' }
+    return
+  }
+  pendingOperation.value = { kind: 'lifecycle', record }
+  confirmOpen.value = true
+}
+
 async function toggleDeleted(record: RecordDraft) {
   const next = structuredClone(record)
   next.deleted = !next.deleted
   next.active = !next.deleted
   await saveRecord(next, 'edit')
+}
+
+function requestMainGym(record: GymRecord) {
+  if (record.deleted || !record.active) {
+    message.value = { type: 'error', text: 'Inactive or deleted Gym cannot be Main Gym.' }
+    return
+  }
+  if (record.main) return
+  pendingOperation.value = { kind: 'main-gym', record }
+  confirmOpen.value = true
+}
+
+async function confirmOperation() {
+  if (!pendingOperation.value) return
+  const operation = pendingOperation.value
+  confirmOpen.value = false
+  pendingOperation.value = null
+  if (operation.kind === 'lifecycle') {
+    await toggleDeleted(operation.record)
+    return
+  }
+
+  await saveMainGym(operation.record as GymRecord)
 }
 
 function closeDialog() {
@@ -340,6 +438,31 @@ async function saveRecord(record: RecordDraft, mode: 'create' | 'edit') {
   } finally {
     saving.value = false
   }
+}
+
+async function saveMainGym(record: GymRecord) {
+  saving.value = true
+  try {
+    const next = gyms.value.map((gym) => ({ ...gym, main: gym.gym_id === record.gym_id }))
+    const result = await updateMasterDocument('GYM_MASTER', {
+      expectedRevision: gymRevision.value,
+      content: JSON.stringify({ schema_version: 1, gyms: next }, null, 2),
+    })
+    if (!result.success || !result.data) throw new Error(result.errors[0]?.message ?? 'Main Gym save failed.')
+    gyms.value = next
+    gymRevision.value = result.data.revision
+    message.value = { type: 'success', text: 'Main Gym updated.' }
+  } catch (error) {
+    message.value = { type: 'error', text: error instanceof Error ? error.message : 'Main Gym update failed.' }
+  } finally {
+    saving.value = false
+  }
+}
+
+function isReferenced(record: RecordDraft): boolean {
+  return isMachine(record)
+    ? referencedMachines.value.has(record.machine_id)
+    : referencedGyms.value.has(record.gym_id)
 }
 
 function recordId(record: RecordDraft): string {

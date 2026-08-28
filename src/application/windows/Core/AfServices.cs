@@ -1714,6 +1714,12 @@ public sealed class AtlamentApplication
             return (401, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
         }
 
+        var referenceErrors = ValidateMasterWriteReferences(type, request.Content ?? "");
+        if (referenceErrors.Count > 0)
+        {
+            return (400, new AfResponse<MasterDocumentWriteResult>(false, referenceErrors, null));
+        }
+
         var result = await _github.SaveMasterDocumentAsync(
             _configuration,
             _token,
@@ -1724,6 +1730,74 @@ public sealed class AtlamentApplication
         return result.Result is null
             ? (MapMasterWriteStatusCode(result.Errors), new AfResponse<MasterDocumentWriteResult>(false, result.Errors, null))
             : (200, AfResponses.Ok(result.Result));
+    }
+
+    private IReadOnlyList<AfError> ValidateMasterWriteReferences(string type, string content)
+    {
+        var (data, errors) = _runtimeDataStore.LoadCurrent();
+        if (data is null)
+        {
+            return errors.Where(error => error.Code == AfErrorCodes.RuntimeDataInvalid).ToArray();
+        }
+
+        try
+        {
+            var document = JsonNode.Parse(content)?.AsObject();
+            if (document is null)
+            {
+                return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document is invalid JSON.", true) };
+            }
+
+            return type switch
+            {
+                "MACHINE_MASTER" => ValidateReferencedMachines(document, data),
+                "GYM_MASTER" => ValidateReferencedGyms(document, data),
+                _ => Array.Empty<AfError>()
+            };
+        }
+        catch
+        {
+            return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document is invalid JSON.", true) };
+        }
+    }
+
+    private static IReadOnlyList<AfError> ValidateReferencedMachines(JsonObject document, RuntimeDataFile data)
+    {
+        var referenced = data.Sessions
+            .SelectMany(session => session.Machines)
+            .Select(machine => machine.MachineId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+        var deleted = document["machines"]?.AsArray()
+            .OfType<JsonObject>()
+            .Where(machine => machine["deleted"]?.GetValue<bool>() == true)
+            .Select(machine => machine["machine_id"]?.GetValue<string>())
+            .Where(id => !string.IsNullOrWhiteSpace(id) && referenced.Contains(id!))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        return deleted
+            .Select(id => new AfError(AfErrorCodes.MasterWriteInvalid, $"Referenced Machine cannot be deleted: {id}.", true))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<AfError> ValidateReferencedGyms(JsonObject document, RuntimeDataFile data)
+    {
+        var referenced = data.Sessions
+            .Select(session => session.Gym.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+        var deleted = document["gyms"]?.AsArray()
+            .OfType<JsonObject>()
+            .Where(gym => gym["deleted"]?.GetValue<bool>() == true)
+            .Select(gym => gym["gym_id"]?.GetValue<string>())
+            .Where(id => !string.IsNullOrWhiteSpace(id) && referenced.Contains(id!))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        return deleted
+            .Select(id => new AfError(AfErrorCodes.MasterWriteInvalid, $"Referenced Gym cannot be deleted: {id}.", true))
+            .ToArray();
     }
 
     public (int StatusCode, AfResponse<CredentialUpdateResult> Response) UpdateCredential(CredentialUpdate update)
