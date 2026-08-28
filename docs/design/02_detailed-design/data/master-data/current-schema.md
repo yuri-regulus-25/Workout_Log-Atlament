@@ -80,7 +80,7 @@ Top-level structure:
 Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMasterData` と `validateWorkoutMasterReferences` を使用する。
 
 `validateWorkoutMasterData` は typed Master Data に対して schema version、required domain fields、unique ID、Machine `body_part`、Main Gym constraint を validation する。
-Master write pipeline では AF が同等の whole-master validation を最終防衛線として実行する。Logical deleted record も ID unique 判定対象であり、deleted ID の再利用は禁止する。Write 前には対象 document と相手側 Master document の current revision を揃えて検証し、Main Gym は最大 1 件、かつ `active:true` / `deleted:false` の Gym だけを許可する。
+Master write pipeline では AF が同等の whole-master validation を最終防衛線として実行する。Logical deleted record も ID unique 判定対象であり、deleted ID の再利用は禁止する。Write 前には対象 document と相手側 Master document の current revision を揃えて検証し、Main Gym は最大 1 件、かつ `active:true` / `deleted:false` の Gym だけを許可する。既に Main Gym が設定されている Gym Master を 0 件状態へ戻す write は invalid である。
 
 `validateWorkoutMasterReferences` は Workout Log の actual references だけを扱う。
 
@@ -96,7 +96,17 @@ Main Gym dependent weight/volume metrics は `getMainGym*Metric` family を使�
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
 
-Main Gym は Gym Master record の `main:true` で表す。全 Gym 中最大 1 件であり、初期未設定状態として 0 件を許容する。`main:true` の Gym が inactive または deleted の場合は invalid な Main Gym context である。
+Main Gym は Gym Master record の `main:true` で表す。全 Gym 中最大 1 件であり、初期未設定状態として 0 件を許容する。設定後は Maintenance application と AF write pipeline の双方で 0 件化を拒否する。`main:true` の Gym が inactive または deleted の場合は invalid な Main Gym context である。
+
+## Maintenance Application Behavior
+
+Master Maintenance は `/maintenance/` で提供する Master Data maintenance UI である。Machine/Gym の Create、single-record Edit、Copy to Create、logical Delete、Restore、Main Gym replacement を提供する。Raw JSON editor、arbitrary path write、bulk edit/delete/restore は提供しない。
+
+Delete/Restore と Main Gym replacement は row action から開始し、実際の write 前に confirmation dialog を表示する。Edit form では `deleted` と `main` を free boolean として編集できない。Main Gym は active かつ non-deleted Gym だけに設定でき、Main Gym の Delete は UI で拒否する。
+
+Save 成功時は returned revision で表示 state を更新する。Save 失敗時は dialog/draft を閉じず、server error message を表示する。Stale revision conflict の場合も local edit content は保持され、user は再取得後に再適用を判断する。
+
+Development runtime は local `data/master/*.json` に対する same-shape GET/PUT を提供する。Windows runtime は GitHub Contents API へ書き込む。Android runtime は Phase 7 時点で boundary/status の公開と hosted Maintenance asset を持つが、Master write document PUT は Windows/dev runtime と同等の GitHub write backend ではない。
 
 ## Runtime Use
 
