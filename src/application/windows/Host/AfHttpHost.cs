@@ -100,6 +100,18 @@ public sealed class AfHttpHost : IAsyncDisposable
         });
         app.MapGet($"{prefix}/credential/status", () => Results.Json(_application.GetCredentialStatus(), AfJson.Options));
         app.MapGet($"{prefix}/master-write/boundary", () => Results.Json(_application.GetMasterWriteBoundary(), AfJson.Options));
+        app.MapGet($"{prefix}/master-write/documents/{{type}}", async (string type, HttpContext context) =>
+        {
+            var result = await _application.ReadMasterDocumentAsync(type, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPut($"{prefix}/master-write/documents/{{type}}", async (string type, HttpContext context) =>
+        {
+            var update = await context.Request.ReadFromJsonAsync<MasterDocumentWriteRequest>(AfJson.Options, context.RequestAborted)
+                ?? new MasterDocumentWriteRequest(null, null);
+            var result = await _application.WriteMasterDocumentAsync(type, update, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
         app.MapPost($"{prefix}/credential", async (HttpContext context) =>
         {
             var update = await context.Request.ReadFromJsonAsync<CredentialUpdate>(AfJson.Options, context.RequestAborted)

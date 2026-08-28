@@ -100,6 +100,10 @@ public sealed record MasterDocumentSnapshot(
     [property: JsonPropertyName("revision")] string Revision,
     [property: JsonPropertyName("content")] string Content);
 
+public sealed record MasterDocumentWriteRequest(
+    [property: JsonPropertyName("expectedRevision")] string? ExpectedRevision,
+    [property: JsonPropertyName("content")] string? Content);
+
 public sealed record MasterDocumentWriteResult(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("path")] string Path,
@@ -208,7 +212,8 @@ public sealed record HostingComponentState(
     [property: JsonPropertyName("workouts")] string Workouts,
     [property: JsonPropertyName("machines")] string Machines,
     [property: JsonPropertyName("analytics")] string Analytics,
-    [property: JsonPropertyName("settings")] string Settings);
+    [property: JsonPropertyName("settings")] string Settings,
+    [property: JsonPropertyName("maintenance")] string Maintenance);
 
 public sealed record RuntimeSourceFile(string Path, string Content);
 

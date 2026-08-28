@@ -10,6 +10,7 @@ const requiredPorts = [
   { name: 'Analytics', port: 5178 },
   { name: 'Settings', port: 5179 },
   { name: 'Node Development Runtime', port: 5180 },
+  { name: 'Maintenance', port: 5181 },
 ]
 
 for (const item of requiredPorts) {
@@ -24,6 +25,7 @@ const processes = [
   startNpm('machines', ['run', 'watch:machines']),
   startNpm('analytics', ['run', 'watch:analytics']),
   startNpm('settings', ['run', 'watch:settings']),
+  startNpm('maintenance', ['run', 'watch:maintenance']),
   start('gateway', process.execPath, ['tools/dev-runtime/development-gateway.mjs']),
 ]
 

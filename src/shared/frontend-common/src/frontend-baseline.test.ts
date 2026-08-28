@@ -21,6 +21,7 @@ const sourceDocuments = [
   'src/frontend/errors/src/503.html',
   'src/frontend/errors/src/common.html',
   'src/frontend/machines-angular/src/index.html',
+  'src/frontend/maintenance-vue/index.html',
   'src/frontend/portal/src/index.html',
   'src/frontend/settings-solid/index.html',
   'src/frontend/workouts-vue/index.html',
@@ -86,6 +87,17 @@ const existingFrontendApps = [
       error: /tone: 'error'/,
     },
   },
+  {
+    id: 'maintenance',
+    sourceFiles: ['src/frontend/maintenance-vue/src/App.vue'],
+    cssFiles: ['src/frontend/maintenance-vue/src/style.css'],
+    stateMarkers: {
+      loading: /:loading="loading"/,
+      warning: /type: 'success' \| 'error' \| 'warning'/,
+      empty: /displayMode/,
+      error: /type: 'error'/,
+    },
+  },
 ] as const satisfies ReadonlyArray<{
   id: Exclude<ApplicationRouteId, 'portal'>
   sourceFiles: readonly string[]
@@ -128,7 +140,7 @@ describe('cross-frontend test baseline', () => {
 
   it('keeps cross-app navigation metadata stable and smoke-tested by each existing app', () => {
     const drawerRouteIds = drawerApplications.map((application) => application.id)
-    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'settings'])
+    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'])
 
     const routes = Object.values(applicationRoutes)
     expect(new Set(routes).size).toBe(routes.length)

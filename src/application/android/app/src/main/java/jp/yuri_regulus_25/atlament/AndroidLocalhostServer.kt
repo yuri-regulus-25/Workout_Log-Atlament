@@ -49,7 +49,7 @@ class AndroidLocalhostServer(
     private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String)
     private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
     private class AfException(val code: String, override val message: String) : Exception(message)
-    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings")
+    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -294,7 +294,8 @@ class AndroidLocalhostServer(
           "workouts": "${assetStatus("frontend/workouts/index.html")}",
           "machines": "${assetStatus("frontend/machines/index.html")}",
           "analytics": "${assetStatus("frontend/analytics/index.html")}",
-          "settings": "${assetStatus("frontend/settings/index.html")}"
+          "settings": "${assetStatus("frontend/settings/index.html")}",
+          "maintenance": "${assetStatus("frontend/maintenance/index.html")}"
         }
     """.trimIndent()
 

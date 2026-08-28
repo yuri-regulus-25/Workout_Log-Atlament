@@ -29,6 +29,10 @@ const apps = [
     path: 'settings',
     source: join(root, 'src/frontend/settings-solid/dist'),
   },
+  {
+    path: 'maintenance',
+    source: join(root, 'src/frontend/maintenance-vue/dist'),
+  },
 ]
 
 // The framework-specific builds produce their own dist folders. This script is the single MPA
