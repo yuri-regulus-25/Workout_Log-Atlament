@@ -1,6 +1,8 @@
 using Atlament.Core;
 using System.Net;
 using System.Reflection;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Atlament.Tests;
 
@@ -579,6 +581,106 @@ public sealed class AfCoreTests
         }
     }
 
+    [Fact]
+    public async Task MasterDocumentWriteUsesExpectedRevisionAndFixedCommitMessage()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var http = new RecordingAsyncHttpMessageHandler(async request =>
+        {
+            requests.Add(CloneRequest(request));
+            if (request.Method == HttpMethod.Get)
+            {
+                return JsonResponse($$"""
+                    {
+                      "sha": "current-sha",
+                      "content": "{{Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"schema_version\":1,\"machines\":[]}"))}}"
+                    }
+                    """);
+            }
+
+            var body = request.Content is null ? "{}" : await request.Content.ReadAsStringAsync();
+            var payload = JsonNode.Parse(body)!;
+            Assert.Equal("Update machine master", payload["message"]!.GetValue<string>());
+            Assert.Equal("current-sha", payload["sha"]!.GetValue<string>());
+            Assert.Equal("master", payload["branch"]!.GetValue<string>());
+            Assert.Equal(
+                "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\"}]}",
+                Encoding.UTF8.GetString(Convert.FromBase64String(payload["content"]!.GetValue<string>())));
+            return JsonResponse("""
+                {
+                  "content": {
+                    "sha": "saved-sha"
+                  }
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"m1\"}]}",
+            CancellationToken.None);
+
+        Assert.Empty(result.Errors);
+        Assert.NotNull(result.Result);
+        Assert.Equal("saved-sha", result.Result!.Revision);
+        Assert.Equal("master/machines.json", result.Result.Path);
+        Assert.Equal(2, requests.Count);
+        Assert.Equal(HttpMethod.Get, requests[0].Method);
+        Assert.Contains("/contents/data/master/machines.json?ref=master", requests[0].RequestUri!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Put, requests[1].Method);
+        Assert.Contains("/contents/data/master/machines.json", requests[1].RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsStaleRevisionWithoutPut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            return JsonResponse("""
+                {
+                  "sha": "newer-sha",
+                  "content": "e30="
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "stale-sha",
+            "{\"schema_version\":1,\"gyms\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteConflict);
+        Assert.Equal(new[] { HttpMethod.Get }, methods);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteRejectsUnknownTarget()
+    {
+        var github = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
+
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "WORKOUT",
+            "sha",
+            "{}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+    }
+
     private static async Task WaitForStartupAsync(AtlamentApplication application)
     {
         for (var attempt = 0; attempt < 20; attempt++)
@@ -630,6 +732,11 @@ public sealed class AfCoreTests
         Content = new StringContent(json)
     };
 
+    private static HttpRequestMessage CloneRequest(HttpRequestMessage request)
+    {
+        return new HttpRequestMessage(request.Method, request.RequestUri);
+    }
+
     private sealed class RecordingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         public List<string> RequestedUrls { get; } = new();
@@ -638,6 +745,14 @@ public sealed class AfCoreTests
         {
             RequestedUrls.Add(request.RequestUri?.AbsoluteUri ?? "");
             return Task.FromResult(respond(request));
+        }
+    }
+
+    private sealed class RecordingAsyncHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return await respond(request);
         }
     }
 }

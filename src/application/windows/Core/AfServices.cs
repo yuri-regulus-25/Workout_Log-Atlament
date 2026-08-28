@@ -706,6 +706,13 @@ public sealed class RuntimeDataBuilder
 
 public sealed class GithubAccessService
 {
+    private static readonly IReadOnlyDictionary<string, (string Path, string CommitMessage)> MasterWriteTargets =
+        new Dictionary<string, (string Path, string CommitMessage)>(StringComparer.Ordinal)
+        {
+            ["MACHINE_MASTER"] = ("master/machines.json", "Update machine master"),
+            ["GYM_MASTER"] = ("master/gyms.json", "Update gym master")
+        };
+
     private readonly HttpClient _httpClient;
 
     public GithubAccessService()
@@ -778,6 +785,117 @@ public sealed class GithubAccessService
     {
         var (_, errors) = await FetchAsync(configuration, token, cancellationToken);
         return errors;
+    }
+
+    public async Task<(MasterDocumentSnapshot? Document, IReadOnlyList<AfError> Errors)> ReadMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target.Path);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            var content = DecodeGithubContent(remote.Content!);
+            if (content is null)
+            {
+                return (null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
+            }
+
+            return (new MasterDocumentSnapshot(type, target.Path, remote.Revision!, content), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(MasterDocumentWriteResult? Result, IReadOnlyList<AfError> Errors)> SaveMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        string expectedRevision,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRevision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true) });
+        }
+
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target.Path);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            if (!string.Equals(remote.Revision, expectedRevision, StringComparison.Ordinal))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterWriteConflict, "Master document revision has changed.", true) });
+            }
+
+            var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}";
+            using var request = CreateRequest(contentsUrl, token, HttpMethod.Put);
+            var payload = new
+            {
+                message = target.CommitMessage,
+                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                sha = remote.Revision,
+                branch = configuration.Repository.Ref
+            };
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, AfJson.Options), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, new[] { response.StatusCode == HttpStatusCode.Conflict
+                    ? new AfError(AfErrorCodes.MasterWriteConflict, "Master document revision has changed.", true)
+                    : MapGithubError(response.StatusCode, fullPath) });
+            }
+
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeoutCts.Token));
+            var savedRevision = json?["content"]?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(savedRevision))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterWriteFailed, "GitHub write result is ambiguous.", true) });
+            }
+
+            return (new MasterDocumentWriteResult(type, target.Path, savedRevision), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
     }
 
     private async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchDirectoryAsync(
@@ -882,9 +1000,49 @@ public sealed class GithubAccessService
         return (new RuntimeSourceFile(path, await response.Content.ReadAsStringAsync(cancellationToken)), null);
     }
 
-    private static HttpRequestMessage CreateRequest(string url, string? token)
+    private async Task<(string? Revision, string? Content, IReadOnlyList<AfError> Errors)> ReadGithubContentAsync(
+        AfConfiguration configuration,
+        string fullPath,
+        string? token,
+        CancellationToken cancellationToken)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}?ref={Uri.EscapeDataString(configuration.Repository.Ref)}";
+        using var request = CreateRequest(contentsUrl, token);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, null, new[] { MapGithubError(response.StatusCode, fullPath) });
+        }
+
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var revision = json?["sha"]?.GetValue<string>();
+        var content = json?["content"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(revision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
+        }
+
+        return (revision, content, Array.Empty<AfError>());
+    }
+
+    private static bool TryGetMasterWriteTarget(string type, out (string Path, string CommitMessage) target) =>
+        MasterWriteTargets.TryGetValue(type, out target);
+
+    private static string? DecodeGithubContent(string content)
+    {
+        try
+        {
+            return Encoding.UTF8.GetString(Convert.FromBase64String(content.Replace("\n", "").Replace("\r", "")));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static HttpRequestMessage CreateRequest(string url, string? token, HttpMethod? method = null)
+    {
+        var request = new HttpRequestMessage(method ?? HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd("Atlament-Windows-AF");
         if (!string.IsNullOrWhiteSpace(token))
         {
