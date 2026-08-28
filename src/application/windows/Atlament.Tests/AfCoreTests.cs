@@ -733,6 +733,127 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public async Task MasterDocumentWriteRejectsClearingConfiguredMainGymBeforePut()
+    {
+        var methods = new List<HttpMethod>();
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            methods.Add(request.Method);
+            return JsonResponse($$"""
+                {
+                  "sha": "gym-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "GYM_MASTER",
+            "gym-sha",
+            "{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"g1\",\"name\":\"Gym 1\",\"active\":true,\"deleted\":false,\"main\":false}]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
+        Assert.Equal(new[] { HttpMethod.Get }, methods);
+    }
+
+    [Theory]
+    [InlineData(401, AfErrorCodes.GithubUnauthorized)]
+    [InlineData(403, AfErrorCodes.GithubForbidden)]
+    [InlineData(404, AfErrorCodes.GithubResourceNotFound)]
+    [InlineData(429, AfErrorCodes.GithubRateLimit)]
+    [InlineData(500, AfErrorCodes.GithubServerError)]
+    public async Task MasterDocumentWriteMapsGithubReadFailureCodes(int statusCode, string expectedCode)
+    {
+        var github = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage((HttpStatusCode)statusCode))));
+
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == expectedCode);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteReportsAmbiguousGithubWriteResult()
+    {
+        var http = new RecordingHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Put)
+            {
+                return JsonResponse("{}");
+            }
+
+            if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""
+                    {
+                      "sha": "gym-sha",
+                      "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[]}")}}"
+                    }
+                    """);
+            }
+
+            return JsonResponse($$"""
+                {
+                  "sha": "machine-sha",
+                  "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[]}")}}"
+                }
+                """);
+        });
+
+        var github = new GithubAccessService(new HttpClient(http));
+        var result = await github.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "machine-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        Assert.Null(result.Result);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteFailed);
+    }
+
+    [Fact]
+    public async Task MasterDocumentWriteMapsNetworkAndCanceledOperations()
+    {
+        var networkGithub = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => throw new HttpRequestException())));
+        var network = await networkGithub.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            CancellationToken.None);
+
+        using var canceled = new CancellationTokenSource();
+        await canceled.CancelAsync();
+        var timeoutGithub = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
+        var timeout = await timeoutGithub.SaveMasterDocumentAsync(
+            Configuration("data"),
+            "github-token",
+            "MACHINE_MASTER",
+            "current-sha",
+            "{\"schema_version\":1,\"machines\":[]}",
+            canceled.Token);
+
+        Assert.Null(network.Result);
+        Assert.Contains(network.Errors, error => error.Code == AfErrorCodes.GithubConnectionFailed);
+        Assert.Null(timeout.Result);
+        Assert.Contains(timeout.Errors, error => error.Code == AfErrorCodes.GithubTimeout);
+    }
+
+    [Fact]
     public async Task MasterDocumentWriteRejectsDeletingReferencedMachineBeforeGithubWrite()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));

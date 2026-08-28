@@ -1007,6 +1007,12 @@ public sealed class GithubAccessService
                 return (null, new[] { new AfError(AfErrorCodes.MasterWriteConflict, "Master document revision has changed.", true) });
             }
 
+            var lifecycleErrors = ValidateMasterLifecycleTransition(type, remote.Content!, content);
+            if (lifecycleErrors.Count > 0)
+            {
+                return (null, lifecycleErrors);
+            }
+
             var other = await ReadOtherMasterDocumentAsync(configuration, token, type, timeoutCts.Token);
             if (other.Errors.Count > 0)
             {
@@ -1207,6 +1213,41 @@ public sealed class GithubAccessService
 
     private static bool TryGetMasterWriteTarget(string type, out (string Path, string CommitMessage) target) =>
         MasterWriteTargets.TryGetValue(type, out target);
+
+    private static IReadOnlyList<AfError> ValidateMasterLifecycleTransition(string type, string currentEncodedContent, string nextContent)
+    {
+        if (type != "GYM_MASTER")
+        {
+            return Array.Empty<AfError>();
+        }
+
+        try
+        {
+            var currentContent = DecodeGithubContent(currentEncodedContent);
+            if (currentContent is null)
+            {
+                return new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) };
+            }
+
+            var currentConfigured = HasMainGym(currentContent);
+            var nextConfigured = HasMainGym(nextContent);
+            return currentConfigured && !nextConfigured
+                ? new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Configured Main Gym cannot be cleared.", true) }
+                : Array.Empty<AfError>();
+        }
+        catch
+        {
+            return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document lifecycle transition is invalid.", true) };
+        }
+    }
+
+    private static bool HasMainGym(string content)
+    {
+        var document = JsonNode.Parse(content)?.AsObject();
+        return document?["gyms"]?.AsArray()
+            .OfType<JsonObject>()
+            .Any(gym => gym["main"]?.GetValue<bool>() == true) == true;
+    }
 
     private static string? DecodeGithubContent(string content)
     {

@@ -194,4 +194,17 @@ describe('cross-frontend test baseline', () => {
     expect(source).toContain('"$route.fullPath"')
     expect(source).toContain('this.$refs.pageHeading?.focus()')
   })
+
+  it('keeps Master Maintenance writes constrained to reviewed operations', () => {
+    const source = readSource('src/frontend/maintenance-vue/src/App.vue')
+
+    expect(source).toContain('requestLifecycleToggle')
+    expect(source).toContain('requestMainGym')
+    expect(source).toContain('confirmOpen')
+    expect(source).toContain("updateMasterDocument('MACHINE_MASTER'")
+    expect(source).toContain("updateMasterDocument('GYM_MASTER'")
+    expect(source).not.toContain('v-textarea')
+    expect(source).not.toMatch(/bulk/i)
+    expect(source).not.toMatch(/raw json/i)
+  })
 })
