@@ -48,6 +48,7 @@ Retained fields:
 - `versions.nativePackages.windows.version`: Settings display for Windows package version.
 - `versions.nativePackages.android.versionName`: Settings display for Android package version.
 - `versions.nativePackages.android.versionCode`: Settings display for Android package code.
+- `readiness.state`, `readiness.requiredActions`, `readiness.unavailableComponents`, `readiness.degradedComponents`: shared setup/readiness/runtime state contract for frontend gating.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
 - `operations.manualSync`: Portal manual sync state display.
@@ -95,3 +96,7 @@ The legacy `/api/common/*` alias is removed from producers and documentation. Un
 ## Phase4 Read Information Extension
 
 `GET /api/v1/common/status` now publishes native package metadata under `versions.nativePackages`. This adds only package version information already held by platform build metadata or the shipped `version.json`; component status and data freshness fields were not added because Phase3 status already represents the existing component states and no lightweight cross-platform last-successful-sync persistence exists yet.
+
+## Phase8-A Readiness Model
+
+`GET /api/v1/common/status` now publishes `readiness` as the shared application readiness model. Frontends should consume this domain state instead of deriving setup/runtime failure independently. Main Gym unconfigured state is intentionally excluded from readiness and remains a feature-level optional context.

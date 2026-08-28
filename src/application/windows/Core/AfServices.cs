@@ -1631,6 +1631,7 @@ public sealed class AtlamentApplication
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
         new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions()),
+        DetermineReadiness(),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1640,6 +1641,59 @@ public sealed class AtlamentApplication
             _runtimeStatus.ToString(),
             _hosting.GetStatus()),
         _requiredActions.ToArray()));
+
+    private ApplicationReadiness DetermineReadiness()
+    {
+        var requiredActions = _requiredActions.Distinct(StringComparer.Ordinal).OrderBy(action => action, StringComparer.Ordinal).ToArray();
+        if (requiredActions.Contains("CONFIGURATION_REQUIRED", StringComparer.Ordinal) ||
+            requiredActions.Contains("CREDENTIAL_REQUIRED", StringComparer.Ordinal))
+        {
+            return new ApplicationReadiness(
+                "unconfigured",
+                requiredActions,
+                UnavailableComponents(),
+                DegradedComponents());
+        }
+
+        if (_applicationStatus is ApplicationStatus.failed or ApplicationStatus.stopping ||
+            _runtimeStatus == ComponentStatus.unavailable)
+        {
+            return new ApplicationReadiness(
+                "unavailable",
+                requiredActions,
+                UnavailableComponents(),
+                DegradedComponents());
+        }
+
+        var degraded = DegradedComponents();
+        if (_applicationStatus == ApplicationStatus.degraded || degraded.Count > 0 || requiredActions.Length > 0)
+        {
+            return new ApplicationReadiness(
+                "degraded",
+                requiredActions,
+                UnavailableComponents(),
+                degraded);
+        }
+
+        return new ApplicationReadiness("ready", requiredActions, Array.Empty<string>(), Array.Empty<string>());
+    }
+
+    private IReadOnlyList<string> UnavailableComponents()
+    {
+        var components = new List<string>();
+        if (_configurationStatus == ComponentStatus.unavailable) components.Add("configuration");
+        if (_credentialComponentStatus == ComponentStatus.unavailable) components.Add("credential");
+        if (_runtimeStatus == ComponentStatus.unavailable) components.Add("runtimeData");
+        return components;
+    }
+
+    private IReadOnlyList<string> DegradedComponents()
+    {
+        var components = new List<string>();
+        if (_githubStatus == ComponentStatus.degraded) components.Add("github");
+        if (_runtimeStatus == ComponentStatus.degraded) components.Add("runtimeData");
+        return components;
+    }
 
     private string GetFrontendFrameworkVersion()
     {

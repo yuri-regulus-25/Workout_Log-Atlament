@@ -42,6 +42,7 @@ const statusLabels: Record<string, string> = {
   running: '実行中',
   starting: '起動中',
   stopping: '終了中',
+  unconfigured: '初期設定未完了',
   unavailable: '利用不可',
   unknown: '不明',
 }
@@ -474,6 +475,7 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
               : '-'
           }
         />
+        <StatusItem label="Readiness" value={displayStatus(props.status?.readiness?.state)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>

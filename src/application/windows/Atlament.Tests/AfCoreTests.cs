@@ -381,6 +381,9 @@ public sealed class AfCoreTests
             Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
             Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);
             Assert.Contains("RUNTIME_DATA_REQUIRED", status.Data.RequiredActions);
+            Assert.Equal("unconfigured", status.Data.Readiness.State);
+            Assert.Contains("configuration", status.Data.Readiness.UnavailableComponents);
+            Assert.Contains("credential", status.Data.Readiness.UnavailableComponents);
         }
         finally
         {
@@ -455,6 +458,10 @@ public sealed class AfCoreTests
             var afterCredential = application.GetStatus().Data!;
             Assert.Equal(200, credential.StatusCode);
             Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterCredential.RequiredActions);
+            Assert.Equal("unavailable", afterCredential.Readiness.State);
+            Assert.DoesNotContain("CONFIGURATION_REQUIRED", afterCredential.Readiness.RequiredActions);
+            Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterCredential.Readiness.RequiredActions);
+            Assert.Contains("RUNTIME_DATA_REQUIRED", afterCredential.Readiness.RequiredActions);
 
             var sync = await application.ManualSyncAsync(CancellationToken.None);
             var afterSync = application.GetStatus().Data!;
@@ -462,6 +469,9 @@ public sealed class AfCoreTests
             Assert.DoesNotContain("RUNTIME_DATA_REQUIRED", afterSync.RequiredActions);
             Assert.Empty(afterSync.RequiredActions);
             Assert.Equal("ready", afterSync.Application.Status);
+            Assert.Equal("ready", afterSync.Readiness.State);
+            Assert.Empty(afterSync.Readiness.RequiredActions);
+            Assert.Empty(afterSync.Readiness.UnavailableComponents);
         }
         finally
         {

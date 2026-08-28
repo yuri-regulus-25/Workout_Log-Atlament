@@ -256,6 +256,7 @@ class AndroidLocalhostServer(
                 }
               }
             },
+            "readiness": ${readinessJson()},
             "application": {
               "status": "${applicationStatus()}",
               "degraded": ${applicationStatus() == "degraded"},
@@ -313,6 +314,30 @@ class AndroidLocalhostServer(
 
     private fun applicationStatus(): String =
         if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
+
+    private fun readinessJson(): String {
+        val requiredActions = requiredActionNames().sorted()
+        val unavailableComponents = mutableListOf<String>()
+        if (configurationStatus() == "unavailable") unavailableComponents.add("configuration")
+        if (credentialComponentStatus() == "unavailable") unavailableComponents.add("credential")
+        if (runtimeDataStatus() == "unavailable") unavailableComponents.add("runtimeData")
+        val degradedComponents = mutableListOf<String>()
+        if (githubStatus() == "degraded") degradedComponents.add("github")
+        val state = when {
+            requiredActions.contains("CONFIGURATION_REQUIRED") || requiredActions.contains("CREDENTIAL_REQUIRED") -> "unconfigured"
+            unavailableComponents.contains("runtimeData") -> "unavailable"
+            applicationStatus() == "degraded" || degradedComponents.isNotEmpty() || requiredActions.isNotEmpty() -> "degraded"
+            else -> "ready"
+        }
+        return """
+            {
+              "state": "$state",
+              "requiredActions": ${requiredActions.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "unavailableComponents": ${unavailableComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "degradedComponents": ${degradedComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }}
+            }
+        """.trimIndent()
+    }
 
     private fun requiredActionsJson(): String =
         requiredActionNames().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }

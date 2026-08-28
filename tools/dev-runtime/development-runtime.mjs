@@ -111,7 +111,45 @@ async function respondStatus(response) {
       },
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
+    readiness: readinessJson({
+      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
+      acceptingRequests: true,
+      configurationStatus: 'unknown',
+      credentialStatus: 'unknown',
+      githubStatus: 'unknown',
+      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
+      requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
+    }),
   }, runtime.errors))
+}
+
+function readinessJson(status) {
+  const requiredActions = Array.from(new Set(status.requiredActions)).sort()
+  const unavailableComponents = [
+    status.configurationStatus === 'unavailable' ? 'configuration' : '',
+    status.credentialStatus === 'unavailable' ? 'credential' : '',
+    status.runtimeDataStatus === 'unavailable' ? 'runtimeData' : '',
+  ].filter(Boolean)
+  const degradedComponents = [
+    status.githubStatus === 'degraded' ? 'github' : '',
+    status.runtimeDataStatus === 'degraded' ? 'runtimeData' : '',
+  ].filter(Boolean)
+
+  let state = 'ready'
+  if (requiredActions.includes('CONFIGURATION_REQUIRED') || requiredActions.includes('CREDENTIAL_REQUIRED')) {
+    state = 'unconfigured'
+  } else if (!status.acceptingRequests || status.applicationStatus === 'failed' || unavailableComponents.includes('runtimeData')) {
+    state = 'unavailable'
+  } else if (status.applicationStatus === 'degraded' || degradedComponents.length > 0 || requiredActions.length > 0) {
+    state = 'degraded'
+  }
+
+  return {
+    state,
+    requiredActions,
+    unavailableComponents,
+    degradedComponents,
+  }
 }
 
 async function loadVersions() {

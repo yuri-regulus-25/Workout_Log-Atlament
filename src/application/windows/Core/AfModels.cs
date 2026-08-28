@@ -176,6 +176,7 @@ public sealed record SessionCondition(
 
 public sealed record AfStatus(
     [property: JsonPropertyName("versions")] StatusVersions Versions,
+    [property: JsonPropertyName("readiness")] ApplicationReadiness Readiness,
     [property: JsonPropertyName("application")] ApplicationState Application,
     [property: JsonPropertyName("operations")] OperationStateSnapshot Operations,
     [property: JsonPropertyName("components")] ComponentStateSnapshot Components,
@@ -196,6 +197,12 @@ public sealed record WindowsPackageVersion(
 public sealed record AndroidPackageVersion(
     [property: JsonPropertyName("versionName")] string VersionName,
     [property: JsonPropertyName("versionCode")] int VersionCode);
+
+public sealed record ApplicationReadiness(
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("requiredActions")] IReadOnlyList<string> RequiredActions,
+    [property: JsonPropertyName("unavailableComponents")] IReadOnlyList<string> UnavailableComponents,
+    [property: JsonPropertyName("degradedComponents")] IReadOnlyList<string> DegradedComponents);
 
 public sealed record ApplicationState(
     [property: JsonPropertyName("status")] string Status,
