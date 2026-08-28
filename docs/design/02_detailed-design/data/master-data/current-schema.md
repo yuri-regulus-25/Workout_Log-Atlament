@@ -62,6 +62,7 @@ Top-level structure:
 | `short_name` | string | no | Short display name。 |
 | `active` | boolean | yes | Parser/validator で必須。 |
 | `deleted` | boolean | yes、JS parser では missing を `false` に normalize | Logical delete flag。Historical reference の存在解決には使用しない。 |
+| `main` | boolean | yes、JS parser では missing を `false` に normalize | Main Gym flag。初期状態では 0 件を許容する。 |
 
 ## Validation
 
@@ -79,6 +80,8 @@ Top-level structure:
 `active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
+
+Main Gym は Gym Master record の `main:true` で表す。全 Gym 中最大 1 件であり、初期未設定状態として 0 件を許容する。`main:true` の Gym が inactive または deleted の場合は invalid な Main Gym context である。
 
 ## Runtime Use
 

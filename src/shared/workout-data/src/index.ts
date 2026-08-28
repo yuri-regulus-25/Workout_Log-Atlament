@@ -110,6 +110,7 @@ export const sampleGymMaster: GymMaster = {
       short_name: 'AF横須賀汐入',
       active: true,
       deleted: false,
+      main: false,
     },
     {
       gym_id: 'af-akihabara',
@@ -117,6 +118,7 @@ export const sampleGymMaster: GymMaster = {
       short_name: 'AF秋葉原',
       active: true,
       deleted: false,
+      main: false,
     },
     {
       gym_id: 'af-minatomirai',
@@ -124,6 +126,7 @@ export const sampleGymMaster: GymMaster = {
       short_name: 'AFみなとみらい',
       active: true,
       deleted: false,
+      main: false,
     },
   ],
 }
@@ -727,6 +730,7 @@ function normalizeGymMasterItem(
   const shortName = readString(value, 'short_name')
   const active = readBoolean(value, 'active')
   const deleted = readBoolean(value, 'deleted') ?? false
+  const main = readBoolean(value, 'main') ?? false
 
   if (!gymId) {
     issues.push({ filePath, message: `Gym master item at index ${index} is missing gym_id.` })
@@ -753,8 +757,8 @@ function normalizeGymMasterItem(
   }
 
   return shortName
-    ? { gym_id: gymId, name, short_name: shortName, active, deleted }
-    : { gym_id: gymId, name, active, deleted }
+    ? { gym_id: gymId, name, short_name: shortName, active, deleted, main }
+    : { gym_id: gymId, name, active, deleted, main }
 }
 
 function createMasterLookup(

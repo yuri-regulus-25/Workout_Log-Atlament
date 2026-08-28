@@ -81,6 +81,7 @@ export type GymMasterItem = {
   short_name?: string
   active: boolean
   deleted: boolean
+  main: boolean
 }
 
 export type GymMaster = {

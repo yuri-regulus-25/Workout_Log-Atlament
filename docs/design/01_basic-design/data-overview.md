@@ -23,7 +23,7 @@ data/
 - `data/master/gyms.json`
 - `data/master/machines.json`
 
-現行には Machine entity file、Body Part entity file、Main Gym setting は存在しない。Gym/Machine record は `active` と logical delete field `deleted` を使用する。
+現行には Machine entity file、Body Part entity file は存在しない。Gym/Machine record は `active` と logical delete field `deleted` を使用する。Main Gym は Gym Master record の `main` field で表す。
 
 ## Workout Data
 

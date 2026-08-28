@@ -359,6 +359,7 @@ describe('workout-data', () => {
     expect(machineResult.master?.machines[0].deleted).toBe(false)
     expect(gymResult.issues).toEqual([])
     expect(gymResult.master?.gyms[0].deleted).toBe(false)
+    expect(gymResult.master?.gyms[0].main).toBe(false)
   })
 
   it('reports duplicate master ids', () => {
