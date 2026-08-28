@@ -35,6 +35,6 @@ Workout file は `gym_id` と `machine_id` reference を持つ raw session を�
 
 AF と Node development runtime は raw data を `WorkoutSession[]` へ normalize する。Normalized model は resolved `gym` と machine display field を埋め込むため、frontend application は Master JSON を直接読む必要がない。
 
-Master Data の domain/reference validation は shared core contract として提供する。Historical reference は inactive/deleted record を解決対象として維持し、新規 write candidate は `active:true` かつ `deleted:false` の record のみに制限する。
+Master Data の domain/reference validation は shared core contract として提供する。Historical reference は inactive/deleted record を解決対象として維持し、履歴解決では active、inactive、deleted、missing を区別する。新規 write candidate は `active:true` かつ `deleted:false` の record のみに制限する。
 
 Frontend 視点では Runtime Data は read-only である。

@@ -87,6 +87,8 @@ Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMas
 - `new-write` mode: referenced Gym/Machine は `active:true` かつ `deleted:false` でなければ invalid。
 - Missing Gym/Machine reference は mode に関係なく invalid。
 
+Historical display/resolution では `resolveHistoricalWorkoutReferences` / `resolveHistoricalWorkoutReferenceReport` を使用し、reference を `active`、`inactive`、`deleted`、`missing` に分類する。`inactive` と `deleted` は historical reference として解決済みであり、`missing` だけが unresolved reference である。Workout Log SoT はこの分類のために rewrite しない。
+
 `active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
