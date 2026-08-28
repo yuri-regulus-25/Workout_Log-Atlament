@@ -77,6 +77,16 @@ Top-level structure:
 - valid machine `body_part`
 - required `active`
 
+Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMasterData` と `validateWorkoutMasterReferences` を使用する。
+
+`validateWorkoutMasterData` は typed Master Data に対して schema version、required domain fields、unique ID、Machine `body_part`、Main Gym constraint を validation する。
+
+`validateWorkoutMasterReferences` は Workout Log の actual references だけを扱う。
+
+- `historical` mode: referenced Gym/Machine が存在すれば valid。Inactive/logically deleted record も historical resolution では valid。
+- `new-write` mode: referenced Gym/Machine は `active:true` かつ `deleted:false` でなければ invalid。
+- Missing Gym/Machine reference は mode に関係なく invalid。
+
 `active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
