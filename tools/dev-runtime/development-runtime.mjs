@@ -14,9 +14,7 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 
 const apiRoutes = new Set([
   '/api/v1/common/status',
-  '/api/common/status',
   '/api/v1/common/runtime/workouts',
-  '/api/common/runtime/workouts',
   '/api/workout-data',
 ])
 
@@ -52,8 +50,6 @@ createServer(async (request, response) => {
   console.log('API:')
   console.log('  GET /api/v1/common/status')
   console.log('  GET /api/v1/common/runtime/workouts')
-  console.log('  GET /api/common/status')
-  console.log('  GET /api/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
 

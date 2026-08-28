@@ -158,8 +158,12 @@ class AndroidLocalhostServer(
 
 
     private fun handleApi(output: OutputStream, method: String, path: String, body: String) {
-        // Android keeps the v1 and legacy common API prefixes behaviorally identical to Windows.
-        val route = path.removePrefix("/api/v1/common").removePrefix("/api/common")
+        if (!path.startsWith("/api/v1/common")) {
+            sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
+            return
+        }
+
+        val route = path.removePrefix("/api/v1/common")
         when {
             method == "GET" && route == "/status" -> sendJson(output, 200, statusJson())
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
@@ -347,7 +351,6 @@ class AndroidLocalhostServer(
             success = true
             SyncResponse(200, okJson("""
                 {
-                  "saved": true,
                   "remoteChecked": $remoteChanged
                 }
             """.trimIndent(), remoteErrors.toString()), true)
@@ -673,8 +676,6 @@ class AndroidLocalhostServer(
             writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
-                  "source": "remote",
-                  "updated": true,
                   "degraded": false
                 }
             """.trimIndent()), true)
@@ -697,8 +698,6 @@ class AndroidLocalhostServer(
             // user's perspective when cached runtime data is still available.
             SyncResponse(200, responseJson(false, """
                 {
-                  "source": "local",
-                  "updated": false,
                   "degraded": true
                 }
             """.trimIndent(), errors), false)

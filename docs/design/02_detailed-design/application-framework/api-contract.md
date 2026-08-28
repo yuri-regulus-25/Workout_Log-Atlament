@@ -2,19 +2,13 @@
 
 Windows と Android は localhost 上で同じ現行 API shape を公開する。
 
-Primary prefix:
+Current prefix:
 
 ```text
 /api/v1/common
 ```
 
-Legacy/latest alias:
-
-```text
-/api/common
-```
-
-Shared frontend client は versioned prefix を使用する。
+Shared frontend client、Windows AF、Android AF、Node development runtime はこの versioned prefix を使用する。
 
 ## Response Envelope
 
@@ -50,6 +44,8 @@ Shared frontend client は versioned prefix を使用する。
 | GET | `/credential/status` | Token value を含まない credential status。 |
 | POST | `/credential` | Credential token と limit date の update。 |
 | POST | `/shutdown` | Application shutdown request。 |
+
+Legacy `/api/common/*` alias は現行 contract では公開しない。Unknown `/api/*` route は frontend HTML へ fall through せず、platform error response を返す。
 
 ## Status Data
 
@@ -128,3 +124,25 @@ Token value は API 経由で返却されない。
 ## Operation Concurrency
 
 現行 implementation は conflict する overlapping operation を防止する。Startup sync と manual sync は同時実行できない。
+
+## Operation Results
+
+Configuration update data:
+
+```json
+{
+  "remoteChecked": true
+}
+```
+
+`remoteChecked` は request が `repository` または `resources` を変更した場合に `true` になる。
+
+Sync data:
+
+```json
+{
+  "degraded": false
+}
+```
+
+`degraded` は remote sync 失敗時に local runtime data で継続した場合に `true` になる。

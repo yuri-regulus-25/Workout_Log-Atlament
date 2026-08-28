@@ -31,11 +31,13 @@ Current API route は [AF API Contract](../application-framework/api-contract.md
 
 Frontend code は versioned `/api/v1/common/*` path を使用する。
 
-Node development runtime は read-only subset を実装する。
+Node development runtime は versioned AF API の read-only subset を実装する。
 
 - status
 - runtime workouts
 - legacy workout data endpoint
+
+`/api/workout-data` は frontend dev server / preview fallback 用 endpoint であり、native AF production contract には含めない。
 
 ## Frontend Asset Routes
 

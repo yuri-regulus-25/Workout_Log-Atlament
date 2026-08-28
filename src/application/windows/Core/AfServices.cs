@@ -1262,7 +1262,7 @@ public sealed class AtlamentApplication
 
             _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("configurationUpdate", true);
-            return (200, AfResponses.Ok(new ConfigurationUpdateResult(true, remoteChanged), responseErrors));
+            return (200, AfResponses.Ok(new ConfigurationUpdateResult(remoteChanged), responseErrors));
         }
         catch
         {
@@ -1363,7 +1363,7 @@ public sealed class AtlamentApplication
             {
                 // Remote failure is degraded, not fatal, when a previously built runtime file can
                 // still satisfy Frontend data requests.
-                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult("local", false, true)));
+                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult(true)));
             }
 
             return (503, new AfResponse<SyncResult>(false, remote.Errors, null));
@@ -1395,7 +1395,7 @@ public sealed class AtlamentApplication
         _runtimeStatus = ComponentStatus.available;
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
-        return (200, AfResponses.Ok(new SyncResult("remote", true, build.Errors.Count > 0), build.Errors));
+        return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors));
     }
 
     private (int StatusCode, AfResponse<SyncResult> Response) RuntimeBuildFailure(IReadOnlyList<AfError> errors)
@@ -1405,7 +1405,7 @@ public sealed class AtlamentApplication
         _applicationStatus = DetermineApplicationStatus();
         if (_runtimeStatus == ComponentStatus.available)
         {
-            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult("local", false, true)));
+            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult(true)));
         }
 
         return (503, new AfResponse<SyncResult>(false, errors, null));

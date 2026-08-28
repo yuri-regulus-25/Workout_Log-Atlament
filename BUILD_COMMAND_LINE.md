@@ -437,8 +437,6 @@ http://127.0.0.1:5180/
 
 - `/api/v1/common/status`
 - `/api/v1/common/runtime/workouts`
-- `/api/common/status`
-- `/api/common/runtime/workouts`
 - 旧互換 `/api/workout-data`
 
 用途:

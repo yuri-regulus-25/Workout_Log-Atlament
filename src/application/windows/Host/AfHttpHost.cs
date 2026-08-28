@@ -73,15 +73,12 @@ public sealed class AfHttpHost : IAsyncDisposable
         builder.WebHost.UseKestrel(options => options.ListenLocalhost(port));
         var app = builder.Build();
         MapApi(app, "/api/v1/common");
-        MapApi(app, "/api/common");
         app.MapGet("/{**path}", ServeFrontendAsync);
         return app;
     }
 
     private void MapApi(WebApplication app, string prefix)
     {
-        // Keep v1 and legacy prefixes mapped to the same handlers. Frontend can migrate routes
-        // without duplicating AF behavior.
         app.MapGet($"{prefix}/status", () => Results.Json(_application.GetStatus(), AfJson.Options));
         app.MapGet($"{prefix}/runtime/workouts", () =>
         {

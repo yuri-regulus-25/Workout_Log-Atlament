@@ -88,7 +88,6 @@ export type AfConfigurationUpdate = {
 }
 
 export type ConfigurationUpdateResult = {
-  saved: boolean
   remoteChecked: boolean
 }
 
@@ -106,8 +105,6 @@ export type CredentialUpdate = {
 export type CredentialUpdateResult = CredentialStatus
 
 export type SyncResult = {
-  source: 'remote' | 'local'
-  updated: boolean
   degraded: boolean
 }
 
