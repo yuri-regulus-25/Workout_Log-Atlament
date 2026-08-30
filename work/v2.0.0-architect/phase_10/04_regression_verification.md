@@ -3,11 +3,9 @@
 **Related Issue:** #79
 
 ## Objective
-
 Phase 0〜10-Cのv2.0.0機能をRegression検証する。
 
 ## Explicitly Out of Scope
-
 - Data Recovery
 - Empty/Initial State正式対応
 - Master record-level partial acceptance
