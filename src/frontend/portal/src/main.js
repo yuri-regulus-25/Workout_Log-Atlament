@@ -31,8 +31,7 @@ async function refreshStatusNotice() {
     const readiness = status?.readiness ?? deriveApplicationReadiness(status)
     const runtimeRequired = readiness.state === 'unavailable'
       && readiness.requiredActions.includes('RUNTIME_DATA_REQUIRED')
-    const localFallbackActive = readiness.state === 'degraded'
-      && readiness.degradedComponents.includes('github')
+    const fallbackActive = status?.runtimeData?.fallbackActive === true
 
     if (startupRunning) {
       syncWasRunning = true
@@ -43,9 +42,11 @@ async function refreshStatusNotice() {
     } else if (runtimeRequired) {
       syncWasRunning = false
       showStatusNotice('同期済みデータがありません。設定情報と同期情報を確認してください。', 'warning', 'mdi-alert-circle-outline')
-    } else if (localFallbackActive) {
+    } else if (fallbackActive) {
       syncWasRunning = false
-      showStatusNotice('取得に失敗しました。設定を確認の上、手動同期を行ってください。', 'warning', 'mdi-alert-circle-outline')
+      const generatedAt = status?.runtimeData?.currentGeneratedAt
+      const suffix = generatedAt ? ` 最終生成: ${generatedAt}` : ''
+      showStatusNotice(`取得に失敗しました。既存Runtime Dataで継続利用中です。${suffix}`, 'warning', 'mdi-alert-circle-outline')
     } else if (syncWasRunning && (startupFailed || manualSyncFailed)) {
       syncWasRunning = false
       showStatusNotice('同期データを取得できませんでした。', 'error', 'mdi-alert-box-outline')
