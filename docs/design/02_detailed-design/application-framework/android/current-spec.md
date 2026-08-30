@@ -98,6 +98,8 @@ Android は GitHub resource を fetch し、Master file と Workout file を par
 
 現行 implementation は required raw field を validate し、Master direct reference と Master `source_ids` reference を `resolved` / `missing` / `deleted` に分類する。`source_ids` で解決できた場合、normalized runtime ID は canonical Master ID になり、`resolution.originalId` は raw Workout reference ID を保持する。Invalid runtime build は reject するが、missing/deleted Master reference は Runtime warning として報告し、session は Runtime Data として accept する。Normalized session は `/api/v1/common/runtime/workouts` 経由で公開する。
 
+Runtime readiness、fallback、required actions、unresolved Master reference の共通意味論は [Runtime Contract Matrix](../runtime-contract-matrix.md) を正とする。
+
 ## Version and Packaging
 
 Android version metadata は `src/application/android/app/build.gradle.kts` にある。

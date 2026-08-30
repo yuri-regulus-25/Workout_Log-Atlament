@@ -74,6 +74,8 @@ Windows は configured GitHub resource を fetch し、normalized runtime data �
 
 Remote sync は required resource missing または technical validation failure の場合、current fetched set を reject する。以前の valid local runtime が存在する場合、application は degraded/local fallback mode で継続できる。Master reference が missing/deleted の場合は Runtime warning として報告し、session は Runtime Data として accept する。
 
+Runtime readiness、fallback、required actions、unresolved Master reference の共通意味論は [Runtime Contract Matrix](../runtime-contract-matrix.md) を正とする。
+
 ## Configuration and Credential
 
 Configuration は JSON であり non-secret である。
