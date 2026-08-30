@@ -116,6 +116,8 @@ Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failu
 
 Shared frontend client は `readiness` と `runtimeData` facts から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。`runtimeData.fallbackActive` が `true` の場合は Remote取得またはvalidationに失敗したが、既存正常Runtime Dataで継続利用中である。
 
+Windows / Android の入力状態別 contract は [Runtime Contract Matrix](./runtime-contract-matrix.md) を正とする。
+
 ## Configuration Data
 
 現行 configuration schema:
