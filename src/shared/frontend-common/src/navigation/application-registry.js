@@ -74,6 +74,10 @@ export const applications = [
   },
 ]
 
+export const applicationRoutes = Object.fromEntries(
+  applications.map((application) => [application.id, application.route]),
+)
+
 export const drawerApplications = applications
 export const portalCardApplications = applications.filter((application) => application.id !== 'portal')
 
