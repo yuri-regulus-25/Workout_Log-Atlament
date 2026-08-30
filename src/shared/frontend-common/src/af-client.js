@@ -43,11 +43,7 @@ export function deriveApplicationAccessPolicy(readiness, runtimeData) {
     ...(readiness?.unavailableComponents ?? []),
     ...(readiness?.degradedComponents ?? []),
   ])).sort()
-  const fallbackActive = runtimeData?.fallbackActive ?? (
-    readiness?.state === 'degraded' &&
-    (readiness?.degradedComponents ?? []).includes('github') &&
-    !(readiness?.unavailableComponents ?? []).includes('runtimeData')
-  )
+  const fallbackActive = runtimeData?.fallbackActive ?? false
 
   if (readiness?.state === 'unconfigured') {
     return {

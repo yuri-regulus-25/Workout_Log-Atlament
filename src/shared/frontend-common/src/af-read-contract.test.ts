@@ -109,6 +109,18 @@ describe('AF read contract refinement', () => {
       requiredActions: [],
       unavailableComponents: [],
       degradedComponents: ['github'],
+    })).toMatchObject({
+      normalApplicationsAvailable: true,
+      recoveryActions: ['retry-sync', 'open-settings', 'reload'],
+      restrictedComponents: ['github'],
+      fallbackActive: false,
+    })
+
+    expect(deriveApplicationAccessPolicy({
+      state: 'degraded',
+      requiredActions: [],
+      unavailableComponents: [],
+      degradedComponents: ['github'],
     }, {
       currentAvailable: true,
       currentGeneratedAt: '2026-08-28T00:00:00Z',
@@ -167,5 +179,16 @@ describe('AF read contract refinement', () => {
       recoveryActions: ['retry-sync', 'update-credential', 'open-settings', 'reload'],
       fallbackActive: false,
     })
+  })
+
+  it('keeps frontend fallback presentation bound to runtimeData facts', () => {
+    const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
+    const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
+    const portal = readSource('src/frontend/portal/src/main.js')
+
+    expect(typedPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')
+    expect(browserPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')
+    expect(portal).toContain('status?.runtimeData?.fallbackActive === true')
+    expect(portal).not.toContain("readiness.degradedComponents.includes('github')")
   })
 })
