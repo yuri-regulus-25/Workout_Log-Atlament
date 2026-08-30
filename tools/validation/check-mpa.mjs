@@ -1,17 +1,16 @@
 import { spawn } from 'node:child_process'
+import { hostedApplications } from '../application-registry.mjs'
 
 const port = Number(process.env.MPA_CHECK_PORT ?? 4183)
 const origin = `http://127.0.0.1:${port}`
 
 const pages = [
   '/',
-  '/dashboard/',
-  '/workouts/',
-  '/workouts/2026-08-14',
-  '/machines/pec-deck',
-  '/analytics/',
-  '/settings/',
-  '/maintenance/',
+  ...hostedApplications.flatMap((application) => (
+    application.dynamicSmokePath
+      ? [application.smokePath, application.dynamicSmokePath]
+      : [application.smokePath]
+  )),
 ]
 
 const notFoundPages = [

@@ -52,6 +52,7 @@ Known app artifact name:
 - `machines`
 - `analytics`
 - `settings`
+- `maintenance`
 
 Dynamic route fallback は以下にのみ存在する。
 
