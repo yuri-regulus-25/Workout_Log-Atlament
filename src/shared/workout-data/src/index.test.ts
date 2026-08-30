@@ -557,9 +557,9 @@ describe('workout-data', () => {
   })
 
   it('normalizes source_ids as master reference aliases', async () => {
-    const result = loadWorkoutSessionsFromFiles([
-      { path: 'workouts/legacy.json', content: '{"schema_version":1,"session_id":"legacy","date":"2026-08-22","status":"complete","gym_id":"legacy-gym","machines":[{"machine_id":"legacy-machine","sets":[{"set":1,"weight_kg":10,"reps":10}]}]}' },
-    ], {
+    const rawWorkout = '{"schema_version":1,"session_id":"legacy","date":"2026-08-22","status":"complete","gym_id":"legacy-gym","machines":[{"machine_id":"legacy-machine","sets":[{"set":1,"weight_kg":10,"reps":10}]}]}'
+    const files = [{ path: 'workouts/legacy.json', content: rawWorkout }]
+    const result = loadWorkoutSessionsFromFiles(files, {
       machines: {
         schema_version: 1,
         machines: [{ machine_id: 'known-machine', source_ids: ['legacy-machine'], name: 'Known Machine', body_part: 'chest', aliases: [], active: true, deleted: false }],
@@ -572,7 +572,57 @@ describe('workout-data', () => {
 
     const session = result.sessions[0]
     expect(result.issues).toEqual([])
+    expect(result.warnings).toEqual([])
     expect(session.gym.id).toBe('known-gym')
+    expect(session.gym.resolution).toEqual({ state: 'resolved', originalId: 'legacy-gym', resolvedId: 'known-gym' })
     expect(session.machines[0].machine_id).toBe('known-machine')
+    expect(session.machines[0].resolution).toEqual({ state: 'resolved', originalId: 'legacy-machine', resolvedId: 'known-machine' })
+    expect(files[0].content).toBe(rawWorkout)
+  })
+
+  it('re-resolves deleted master references after master lifecycle repair without rewriting raw workouts', () => {
+    const rawWorkout = '{"schema_version":1,"session_id":"lifecycle","date":"2026-08-22","status":"complete","gym_id":"deleted-gym","machines":[{"machine_id":"deleted-machine","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}'
+    const files = [{ path: 'workouts/lifecycle.json', content: rawWorkout }]
+    const deletedMasterData = {
+      machines: {
+        schema_version: 1,
+        machines: [{ machine_id: 'deleted-machine', source_ids: [], name: 'Deleted Machine', body_part: 'chest', aliases: [], active: false, deleted: true }],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [{ gym_id: 'deleted-gym', source_ids: [], name: 'Deleted Gym', active: false, deleted: true, main: false }],
+      },
+    }
+    const repairedMasterData = {
+      machines: {
+        schema_version: 1,
+        machines: [{ machine_id: 'deleted-machine', source_ids: [], name: 'Restored Machine', body_part: 'chest', aliases: [], active: true, deleted: false }],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [{ gym_id: 'deleted-gym', source_ids: [], name: 'Restored Gym', active: true, deleted: false, main: false }],
+      },
+    }
+
+    const deletedResult = loadWorkoutSessionsFromFiles(files, deletedMasterData)
+    const repairedResult = loadWorkoutSessionsFromFiles(files, repairedMasterData)
+
+    expect(deletedResult.issues).toEqual([])
+    expect(deletedResult.sessions).toHaveLength(1)
+    expect(deletedResult.sessions[0].machines[0].sets[0]).toMatchObject({ set: 1, weight_kg: 40, reps: 12 })
+    expect(deletedResult.sessions[0].gym.resolution).toEqual({ state: 'deleted', originalId: 'deleted-gym', resolvedId: 'deleted-gym' })
+    expect(deletedResult.sessions[0].machines[0].resolution).toEqual({ state: 'deleted', originalId: 'deleted-machine', resolvedId: 'deleted-machine' })
+    expect(deletedResult.sessions[0].gym).not.toHaveProperty('name')
+    expect(deletedResult.sessions[0].machines[0]).not.toHaveProperty('body_part')
+    expect(deletedResult.warnings).toEqual([
+      expect.objectContaining({ code: 'MASTER_REFERENCE_DELETED', referenceKind: 'gym', resolutionState: 'deleted', originalId: 'deleted-gym', resolvedId: 'deleted-gym' }),
+      expect.objectContaining({ code: 'MASTER_REFERENCE_DELETED', referenceKind: 'machine', resolutionState: 'deleted', originalId: 'deleted-machine', resolvedId: 'deleted-machine' }),
+    ])
+
+    expect(repairedResult.issues).toEqual([])
+    expect(repairedResult.warnings).toEqual([])
+    expect(repairedResult.sessions[0].gym).toMatchObject({ id: 'deleted-gym', name: 'Restored Gym', resolution: { state: 'resolved', originalId: 'deleted-gym', resolvedId: 'deleted-gym' } })
+    expect(repairedResult.sessions[0].machines[0]).toMatchObject({ machine_id: 'deleted-machine', name: 'Restored Machine', body_part: 'chest', resolution: { state: 'resolved', originalId: 'deleted-machine', resolvedId: 'deleted-machine' } })
+    expect(files[0].content).toBe(rawWorkout)
   })
 })
