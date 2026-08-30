@@ -1,3 +1,9 @@
+import {
+  applications as applicationRegistry,
+  drawerApplications as drawerApplicationRegistry,
+  getApplicationMetadata as getRegisteredApplicationMetadata,
+  type ApplicationMetadata as RegisteredApplicationMetadata,
+} from './application-registry.js'
 import { applicationRoutes, type ApplicationRoute, type ApplicationRouteId } from './routes'
 
 export type ApplicationMetadata = {
@@ -8,60 +14,10 @@ export type ApplicationMetadata = {
   drawer: boolean
 }
 
-export const applications = [
-  {
-    id: 'portal',
-    route: applicationRoutes.portal,
-    displayName: 'Portal',
-    iconClass: 'mdi-crop-portrait',
-    drawer: false,
-  },
-  {
-    id: 'dashboard',
-    route: applicationRoutes.dashboard,
-    displayName: 'Dashboard',
-    iconClass: 'mdi-view-dashboard-outline',
-    drawer: true,
-  },
-  {
-    id: 'workouts',
-    route: applicationRoutes.workouts,
-    displayName: 'Workout Domain',
-    iconClass: 'mdi-view-list-outline',
-    drawer: true,
-  },
-  {
-    id: 'machines',
-    route: applicationRoutes.machines,
-    displayName: 'Performance Detail',
-    iconClass: 'mdi-chart-multiple',
-    drawer: true,
-  },
-  {
-    id: 'analytics',
-    route: applicationRoutes.analytics,
-    displayName: 'Analytics',
-    iconClass: 'mdi-poll',
-    drawer: true,
-  },
-  {
-    id: 'settings',
-    route: applicationRoutes.settings,
-    displayName: 'Application Settings',
-    iconClass: 'mdi-cog-outline',
-    drawer: true,
-  },
-  {
-    id: 'maintenance',
-    route: applicationRoutes.maintenance,
-    displayName: 'Master Maintenance',
-    iconClass: 'mdi-database-edit-outline',
-    drawer: true,
-  },
-] as const satisfies readonly ApplicationMetadata[]
+export const applications = applicationRegistry.map(toApplicationMetadata) as readonly ApplicationMetadata[]
 
 export function getApplicationMetadata(id: ApplicationRouteId): ApplicationMetadata {
-  return applications.find((application) => application.id === id) ?? {
+  return toApplicationMetadata(getRegisteredApplicationMetadata(id)) ?? {
     id,
     route: applicationRoutes[id],
     displayName: id,
@@ -70,4 +26,15 @@ export function getApplicationMetadata(id: ApplicationRouteId): ApplicationMetad
   }
 }
 
-export const drawerApplications = applications
+export const drawerApplications = drawerApplicationRegistry.map(toApplicationMetadata) as readonly ApplicationMetadata[]
+
+function toApplicationMetadata(application: RegisteredApplicationMetadata | null): ApplicationMetadata | null {
+  if (!application) return null
+  return {
+    id: application.id,
+    route: application.route,
+    displayName: application.displayName,
+    iconClass: application.iconClass,
+    drawer: application.drawer,
+  }
+}

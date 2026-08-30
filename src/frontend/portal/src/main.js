@@ -1,5 +1,6 @@
 import { initializeBrandingLogo, initializeStoredBrandVariant } from './frontend-common/branding/index.js'
 import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index.js'
+import { portalCardApplications } from './frontend-common/navigation/application-registry.js'
 import { initializeStoredTheme } from './frontend-common/theme/index.js'
 import { deriveApplicationReadiness, getAfStatus } from './frontend-common/af-client.js'
 
@@ -8,6 +9,7 @@ const storedTheme = initializeStoredTheme()
 const notice = document.getElementById('sync-notice')
 const noticeText = document.getElementById('sync-notice-text')
 const noticeIcon = document.getElementById('sync-notice-icon')
+const appGrid = document.getElementById('portal-app-grid')
 const successVisibleMs = 3000
 const successFadeMs = 1500
 let statusTimer = null
@@ -15,6 +17,8 @@ let successFadeTimer = null
 let successHideTimer = null
 let noticeState = 'hidden'
 let syncWasRunning = false
+
+renderApplicationCards()
 
 async function refreshStatusNotice() {
   try {
@@ -126,5 +130,59 @@ window.addEventListener('pagehide', () => {
   storedBrandVariant.dispose()
   storedTheme.dispose()
 })
+
+function renderApplicationCards() {
+  if (!appGrid) return
+
+  appGrid.replaceChildren(...portalCardApplications.map(createApplicationCard))
+}
+
+function createApplicationCard(application) {
+  const card = document.createElement('a')
+  card.className = 'app-card'
+  card.href = application.route
+
+  const category = document.createElement('span')
+  category.className = 'app-category'
+  category.textContent = application.portalCategory ?? application.displayName
+
+  const title = document.createElement('strong')
+  title.className = 'app-title'
+  title.textContent = application.displayName
+
+  const pointer = document.createElement('span')
+  pointer.className = 'app-pointer'
+  pointer.textContent = application.portalPointer ?? ''
+
+  const frameworkBadge = document.createElement('small')
+  frameworkBadge.className = 'framework-badge'
+
+  const frameworkLabel = document.createElement('span')
+  frameworkLabel.className = 'framework-label'
+  frameworkLabel.textContent = 'Built with'
+
+  const frameworkStack = document.createElement('span')
+  frameworkStack.className = 'framework-stack'
+  frameworkStack.append(createFrameworkIcon(application), document.createTextNode(application.frameworkName ?? ''))
+  frameworkBadge.append(frameworkLabel, frameworkStack)
+
+  card.append(category, title, pointer, frameworkBadge)
+  return card
+}
+
+function createFrameworkIcon(application) {
+  if (application.frameworkIconHref) {
+    const icon = document.createElement('img')
+    icon.src = application.frameworkIconHref
+    icon.alt = ''
+    icon.className = 'framework-icon'
+    return icon
+  }
+
+  const icon = document.createElement('span')
+  icon.className = `framework-icon mdi ${application.frameworkIconClass ?? application.iconClass}`
+  icon.setAttribute('aria-hidden', 'true')
+  return icon
+}
 
 

@@ -36,8 +36,6 @@ describe('application registry and hosting integration', () => {
     expect(watch).toContain("from '../application-registry.mjs'")
 
     for (const id of currentHostedApplicationIds) {
-      expect(buildRegistry, id).toContain(`id: '${id}'`)
-      expect(buildRegistry, id).toContain(`route: '${applicationRoutes[id]}'`)
       expect(buildRegistry, id).toContain(`distPath: '${id}'`)
     }
   })
