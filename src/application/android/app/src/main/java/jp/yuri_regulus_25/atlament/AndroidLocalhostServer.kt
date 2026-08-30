@@ -47,8 +47,8 @@ class AndroidLocalhostServer(
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
-    private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String, val deleted: Boolean)
-    private data class GymMasterItem(val id: String, val name: String, val shortName: String?, val deleted: Boolean)
+    private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
+    private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
     private class AfException(val code: String, override val message: String) : Exception(message)
     private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
@@ -971,6 +971,7 @@ class AndroidLocalhostServer(
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("machine_id").orEmpty().trim()
+                val sourceIds = readStringList(item?.optJSONArray("source_ids"))
                 val name = item?.optString("name").orEmpty().trim()
                 val bodyPart = item?.optString("body_part").orEmpty().trim()
                 val hasActive = item?.has("active") == true
@@ -982,7 +983,15 @@ class AndroidLocalhostServer(
                     errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine_id: $id."))
                     return emptyMap()
                 }
-                result[id] = MachineMasterItem(id, name, bodyPart, item?.optBoolean("deleted", false) ?: false)
+                val record = MachineMasterItem(id, sourceIds, name, bodyPart, item?.optBoolean("deleted", false) ?: false)
+                result[id] = record
+                for (sourceId in sourceIds) {
+                    if (result.containsKey(sourceId)) {
+                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine source_id: $sourceId."))
+                        return emptyMap()
+                    }
+                    result[sourceId] = record
+                }
             }
             result
         } catch (_: Exception) {
@@ -1004,6 +1013,7 @@ class AndroidLocalhostServer(
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("gym_id").orEmpty().trim()
+                val sourceIds = readStringList(item?.optJSONArray("source_ids"))
                 val name = item?.optString("name").orEmpty().trim()
                 val hasActive = item?.has("active") == true
                 if (id.isBlank() || name.isBlank() || !hasActive) {
@@ -1015,7 +1025,15 @@ class AndroidLocalhostServer(
                     return emptyMap()
                 }
                 val shortName = item?.optString("short_name")?.takeIf { it.isNotBlank() }
-                result[id] = GymMasterItem(id, name, shortName, item?.optBoolean("deleted", false) ?: false)
+                val record = GymMasterItem(id, sourceIds, name, shortName, item?.optBoolean("deleted", false) ?: false)
+                result[id] = record
+                for (sourceId in sourceIds) {
+                    if (result.containsKey(sourceId)) {
+                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate gym source_id: $sourceId."))
+                        return emptyMap()
+                    }
+                    result[sourceId] = record
+                }
             }
             result
         } catch (_: Exception) {
@@ -1183,6 +1201,16 @@ class AndroidLocalhostServer(
         for (index in 0 until array.length()) {
             val value = array.optString(index)
             if (value.isNotBlank()) result.put(value)
+        }
+        return result
+    }
+
+    private fun readStringList(array: JSONArray?): List<String> {
+        val result = mutableListOf<String>()
+        if (array == null) return result
+        for (index in 0 until array.length()) {
+            val value = array.optString(index).trim()
+            if (value.isNotBlank()) result.add(value)
         }
         return result
     }
