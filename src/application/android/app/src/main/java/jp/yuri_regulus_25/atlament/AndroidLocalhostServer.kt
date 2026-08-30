@@ -35,6 +35,15 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
+internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted: Boolean): String = when {
+    resolvedId.isNullOrBlank() -> "missing"
+    deleted -> "deleted"
+    else -> "resolved"
+}
+
+internal fun androidMasterReferenceWarningCode(deleted: Boolean): String =
+    if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
+
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
@@ -1161,13 +1170,8 @@ class AndroidLocalhostServer(
     }
 
     private fun referenceResolutionJson(originalId: String, resolvedId: String?, deleted: Boolean): JSONObject {
-        val state = when {
-            resolvedId.isNullOrBlank() -> "missing"
-            deleted -> "deleted"
-            else -> "resolved"
-        }
         return JSONObject()
-            .put("state", state)
+            .put("state", androidMasterReferenceResolutionState(resolvedId, deleted))
             .put("originalId", originalId)
             .put("resolvedId", resolvedId ?: JSONObject.NULL)
     }
@@ -1184,7 +1188,7 @@ class AndroidLocalhostServer(
         val resolutionState = if (deleted) "deleted" else "missing"
         val subject = if (referenceKind == "gym") "Gym" else "Machine"
         return JSONObject()
-            .put("code", if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING")
+            .put("code", androidMasterReferenceWarningCode(deleted))
             .put("referenceKind", referenceKind)
             .put("resolutionState", resolutionState)
             .put("originalId", originalId)
