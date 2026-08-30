@@ -1,16 +1,15 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
+import { hostedApplications, portalApplication } from '../application-registry.mjs'
 
 const requiredPorts = [
   { name: 'Development Gateway', port: 5173 },
-  { name: 'Portal', port: 5174 },
-  { name: 'Dashboard', port: 5175 },
-  { name: 'Workouts', port: 5176 },
-  { name: 'Machines', port: 5177 },
-  { name: 'Analytics', port: 5178 },
-  { name: 'Settings', port: 5179 },
+  { name: portalApplication.displayName, port: portalApplication.devPort },
+  ...hostedApplications.map((application) => ({
+    name: application.displayName,
+    port: application.devPort,
+  })),
   { name: 'Node Development Runtime', port: 5180 },
-  { name: 'Maintenance', port: 5181 },
 ]
 
 for (const item of requiredPorts) {
