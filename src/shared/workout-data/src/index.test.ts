@@ -6,6 +6,7 @@ import {
   parseGymMaster,
   parseWorkoutJson,
   parseWorkoutJsonl,
+  sampleMasterData,
 } from './index'
 
 describe('workout-data', () => {
@@ -126,7 +127,6 @@ describe('workout-data', () => {
       expect.arrayContaining([
         'Missing required numeric field: schema_version.',
         'Missing required string field: session_id.',
-        'Unknown gym_id: unknown-gym.',
       ]),
     )
   })
@@ -199,7 +199,7 @@ describe('workout-data', () => {
     )
   })
 
-  it('rejects unknown machine_id references', () => {
+  it('keeps workouts with unknown machine_id references as runtime warnings', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
       JSON.stringify({
@@ -217,8 +217,186 @@ describe('workout-data', () => {
       }),
     )
 
-    expect(result.sessions).toEqual([])
-    expect(result.issues.some((issue) => issue.message.includes('Unknown machine_id'))).toBe(true)
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].machines[0]).toMatchObject({
+      machine_id: 'unknown-machine',
+      resolution: {
+        state: 'missing',
+        originalId: 'unknown-machine',
+        resolvedId: null,
+      },
+    })
+    expect(result.sessions[0].machines[0]).not.toHaveProperty('name')
+    expect(result.sessions[0].machines[0]).not.toHaveProperty('body_part')
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'MASTER_REFERENCE_MISSING',
+        referenceKind: 'machine',
+        resolutionState: 'missing',
+        originalId: 'unknown-machine',
+        resolvedId: null,
+        sessionId: '2026-08-22-01',
+      }),
+    ])
+  })
+
+  it('keeps workouts with unknown gym_id references as runtime warnings', () => {
+    const result = parseWorkoutJson(
+      'workouts/2026/08/2026-08-22.json',
+      JSON.stringify({
+        schema_version: 1,
+        session_id: '2026-08-22-01',
+        date: '2026-08-22',
+        status: 'complete',
+        gym_id: 'unknown-gym',
+        machines: [
+          {
+            machine_id: 'abdominal',
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      }),
+    )
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions[0].gym).toMatchObject({
+      id: 'unknown-gym',
+      resolution: {
+        state: 'missing',
+        originalId: 'unknown-gym',
+        resolvedId: null,
+      },
+    })
+    expect(result.sessions[0].gym).not.toHaveProperty('name')
+    expect(result.sessions[0].gym).not.toHaveProperty('short_name')
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'MASTER_REFERENCE_MISSING',
+        referenceKind: 'gym',
+        resolutionState: 'missing',
+        originalId: 'unknown-gym',
+        resolvedId: null,
+        sessionId: '2026-08-22-01',
+      }),
+    ])
+  })
+
+  it('keeps workouts with deleted gym references as runtime warnings', () => {
+    const result = parseWorkoutJson(
+      'workouts/2026/08/2026-08-22.json',
+      JSON.stringify({
+        schema_version: 1,
+        session_id: '2026-08-22-01',
+        date: '2026-08-22',
+        status: 'complete',
+        gym_id: 'deleted-gym',
+        machines: [
+          {
+            machine_id: 'abdominal',
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      }),
+      {
+        ...sampleMasterData,
+        gyms: {
+          schema_version: 1,
+          gyms: [
+            {
+              gym_id: 'deleted-gym',
+              name: 'Deleted Gym',
+              short_name: 'DG',
+              active: false,
+              deleted: true,
+              main: false,
+            },
+          ],
+        },
+      },
+    )
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].gym).toMatchObject({
+      id: 'deleted-gym',
+      resolution: {
+        state: 'deleted',
+        originalId: 'deleted-gym',
+        resolvedId: 'deleted-gym',
+      },
+    })
+    expect(result.sessions[0].gym).not.toHaveProperty('name')
+    expect(result.sessions[0].gym).not.toHaveProperty('short_name')
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'MASTER_REFERENCE_DELETED',
+        referenceKind: 'gym',
+        resolutionState: 'deleted',
+        originalId: 'deleted-gym',
+        resolvedId: 'deleted-gym',
+        sessionId: '2026-08-22-01',
+      }),
+    ])
+  })
+
+  it('keeps workouts with deleted machine references as runtime warnings', () => {
+    const result = parseWorkoutJson(
+      'workouts/2026/08/2026-08-22.json',
+      JSON.stringify({
+        schema_version: 1,
+        session_id: '2026-08-22-01',
+        date: '2026-08-22',
+        status: 'complete',
+        gym_id: 'af-shioiri',
+        machines: [
+          {
+            machine_id: 'deleted-machine',
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      }),
+      {
+        ...sampleMasterData,
+        machines: {
+          schema_version: 1,
+          machines: [
+            {
+              machine_id: 'deleted-machine',
+              name: 'Deleted Machine',
+              body_part: 'chest',
+              aliases: [],
+              active: false,
+              deleted: true,
+            },
+          ],
+        },
+      },
+    )
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].machines[0]).toMatchObject({
+      machine_id: 'deleted-machine',
+      sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+      resolution: {
+        state: 'deleted',
+        originalId: 'deleted-machine',
+        resolvedId: 'deleted-machine',
+      },
+    })
+    expect(result.sessions[0].machines[0]).not.toHaveProperty('name')
+    expect(result.sessions[0].machines[0]).not.toHaveProperty('body_part')
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'MASTER_REFERENCE_DELETED',
+        referenceKind: 'machine',
+        resolutionState: 'deleted',
+        originalId: 'deleted-machine',
+        resolvedId: 'deleted-machine',
+        sessionId: '2026-08-22-01',
+      }),
+    ])
   })
 
   it('rejects sets with missing required fields instead of generating set numbers', () => {

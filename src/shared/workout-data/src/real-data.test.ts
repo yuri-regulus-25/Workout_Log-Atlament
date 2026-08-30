@@ -29,12 +29,12 @@ describe('real workout data', () => {
     expect(new Set(result.sessions.map((session) => session.session_id)).size).toBe(
       result.sessions.length,
     )
-    expect(result.sessions.every((session) => session.gym.name.length > 0)).toBe(true)
+    expect(result.sessions.every((session) => (session.gym.name ?? '').length > 0)).toBe(true)
     expect(
       result.sessions.every((session) =>
         session.machines.every(
           (machine) =>
-            machine.name.length > 0 && machine.body_part.length > 0 && machine.sets.length > 0,
+            (machine.name ?? '').length > 0 && (machine.body_part ?? '').length > 0 && machine.sets.length > 0,
         ),
       ),
     ).toBe(true)
@@ -82,7 +82,7 @@ describe('real workout data', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(rawSessionCount)
-    expect(result.sessions[0].gym.name.length).toBeGreaterThan(0)
+    expect((result.sessions[0].gym.name ?? '').length).toBeGreaterThan(0)
     expect(result.sessions.some((session) => session.machines.some((machine) => machine.name === 'リアデルト'))).toBe(true)
   })
 
@@ -118,7 +118,7 @@ describe('real workout data', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(expected.sessions.length)
-    expect(result.sessions[0].gym.name.length).toBeGreaterThan(0)
+    expect((result.sessions[0].gym.name ?? '').length).toBeGreaterThan(0)
   })
 })
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { WorkoutRow, WorkoutSession } from '@workout-lab/workout-types'
-import { formatDisplayDate, toWorkoutRows } from '@workout-lab/workout-core'
+import { formatDisplayDate, getGymDisplayName, toWorkoutRows } from '@workout-lab/workout-core'
 
 const props = defineProps<{
   sessions: WorkoutSession[]
@@ -76,7 +76,8 @@ function selectRow(row: WorkoutRow) {
   }
 }
 function fullGymName(row: WorkoutRow): string {
-  return props.sessions.find((item) => item.session_id === row.sessionId)?.gym.name ?? row.gym
+  const session = props.sessions.find((item) => item.session_id === row.sessionId)
+  return session ? getGymDisplayName(session.gym) : row.gym
 }
 
 function displayGymName(row: WorkoutRow): string {

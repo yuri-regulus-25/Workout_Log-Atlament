@@ -47,7 +47,7 @@
                 [value]="machine.machine_id"
                 [selected]="machine.machine_id === selectedMachineId()"
               >
-                {{ machine.name }}
+                {{ displayMachineName(machine) }}
               </option>
             }
           </select>

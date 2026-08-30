@@ -18,6 +18,7 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 {
   "success": true,
   "errors": [],
+  "warnings": [],
   "data": {}
 }
 ```
@@ -29,6 +30,22 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
   "code": "ERROR_CODE",
   "message": "Human readable message.",
   "recoverable": true
+}
+```
+
+`warnings` entry は Runtime Data を accept しながら報告する user-actionable warning である。Master reference warning は以下を持つ。
+
+```json
+{
+  "code": "MASTER_REFERENCE_MISSING",
+  "referenceKind": "machine",
+  "resolutionState": "missing",
+  "originalId": "legacy-machine-id",
+  "resolvedId": null,
+  "sessionId": "2026-08-24-01",
+  "filePath": "data/workouts/2026/08/2026-08-24.json",
+  "line": null,
+  "message": "Machine master reference is missing: legacy-machine-id."
 }
 ```
 
@@ -205,7 +222,7 @@ Successful write response data:
 ]
 ```
 
-Unresolved list は current remote Workout/Master files を read して build validation error から生成する。Raw Workout JSON は更新しない。
+Unresolved list は current remote Workout/Master files を read して Runtime warning から生成する。Raw Workout JSON は更新しない。
 
 Write は GitHub Contents API の current SHA と `expectedRevision` を比較してから 1 回の PUT を実行する。Mismatch は `MASTER_WRITE_CONFLICT` であり、client は再取得して表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
 
@@ -261,3 +278,5 @@ Sync data:
 ```
 
 `degraded` は remote sync 失敗時に local runtime data で継続した場合に `true` になる。
+
+Unresolved Master reference は `resolved` / `missing` / `deleted` を Runtime entity の `resolution` と top-level `warnings` に保持する。`missing` / `deleted` だけでは `/sync` の `degraded`、status の `fallbackActive`、readiness degradation を発火しない。Workout は Runtime Data として accept され、sets/reps/weight/count aggregate の対象に残る。

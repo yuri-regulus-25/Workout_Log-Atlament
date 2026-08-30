@@ -1,5 +1,5 @@
 import type { WorkoutSession } from '@workout-lab/workout-types'
-import { getMachineVolume, getSessionSetCount, getSessionVolume } from '@workout-lab/workout-core'
+import { getGymDisplayName, getMachineVolume, getSessionSetCount, getSessionVolume } from '@workout-lab/workout-core'
 
 export type WorkoutDaySummary = {
   sessionCount: number
@@ -17,7 +17,7 @@ export function getMachineReps(machine: WorkoutSession['machines'][number]): num
 export function getWorkoutDaySummary(sessions: WorkoutSession[]): WorkoutDaySummary {
   return {
     sessionCount: sessions.length,
-    gymNames: Array.from(new Set(sessions.map((session) => session.gym.name))).join(' / '),
+    gymNames: Array.from(new Set(sessions.map((session) => getGymDisplayName(session.gym)))).join(' / '),
     totalMachines: sessions.reduce((total, session) => total + session.machines.length, 0),
     totalSets: sessions.reduce((total, session) => total + getSessionSetCount(session), 0),
     totalReps: sessions.reduce((total, session) => total + session.machines.reduce(

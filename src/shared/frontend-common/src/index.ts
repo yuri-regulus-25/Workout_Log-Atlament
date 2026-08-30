@@ -7,9 +7,22 @@ export type AfError = {
   recoverable: boolean
 }
 
+export type RuntimeWarning = {
+  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED'
+  referenceKind: 'gym' | 'machine'
+  resolutionState: 'missing' | 'deleted'
+  originalId: string
+  resolvedId: string | null
+  sessionId: string
+  filePath?: string
+  line?: number | null
+  message: string
+}
+
 export type AfResponse<T> = {
   success: boolean
   errors: AfError[]
+  warnings?: RuntimeWarning[]
   data: T | null
 }
 

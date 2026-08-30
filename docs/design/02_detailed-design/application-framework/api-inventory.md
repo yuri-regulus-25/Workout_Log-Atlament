@@ -37,7 +37,7 @@ Inventory target:
 
 ### Common Envelope
 
-`success`, `errors`, and `data` are consumed by shared clients and Settings error handling. `errors[].code`, `errors[].message`, and `errors[].recoverable` are retained as the shared error contract.
+`success`, `errors`, `warnings`, and `data` are consumed by shared clients and Settings error handling. `errors[].code`, `errors[].message`, and `errors[].recoverable` are retained as the shared error contract. Runtime Master reference warnings use `warnings[]` so unresolved Master references do not imply request failure or fallback.
 
 ### Status Data
 

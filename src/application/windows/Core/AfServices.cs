@@ -316,7 +316,7 @@ public sealed class RuntimeDataStore
             // Write through the temporary runtime area so Frontend requests never observe a
             // partially serialized runtime-data.json during sync.
             Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
-            var data = new RuntimeDataFile(1, DateTimeOffset.UtcNow, result.Sessions, result.Errors);
+            var data = new RuntimeDataFile(1, DateTimeOffset.UtcNow, result.Sessions, result.Errors, result.Warnings);
             var tempPath = Path.Combine(_paths.TemporaryRuntimeRoot, "runtime-data.json");
             File.WriteAllText(tempPath, JsonSerializer.Serialize(data, AfJson.Options), Encoding.UTF8);
             Directory.CreateDirectory(_paths.CurrentRuntimeRoot);
@@ -364,19 +364,20 @@ public sealed class RuntimeDataBuilder
     public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile machinesFile, RuntimeSourceFile gymsFile)
     {
         var errors = new List<AfError>();
+        var warnings = new List<RuntimeWarning>();
         var machines = ParseMachineMaster(machinesFile, errors);
         var gyms = ParseGymMaster(gymsFile, errors);
         if (errors.Any(error => error.Code == AfErrorCodes.RuntimeDataInvalid))
         {
             // Master data is structural input for every workout. Stop immediately when it is
             // malformed so downstream errors do not hide the actual contract failure.
-            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
         }
 
         if (workoutFiles.Count == 0)
         {
             errors.Add(new AfError(AfErrorCodes.RuntimeDataEmpty, "Workout resource is empty.", true));
-            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
         }
 
         var sessions = new List<WorkoutSession>();
@@ -389,38 +390,37 @@ public sealed class RuntimeDataBuilder
                 {
                     lineNo++;
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    var parsed = BuildSession(file.Path, lineNo, line, machines, gyms, errors);
-                    if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+                    var parsed = BuildSession(file.Path, lineNo, line, machines, gyms, errors, warnings);
+                    if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
                     if (parsed.Session is not null) sessions.Add(parsed.Session);
                 }
             }
             else if (file.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {
-                var parsed = BuildSession(file.Path, null, file.Content, machines, gyms, errors);
-                if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+                var parsed = BuildSession(file.Path, null, file.Content, machines, gyms, errors, warnings);
+                if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
                 if (parsed.Session is not null) sessions.Add(parsed.Session);
             }
         }
 
         return errors.Count > 0
-            // Master lookup misses are reported as user-actionable sync errors, but the current
-            // runtime file is left untouched so local fallback can continue serving old data.
-            ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, false)
-            : new RuntimeBuildResult(sessions, errors, false);
+            ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, false)
+            : new RuntimeBuildResult(sessions, errors, warnings, false);
     }
 
     public (WorkoutSession? Session, bool TechnicalInvalid) BuildSingleSessionForTest(string json, string path = "test.json")
     {
         var machines = new Dictionary<string, MachineMasterItem>
         {
-            ["known-machine"] = new("known-machine", "Known Machine", "chest")
+            ["known-machine"] = new("known-machine", "Known Machine", "chest", false)
         };
         var gyms = new Dictionary<string, GymMasterItem>
         {
-            ["known-gym"] = new("known-gym", "Known Gym", "KG")
+            ["known-gym"] = new("known-gym", "Known Gym", "KG", false)
         };
         var errors = new List<AfError>();
-        return BuildSession(path, null, json, machines, gyms, errors);
+        var warnings = new List<RuntimeWarning>();
+        return BuildSession(path, null, json, machines, gyms, errors, warnings);
     }
 
     private static Dictionary<string, MachineMasterItem> ParseMachineMaster(RuntimeSourceFile file, List<AfError> errors)
@@ -448,7 +448,8 @@ public sealed class RuntimeDataBuilder
                     return new();
                 }
 
-                var record = new MachineMasterItem(id, name, bodyPart);
+                var deleted = TryGetOptionalBool(item, "deleted") ?? false;
+                var record = new MachineMasterItem(id, name, bodyPart, deleted);
                 if (!result.TryAdd(id, record))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine_id: {id}.", false));
@@ -498,7 +499,8 @@ public sealed class RuntimeDataBuilder
                 }
 
                 TryGetString(item, "short_name", out var shortName);
-                var record = new GymMasterItem(id, name, shortName);
+                var deleted = TryGetOptionalBool(item, "deleted") ?? false;
+                var record = new GymMasterItem(id, name, shortName, deleted);
                 if (!result.TryAdd(id, record))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym_id: {id}.", false));
@@ -530,7 +532,8 @@ public sealed class RuntimeDataBuilder
         string content,
         IReadOnlyDictionary<string, MachineMasterItem> machines,
         IReadOnlyDictionary<string, GymMasterItem> gyms,
-        List<AfError> errors)
+        List<AfError> errors,
+        List<RuntimeWarning> warnings)
     {
         JsonDocument document;
         try
@@ -567,18 +570,17 @@ public sealed class RuntimeDataBuilder
                 return (null, true);
             }
 
-            if (!gyms.TryGetValue(gymId, out var gymMaster))
+            gyms.TryGetValue(gymId, out var gymMaster);
+            if (gymMaster is null || gymMaster.Deleted)
             {
-                errors.Add(new AfError(AfErrorCodes.MasterGymNotFound, Location(filePath, line) + $"Gym master is not found: {gymId}.", true));
-                return (null, false);
+                warnings.Add(CreateReferenceWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, sessionId, filePath, line));
             }
 
             var workoutMachines = new List<WorkoutMachine>();
             foreach (var machineItem in machineItems.EnumerateArray())
             {
-                var parsed = BuildMachine(filePath, line, machineItem, machines, errors);
+                var parsed = BuildMachine(filePath, line, machineItem, machines, errors, warnings, sessionId);
                 if (parsed.TechnicalInvalid) return (null, true);
-                if (parsed.MasterResolveFailure) return (null, false);
                 if (parsed.Machine is not null) workoutMachines.Add(parsed.Machine);
             }
 
@@ -593,7 +595,11 @@ public sealed class RuntimeDataBuilder
                 sessionId,
                 date,
                 status,
-                new Gym(gymMaster.Id, gymMaster.Name, gymMaster.ShortName),
+                new Gym(
+                    gymMaster?.Id ?? gymId,
+                    gymMaster is not null && !gymMaster.Deleted ? gymMaster.Name : null,
+                    gymMaster is not null && !gymMaster.Deleted ? gymMaster.ShortName : null,
+                    ResolveMasterReference(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false)),
                 ReadCondition(root),
                 workoutMachines,
                 ReadStringArray(root, "notes"));
@@ -601,12 +607,14 @@ public sealed class RuntimeDataBuilder
         }
     }
 
-    private static (WorkoutMachine? Machine, bool TechnicalInvalid, bool MasterResolveFailure) BuildMachine(
+    private static (WorkoutMachine? Machine, bool TechnicalInvalid) BuildMachine(
         string filePath,
         int? line,
         JsonElement item,
         IReadOnlyDictionary<string, MachineMasterItem> masters,
-        List<AfError> errors)
+        List<AfError> errors,
+        List<RuntimeWarning> warnings,
+        string sessionId)
     {
         if (item.ValueKind != JsonValueKind.Object ||
             !TryGetString(item, "machine_id", out var machineId) ||
@@ -615,13 +623,13 @@ public sealed class RuntimeDataBuilder
             setItems.GetArrayLength() == 0)
         {
             errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Machine required fields are invalid.", false));
-            return (null, true, false);
+            return (null, true);
         }
 
-        if (!masters.TryGetValue(machineId, out var master))
+        masters.TryGetValue(machineId, out var master);
+        if (master is null || master.Deleted)
         {
-            errors.Add(new AfError(AfErrorCodes.MasterMachineNotFound, Location(filePath, line) + $"Machine master is not found: {machineId}.", true));
-            return (null, false, true);
+            warnings.Add(CreateReferenceWarning("machine", machineId, master?.Id, master?.Deleted ?? false, sessionId, filePath, line));
         }
 
         var sets = new List<MachineSet>();
@@ -633,7 +641,7 @@ public sealed class RuntimeDataBuilder
                 !TryGetInt(setItem, "reps", out var reps))
             {
                 errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + $"Set in machine {machineId} is invalid.", false));
-                return (null, true, false);
+                return (null, true);
             }
 
             sets.Add(new MachineSet(
@@ -646,7 +654,13 @@ public sealed class RuntimeDataBuilder
                 TryGetOptionalString(setItem, "note")));
         }
 
-        return (new WorkoutMachine(master.Id, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
+        return (new WorkoutMachine(
+            master?.Id ?? machineId,
+            master is not null && !master.Deleted ? master.Name : null,
+            master is not null && !master.Deleted ? master.BodyPart : null,
+            ResolveMasterReference(machineId, master?.Id, master?.Deleted ?? false),
+            sets,
+            ReadStringArray(item, "notes")), false);
     }
 
     private static SessionCondition? ReadCondition(JsonElement root)
@@ -666,6 +680,39 @@ public sealed class RuntimeDataBuilder
     }
 
     private static string Location(string filePath, int? line) => line is null ? $"{filePath}: " : $"{filePath}:{line}: ";
+
+    private static MasterReferenceResolution ResolveMasterReference(string originalId, string? resolvedId, bool deleted)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedId))
+        {
+            return new MasterReferenceResolution("missing", originalId, null);
+        }
+
+        return new MasterReferenceResolution(deleted ? "deleted" : "resolved", originalId, resolvedId);
+    }
+
+    private static RuntimeWarning CreateReferenceWarning(
+        string referenceKind,
+        string originalId,
+        string? resolvedId,
+        bool deleted,
+        string sessionId,
+        string filePath,
+        int? line)
+    {
+        var resolutionState = deleted ? "deleted" : "missing";
+        var subject = referenceKind == "gym" ? "Gym" : "Machine";
+        return new RuntimeWarning(
+            deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
+            referenceKind,
+            resolutionState,
+            originalId,
+            resolvedId,
+            sessionId,
+            filePath,
+            line,
+            $"{subject} master reference is {resolutionState}: {originalId}.");
+    }
 
     private static bool TryGetString(JsonElement element, string name, out string value)
     {
@@ -694,6 +741,12 @@ public sealed class RuntimeDataBuilder
         return element.TryGetProperty(name, out var property) && (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False) && (value = property.GetBoolean()) == value;
     }
 
+    private static bool? TryGetOptionalBool(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var property)) return null;
+        return property.ValueKind is JsonValueKind.True or JsonValueKind.False ? property.GetBoolean() : null;
+    }
+
     private static decimal? TryGetNullableDecimal(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var property) || property.ValueKind == JsonValueKind.Null) return null;
@@ -720,8 +773,8 @@ public sealed class RuntimeDataBuilder
             .ToArray();
     }
 
-    private sealed record MachineMasterItem(string Id, string Name, string BodyPart);
-    private sealed record GymMasterItem(string Id, string Name, string? ShortName);
+    private sealed record MachineMasterItem(string Id, string Name, string BodyPart, bool Deleted);
+    private sealed record GymMasterItem(string Id, string Name, string? ShortName, bool Deleted);
 }
 
 public static class MasterWriteValidator
@@ -1766,7 +1819,7 @@ public sealed class AtlamentApplication
             return AfResponses.Fail<RuntimeWorkoutData>(errors.First());
         }
 
-        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions), data.Errors);
+        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions), data.Errors, data.Warnings ?? Array.Empty<RuntimeWarning>());
     }
 
     public AfResponse<AfConfiguration> GetConfiguration() => AfResponses.Ok(_configuration);
@@ -1889,7 +1942,12 @@ public sealed class AtlamentApplication
         }
 
         var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
-        return (200, AfResponses.Ok(BuildUnresolvedMasterReferences(build.Errors)));
+        if (build.TechnicalInvalid || build.Errors.Count > 0)
+        {
+            return (400, new AfResponse<IReadOnlyList<UnresolvedMasterReference>>(false, build.Errors, null));
+        }
+
+        return (200, AfResponses.Ok(BuildUnresolvedMasterReferences(build.Warnings)));
     }
 
     public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
@@ -1993,35 +2051,25 @@ public sealed class AtlamentApplication
             .ToArray();
     }
 
-    private static IReadOnlyList<UnresolvedMasterReference> BuildUnresolvedMasterReferences(IReadOnlyList<AfError> errors)
+    private static IReadOnlyList<UnresolvedMasterReference> BuildUnresolvedMasterReferences(IReadOnlyList<RuntimeWarning> warnings)
     {
         var groups = new Dictionary<(string Type, string ReferenceId), List<UnresolvedAffectedWorkout>>();
-        foreach (var error in errors.Where(error => error.Code is AfErrorCodes.MasterMachineNotFound or AfErrorCodes.MasterGymNotFound))
+        foreach (var warning in warnings.Where(warning => warning.Code is "MASTER_REFERENCE_MISSING" or "MASTER_REFERENCE_DELETED"))
         {
-            var marker = error.Code == AfErrorCodes.MasterMachineNotFound
-                ? "Machine master is not found: "
-                : "Gym master is not found: ";
-            var markerIndex = error.Message.IndexOf(marker, StringComparison.Ordinal);
-            if (markerIndex < 0)
-            {
-                continue;
-            }
-
-            var referenceId = error.Message[(markerIndex + marker.Length)..].Trim().TrimEnd('.');
+            var referenceId = warning.OriginalId.Trim();
             if (referenceId.Length == 0)
             {
                 continue;
             }
 
-            var (filePath, line) = ParseErrorLocation(error.Message);
-            var key = (error.Code == AfErrorCodes.MasterMachineNotFound ? "MACHINE_MASTER" : "GYM_MASTER", referenceId);
+            var key = (warning.ReferenceKind == "machine" ? "MACHINE_MASTER" : "GYM_MASTER", referenceId);
             if (!groups.TryGetValue(key, out var affected))
             {
                 affected = new List<UnresolvedAffectedWorkout>();
                 groups[key] = affected;
             }
 
-            affected.Add(new UnresolvedAffectedWorkout(filePath, line, error.Message));
+            affected.Add(new UnresolvedAffectedWorkout(warning.FilePath ?? "", warning.Line, warning.Message));
         }
 
         return groups
@@ -2173,7 +2221,7 @@ public sealed class AtlamentApplication
         _latestValidation = "succeeded";
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
-        return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors));
+        return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors, build.Warnings));
     }
 
     private (int StatusCode, AfResponse<SyncResult> Response) RuntimeBuildFailure(IReadOnlyList<AfError> errors)

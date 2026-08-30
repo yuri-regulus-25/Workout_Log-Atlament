@@ -51,7 +51,9 @@ export function getMachineOptions(sessions: WorkoutSession[]): WorkoutMachine[] 
     }
   }
 
-  return Array.from(machinesById.values()).sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(machinesById.values()).sort(
+    (a, b) => getMachineDisplayName(a).localeCompare(getMachineDisplayName(b)) || a.machine_id.localeCompare(b.machine_id),
+  )
 }
 
 export function getMachineHistory(
@@ -63,10 +65,10 @@ export function getMachineHistory(
       .filter((machine) => machine.machine_id === machineId)
       .map((machine) => ({
         date: session.date,
-        gym: session.gym.name,
+        gym: getGymDisplayName(session.gym),
         machineId: machine.machine_id,
-        machineName: machine.name,
-        bodyPart: machine.body_part,
+        machineName: getMachineDisplayName(machine),
+        bodyPart: getMachineBodyPartDisplay(machine),
         sets: machine.sets.length,
         bestWeight: getBestSetValue(machine.sets, (set) => set.weight_kg),
         bestReps: getBestSetValue(machine.sets, (set) => set.reps),
@@ -239,7 +241,7 @@ export type BodyPartLastTrained = {
 export type MachineFrequencyRanking = {
   machineId: string
   machineName: string
-  bodyPart: BodyPart
+  bodyPart?: BodyPart
   sessionCount: number
   occurrenceCount: number
 }
@@ -423,7 +425,7 @@ export function getSessionAggregates(sessions: WorkoutSession[]): SessionAggrega
   return sortSessions(sessions).map((session) => ({
     sessionId: session.session_id,
     date: session.date,
-    gym: session.gym.name,
+    gym: getGymDisplayName(session.gym),
     machineCount: session.machines.length,
     setCount: getTotalSets(session),
     repCount: getTotalReps(session),
@@ -535,7 +537,7 @@ export function getWorkoutSummary(session: WorkoutSession): WorkoutSummary {
   return {
     sessionId: session.session_id,
     date: session.date,
-    gym: session.gym.name,
+    gym: getGymDisplayName(session.gym),
     machineCount: session.machines.length,
     setCount: getTotalSets(session),
     totalReps: getTotalReps(session),
@@ -593,11 +595,11 @@ export function compareWorkoutSessions(
     totalRepsDelta: getNumericDelta(currentSummary.totalReps, previousSummary.totalReps),
     addedMachines: Array.from(currentMachines.entries())
       .filter(([machineId]) => !previousMachines.has(machineId))
-      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .map(([machineId, machine]) => ({ machineId, machineName: getMachineDisplayName(machine) }))
       .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
     removedMachines: Array.from(previousMachines.entries())
       .filter(([machineId]) => !currentMachines.has(machineId))
-      .map(([machineId, machine]) => ({ machineId, machineName: machine.name }))
+      .map(([machineId, machine]) => ({ machineId, machineName: getMachineDisplayName(machine) }))
       .sort((a, b) => a.machineName.localeCompare(b.machineName) || a.machineId.localeCompare(b.machineId)),
   }
 }
@@ -647,6 +649,9 @@ export function getSetsByBodyPart(sessions: WorkoutSession[]): BodyPartSetDistri
 
   for (const session of sessions) {
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       setCounts.set(machine.body_part, (setCounts.get(machine.body_part) ?? 0) + machine.sets.length)
     }
   }
@@ -661,6 +666,9 @@ export function getBodyPartFrequency(sessions: WorkoutSession[]): BodyPartFreque
 
   for (const session of sessions) {
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       const sessionIds = sessionIdsByBodyPart.get(machine.body_part) ?? new Set<string>()
       sessionIds.add(session.session_id)
       sessionIdsByBodyPart.set(machine.body_part, sessionIds)
@@ -692,6 +700,9 @@ export function getBodyPartTrend(sessions: WorkoutSession[]): BodyPartTrend[] {
   for (const session of sessions) {
     const month = session.date.slice(0, 7)
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       const key = `${month}:${machine.body_part}`
       const current = trend.get(key) ?? {
         month,
@@ -719,6 +730,9 @@ export function getLastTrainedDateByBodyPart(sessions: WorkoutSession[]): BodyPa
 
   for (const session of sessions) {
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       const current = lastDateByBodyPart.get(machine.body_part)
       if (!current || session.date > current) {
         lastDateByBodyPart.set(machine.body_part, session.date)
@@ -739,7 +753,7 @@ export function getMachineFrequencyRanking(sessions: WorkoutSession[]): MachineF
     for (const machine of session.machines) {
       const row = rows.get(machine.machine_id) ?? {
         machineId: machine.machine_id,
-        machineName: machine.name,
+        machineName: getMachineDisplayName(machine),
         bodyPart: machine.body_part,
         sessionCount: 0,
         occurrenceCount: 0,
@@ -769,7 +783,7 @@ export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribu
   for (const session of sessions) {
     const row = rows.get(session.gym.id) ?? {
       gymId: session.gym.id,
-      gymName: session.gym.name,
+      gymName: getGymDisplayName(session.gym),
       sessionCount: 0,
     }
 
@@ -1160,7 +1174,12 @@ function createMainGymMetric<TValue>(
     return { state: 'invalid', reason: context.reason, gyms: context.gyms }
   }
 
-  const mainGymSessions = sessions.filter((session) => session.gym.id === context.gym.gym_id)
+  const mainGymSessions = sessions.filter(
+    (session) =>
+      session.gym.id === context.gym.gym_id &&
+      session.gym.resolution?.state !== 'missing' &&
+      session.gym.resolution?.state !== 'deleted',
+  )
 
   return {
     state: 'available',
@@ -1199,6 +1218,9 @@ export function getBodyPartMachineVariety(sessions: WorkoutSession[]): Array<{
 
   for (const session of sessions) {
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       const machines = machinesByBodyPart.get(machine.body_part) ?? new Set<string>()
       machines.add(machine.machine_id)
       machinesByBodyPart.set(machine.body_part, machines)
@@ -1271,7 +1293,27 @@ export function formatTotalWeight(value: number): string {
   return `合計重量: ${formatWeightKg(value)}`
 }
 
-export function formatBodyPart(bodyPart: BodyPart | string): string {
+export function getGymDisplayName(gym: WorkoutSession['gym']): string {
+  return getDisplayText(gym.name)
+}
+
+export function getGymShortDisplayName(gym: WorkoutSession['gym']): string {
+  return getDisplayText(gym.short_name ?? gym.name)
+}
+
+export function getMachineDisplayName(machine: WorkoutMachine): string {
+  return getDisplayText(machine.name)
+}
+
+export function getMachineBodyPartDisplay(machine: WorkoutMachine): string {
+  return machine.body_part ? formatBodyPart(machine.body_part) : '?'
+}
+
+function getDisplayText(value: string | undefined | null): string {
+  return value && value.length > 0 ? value : '?'
+}
+
+export function formatBodyPart(bodyPart: BodyPart | string | undefined | null): string {
   switch (bodyPart) {
     case 'chest':
       return '胸'
@@ -1292,7 +1334,7 @@ export function formatBodyPart(bodyPart: BodyPart | string): string {
     case 'other':
       return 'その他'
     default:
-      return bodyPart
+      return bodyPart ?? '?'
   }
 }
 
@@ -1335,6 +1377,9 @@ export function getBodyPartSummary(sessions: WorkoutSession[]): BodyPartSummary[
 
   for (const session of sessions) {
     for (const machine of session.machines) {
+      if (!machine.body_part) {
+        continue
+      }
       const current = totals.get(machine.body_part) ?? {
         bodyPart: machine.body_part,
         sets: 0,
@@ -1359,21 +1404,21 @@ export function getPersonalRecords(sessions: WorkoutSession[]): PersonalRecord[]
         const estimated1RM = getEstimated1RM(set.weight_kg, set.reps)
         updateRecord(records, {
           machineId: machine.machine_id,
-          machineName: machine.name,
+          machineName: getMachineDisplayName(machine),
           date: session.date,
           type: 'weight',
           value: set.weight_kg,
         })
         updateRecord(records, {
           machineId: machine.machine_id,
-          machineName: machine.name,
+          machineName: getMachineDisplayName(machine),
           date: session.date,
           type: 'reps',
           value: set.reps,
         })
         updateRecord(records, {
           machineId: machine.machine_id,
-          machineName: machine.name,
+          machineName: getMachineDisplayName(machine),
           date: session.date,
           type: 'estimated_1rm',
           value: estimated1RM,
@@ -1442,11 +1487,11 @@ export function toWorkoutRows(sessions: WorkoutSession[]): WorkoutRow[] {
   return sessions.map((session) => ({
     sessionId: session.session_id,
     date: session.date,
-    gym: session.gym.name,
+    gym: getGymDisplayName(session.gym),
     machineCount: session.machines.length,
     totalSets: getTotalSets(session),
     totalVolume: getTotalVolume(session),
-    machines: session.machines.map((machine) => machine.name).join(', '),
+    machines: session.machines.map((machine) => getMachineDisplayName(machine)).join(', '),
     status: session.status,
   }))
 }

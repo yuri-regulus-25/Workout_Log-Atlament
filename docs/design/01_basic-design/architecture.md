@@ -65,6 +65,6 @@ Frontend application の責務:
 
 ## Data Correctness Boundary
 
-Raw JSON / JSONL parsing、technical validation、Master Resolve は Runtime Data を accept する前に実行される。Master Resolve failure は remote sync set 全体を reject する。その sync set に含まれる部分的に valid な session は current runtime data へ accept されない。
+Raw JSON / JSONL parsing と technical validation は Runtime Data を accept する前に実行される。Master reference resolution は Runtime Data build 中に `resolved` / `missing` / `deleted` として記録される。`missing` / `deleted` Master reference は Runtime warning として報告し、Workout session 自体は正常な Runtime Data として accept する。Technical validation failure は引き続き current runtime data へ accept されない。
 
 Workout 由来の aggregate value は AF 外、主に `workout-core` で計算される。

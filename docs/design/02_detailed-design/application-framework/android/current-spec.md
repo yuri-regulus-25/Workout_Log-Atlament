@@ -96,7 +96,7 @@ Unknown API route は現行 Android implementation では JSON 501 response を�
 
 Android は GitHub resource を fetch し、Master file と Workout file を parse し、normalized runtime data を app internal storage へ write する。
 
-現行 implementation は required raw field を validate し、Master reference を resolve し、invalid runtime build を reject する。Normalized session は `/api/v1/common/runtime/workouts` 経由で公開する。
+現行 implementation は required raw field を validate し、Master direct reference を `resolved` / `missing` / `deleted` に分類する。Invalid runtime build は reject するが、missing/deleted Master reference は Runtime warning として報告し、session は Runtime Data として accept する。Normalized session は `/api/v1/common/runtime/workouts` 経由で公開する。
 
 ## Version and Packaging
 

@@ -49,7 +49,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public void MasterResolveFailureRejectsRuntimeBuild()
+    public void MasterResolveFailureKeepsRuntimeBuildWithWarnings()
     {
         var builder = new RuntimeDataBuilder();
         var files = new[]
@@ -62,9 +62,10 @@ public sealed class AfCoreTests
         var result = builder.Build(files, MachineMaster, GymMaster);
 
         Assert.False(result.TechnicalInvalid);
-        Assert.Empty(result.Sessions);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterMachineNotFound);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterGymNotFound);
+        Assert.Empty(result.Errors);
+        Assert.Equal(3, result.Sessions.Count);
+        Assert.Contains(result.Warnings, warning => warning.Code == "MASTER_REFERENCE_MISSING" && warning.ReferenceKind == "machine" && warning.OriginalId == "missing-machine");
+        Assert.Contains(result.Warnings, warning => warning.Code == "MASTER_REFERENCE_MISSING" && warning.ReferenceKind == "gym" && warning.OriginalId == "missing-gym");
     }
 
     [Fact]
@@ -109,15 +110,15 @@ public sealed class AfCoreTests
                 "valid",
                 "2026-08-24",
                 "complete",
-                new Gym("known-gym", "Known Gym", "KG"),
+                new Gym("known-gym", "Known Gym", "KG", new MasterReferenceResolution("resolved", "known-gym", "known-gym")),
                 null,
                 new[]
                 {
-                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new MasterReferenceResolution("resolved", "known-machine", "known-machine"), new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
 
-            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false));
+            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false));
             var (loaded, loadErrors) = store.LoadCurrent();
 
             Assert.Empty(saveErrors);
@@ -125,6 +126,7 @@ public sealed class AfCoreTests
             Assert.NotNull(loaded);
             Assert.Equal("valid", Assert.Single(loaded!.Sessions).SessionId);
             Assert.Empty(loaded.Errors);
+            Assert.Empty(loaded.Warnings);
         }
         finally
         {
@@ -486,6 +488,77 @@ public sealed class AfCoreTests
             Assert.Contains("credential", afterExpiredCredential.Readiness.UnavailableComponents);
             Assert.DoesNotContain("runtimeData", afterExpiredCredential.Readiness.UnavailableComponents);
             Assert.True(afterExpiredCredential.RuntimeData.CurrentAvailable);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UnresolvedMasterReferencesDoNotDegradeRuntimeHealth()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse("""
+                        [
+                          { "path": "data/workouts/2026-08-24.json", "type": "file" }
+                        ]
+                        """);
+                }
+
+                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "missing-gym", "missing-machine").Content);
+                }
+
+                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(MachineMaster.Content);
+                }
+
+                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(GymMaster.Content);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var status = application.GetStatus().Data!;
+            var runtime = application.GetRuntimeWorkouts();
+
+            Assert.True(runtime.Success);
+            Assert.Empty(runtime.Errors);
+            Assert.NotEmpty(runtime.Warnings);
+            Assert.Equal("ready", status.Readiness.State);
+            Assert.False(status.Application.Degraded);
+            Assert.False(status.RuntimeData.FallbackActive);
         }
         finally
         {
@@ -1008,14 +1081,14 @@ public sealed class AfCoreTests
                 "valid",
                 "2026-08-24",
                 "complete",
-                new Gym("known-gym", "Known Gym", "KG"),
+                new Gym("known-gym", "Known Gym", "KG", new MasterReferenceResolution("resolved", "known-gym", "known-gym")),
                 null,
                 new[]
                 {
-                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new MasterReferenceResolution("resolved", "known-machine", "known-machine"), new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
 
             var http = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
             var application = new AtlamentApplication(
@@ -1029,7 +1102,7 @@ public sealed class AfCoreTests
 
             await application.StartAsync(CancellationToken.None);
             await WaitForStartupAsync(application);
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
             http.RequestedUrls.Clear();
 
             var result = await application.WriteMasterDocumentAsync(
