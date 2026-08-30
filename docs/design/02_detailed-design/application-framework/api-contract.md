@@ -226,7 +226,7 @@ Unresolved list は current remote Workout/Master files を read して Runtime 
 
 Write は GitHub Contents API の current SHA と `expectedRevision` を比較してから 1 回の PUT を実行する。Mismatch は `MASTER_WRITE_CONFLICT` であり、client は再取得して表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
 
-Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine を logical delete する write も reject する。
+Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine の logical delete は許可し、参照側は次回 sync/runtime rebuild で unresolved warning として扱う。
 
 Unresolved reference を既存 Master record へ resolve する場合は、Master record の optional `source_ids` に unresolved raw ID を追加する。Runtime normalization は `machine_id` / `gym_id` に加えて `source_ids` を lookup key として扱い、normalized output は canonical Master ID を返す。新規 Master record で resolve する場合は unresolved raw ID を canonical ID として通常 Create flow を通す。
 

@@ -233,8 +233,6 @@ const gymRevision = ref('')
 const machines = ref<MachineRecord[]>([])
 const gyms = ref<GymRecord[]>([])
 const unresolved = ref<UnresolvedMasterReference[]>([])
-const referencedGyms = ref(new Set<string>())
-const referencedMachines = ref(new Set<string>())
 const dialogOpen = ref(false)
 const discardOpen = ref(false)
 const confirmOpen = ref(false)
@@ -353,7 +351,6 @@ async function loadAll() {
     gyms.value = gymDocument.gyms
     machineRevision.value = machineResult.data.revision
     gymRevision.value = gymResult.data.revision
-    await loadRuntimeReferences()
     await loadUnresolved()
   } catch (error) {
     message.value = { type: 'error', text: error instanceof Error ? error.message : 'Master load failed.' }
@@ -365,27 +362,6 @@ async function loadAll() {
 async function loadUnresolved() {
   const result = await getUnresolvedMasterReferences()
   unresolved.value = result.success && result.data ? result.data : []
-}
-
-async function loadRuntimeReferences() {
-  try {
-    const response = await fetch('/api/v1/common/runtime/workouts')
-    const payload = await response.json() as { success: boolean; data?: { sessions?: Array<{ gym?: { id?: string }; machines?: Array<{ machineId?: string; machine_id?: string }> }> } }
-    if (!payload.success) return
-    const gymsInUse = new Set<string>()
-    const machinesInUse = new Set<string>()
-    for (const session of payload.data?.sessions ?? []) {
-      if (session.gym?.id) gymsInUse.add(session.gym.id)
-      for (const machine of session.machines ?? []) {
-        const id = machine.machineId ?? machine.machine_id
-        if (id) machinesInUse.add(id)
-      }
-    }
-    referencedGyms.value = gymsInUse
-    referencedMachines.value = machinesInUse
-  } catch {
-    message.value = { type: 'warning', text: 'Runtime references are unavailable.' }
-  }
 }
 
 function openCreate() {
@@ -476,10 +452,6 @@ async function resolveToExisting() {
 }
 
 function requestLifecycleToggle(record: RecordDraft) {
-  if (!record.deleted && isReferenced(record)) {
-    message.value = { type: 'error', text: 'Referenced records cannot be deleted.' }
-    return
-  }
   if (!record.deleted && isGym(record) && record.main) {
     message.value = { type: 'error', text: 'Main Gym cannot be deleted.' }
     return
@@ -602,12 +574,6 @@ async function saveMainGym(record: GymRecord) {
   } finally {
     saving.value = false
   }
-}
-
-function isReferenced(record: RecordDraft): boolean {
-  return isMachine(record)
-    ? referencedMachines.value.has(record.machine_id)
-    : referencedGyms.value.has(record.gym_id)
 }
 
 function recordId(record: RecordDraft): string {
