@@ -12,6 +12,7 @@ export type ApplicationMetadata = {
 }
 
 export const applications: readonly ApplicationMetadata[]
+export const applicationRoutes: Record<ApplicationMetadata['id'], ApplicationMetadata['route']>
 export const drawerApplications: readonly ApplicationMetadata[]
 export const portalCardApplications: readonly ApplicationMetadata[]
 export function getApplicationMetadata(id: ApplicationMetadata['id']): ApplicationMetadata | null
