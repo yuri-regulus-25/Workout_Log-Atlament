@@ -1,5 +1,6 @@
 import { createServer, request as httpRequest } from 'node:http'
 import { Socket } from 'node:net'
+import { hostedApplications, portalApplication } from '../application-registry.mjs'
 
 const port = 5173
 
@@ -12,60 +13,20 @@ const routes = [
       port: 5180,
     },
   },
-  {
-    name: 'dashboard',
-    prefixes: ['/dashboard'],
+  ...hostedApplications.map((application) => ({
+    name: application.id,
+    prefixes: [application.route.replace(/\/$/, '')],
     target: {
       host: '127.0.0.1',
-      port: 5175,
+      port: application.devPort,
     },
-  },
-  {
-    name: 'workouts',
-    prefixes: ['/workouts'],
-    target: {
-      host: '127.0.0.1',
-      port: 5176,
-    },
-  },
-  {
-    name: 'machines',
-    prefixes: ['/machines'],
-    target: {
-      host: '127.0.0.1',
-      port: 5177,
-    },
-  },
-  {
-    name: 'analytics',
-    prefixes: ['/analytics'],
-    target: {
-      host: '127.0.0.1',
-      port: 5178,
-    },
-  },
-  {
-    name: 'settings',
-    prefixes: ['/settings'],
-    target: {
-      host: '127.0.0.1',
-      port: 5179,
-    },
-  },
-  {
-    name: 'maintenance',
-    prefixes: ['/maintenance'],
-    target: {
-      host: '127.0.0.1',
-      port: 5181,
-    },
-  },
+  })),
   {
     name: 'portal',
     prefixes: ['/'],
     target: {
       host: '127.0.0.1',
-      port: 5174,
+      port: portalApplication.devPort,
     },
   },
 ]

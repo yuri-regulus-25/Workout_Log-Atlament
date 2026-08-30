@@ -31,8 +31,9 @@ Copy 対象:
 - Machines を `dist/machines/` へ配置する。
 - Analytics を `dist/analytics/` へ配置する。
 - Settings を `dist/settings/` へ配置する。
+- Master Maintenance を `dist/maintenance/` へ配置する。
 
-現行 MPA build script が認識するのは、これら既存 application のみである。
+現行 MPA build script が認識するのは、`tools/application-registry.mjs` に定義された Portal と既存 hosted application のみである。
 
 ## Development Runtime
 
@@ -46,6 +47,7 @@ Development では local Node runtime と gateway を使用する。
 - Analytics: `127.0.0.1:5178`
 - Settings: `127.0.0.1:5179`
 - Development Runtime API: `127.0.0.1:5180`
+- Master Maintenance: `127.0.0.1:5181`
 
 Node development runtime は repository の `data/master` と `data/workouts` を直接読み取り、local development 用に AF-compatible read API を公開する。Credential storage、GitHub sync、configuration write、native shell lifecycle は実装しない。
 

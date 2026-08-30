@@ -65,6 +65,7 @@ workouts
 machines
 analytics
 settings
+maintenance
 ```
 
 Portal は `frontend/index.html` から serve される。
