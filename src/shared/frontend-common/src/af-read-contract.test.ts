@@ -82,6 +82,12 @@ describe('AF read contract refinement', () => {
       ...baseStatus,
       components: { ...baseStatus.components, credential: 'unavailable' },
     }).state).toBe('degraded')
+    expect(deriveApplicationReadiness({
+      ...baseStatus,
+      application: { status: 'degraded', degraded: true, acceptingRequests: true },
+      components: { ...baseStatus.components, credential: 'unavailable', runtimeData: 'unavailable' },
+      requiredActions: ['RUNTIME_DATA_REQUIRED'],
+    }).state).toBe('unavailable')
     expect(deriveApplicationReadiness(baseStatus).state).toBe('ready')
   })
 
@@ -121,6 +127,12 @@ describe('AF read contract refinement', () => {
       requiredActions: [],
       unavailableComponents: ['credential'],
       degradedComponents: [],
+    }, {
+      currentAvailable: true,
+      currentGeneratedAt: '2026-08-28T00:00:00Z',
+      latestRemoteRetrieval: 'skipped',
+      latestValidation: 'skipped',
+      fallbackActive: false,
     })).toMatchObject({
       normalApplicationsAvailable: true,
       recoveryActions: ['update-credential', 'open-settings', 'reload'],
@@ -136,6 +148,23 @@ describe('AF read contract refinement', () => {
       normalApplicationsAvailable: false,
       setupAvailable: false,
       recoveryActions: ['retry-sync', 'open-settings', 'reload'],
+      fallbackActive: false,
+    })
+
+    expect(deriveApplicationAccessPolicy({
+      state: 'unavailable',
+      requiredActions: ['RUNTIME_DATA_REQUIRED'],
+      unavailableComponents: ['credential', 'runtimeData'],
+      degradedComponents: [],
+    }, {
+      currentAvailable: false,
+      currentGeneratedAt: null,
+      latestRemoteRetrieval: 'skipped',
+      latestValidation: 'skipped',
+      fallbackActive: false,
+    })).toMatchObject({
+      normalApplicationsAvailable: false,
+      recoveryActions: ['retry-sync', 'update-credential', 'open-settings', 'reload'],
       fallbackActive: false,
     })
   })
