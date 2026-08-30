@@ -56,6 +56,8 @@ class AndroidLocalhostServer(
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
+    private data class MasterWriteTarget(val type: String, val path: String, val commitMessage: String)
+    private data class GithubContent(val revision: String, val content: String)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
     private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
     private class AfException(val code: String, override val message: String) : Exception(message)
@@ -181,10 +183,13 @@ class AndroidLocalhostServer(
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
             method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
             method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
+            method == "GET" && route == "/master-write/unresolved" -> sendUnresolvedMasterReferences(output)
+            method == "GET" && route.startsWith("/master-write/documents/") -> sendMasterDocument(output, route.substringAfterLast('/'))
             method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
             method == "POST" && route == "/configuration" -> sendConfigurationUpdate(output, body)
             method == "POST" && route == "/credential" -> sendCredentialUpdate(output, body)
             method == "POST" && route == "/sync" -> sendManualSync(output)
+            method == "PUT" && route.startsWith("/master-write/documents/") -> sendMasterDocumentWrite(output, route.substringAfterLast('/'), body)
             method == "POST" && route == "/shutdown" -> sendShutdown(output)
             else -> sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
         }
@@ -432,6 +437,327 @@ class AndroidLocalhostServer(
                 .put("rawJsonWriteAllowed", false)
                 .put("genericGitWriteAllowed", false))
             .toString(2)
+    }
+
+    private fun sendMasterDocument(output: OutputStream, type: String) {
+        val response = masterDocumentResponse(type)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun masterDocumentResponse(type: String): SyncResponse {
+        val target = masterWriteTarget(type)
+            ?: return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master write target is not allowed."), false)
+        val environment = masterWriteEnvironment()
+        if (environment.first != null) return environment.first!!
+        val configuration = environment.second!!
+        val repository = configuration.getJSONObject("repository")
+        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
+
+        return try {
+            val content = readGithubContentFile(configuration, fullPath)
+            SyncResponse(200, okJson(JSONObject()
+                .put("type", target.type)
+                .put("path", target.path)
+                .put("revision", content.revision)
+                .put("content", content.content)
+                .toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun sendMasterDocumentWrite(output: OutputStream, type: String, body: String) {
+        val response = masterDocumentWriteResponse(type, body)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun masterDocumentWriteResponse(type: String, body: String): SyncResponse {
+        val target = masterWriteTarget(type)
+            ?: return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master write target is not allowed."), false)
+        val request = try {
+            if (body.isBlank()) JSONObject() else JSONObject(body)
+        } catch (_: Exception) {
+            return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master document write request is invalid."), false)
+        }
+        val expectedRevision = request.optString("expectedRevision").trim()
+        val nextContent = request.optString("content")
+        if (expectedRevision.isBlank() || nextContent.isBlank()) {
+            return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master document write request is invalid."), false)
+        }
+
+        val environment = masterWriteEnvironment()
+        if (environment.first != null) return environment.first!!
+        val configuration = environment.second!!
+        val repository = configuration.getJSONObject("repository")
+        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
+
+        return try {
+            val current = readGithubContentFile(configuration, fullPath)
+            if (current.revision != expectedRevision) {
+                return SyncResponse(409, failJson("MASTER_WRITE_CONFLICT", "Master document revision has changed."), false)
+            }
+
+            val other = readGithubContentFile(configuration, combineRemote(repository.optString("rootPath"), otherMasterWriteTarget(type).path))
+            val validationErrors = validateMasterWrite(type, current.content, nextContent, other.content)
+            if (validationErrors.length() > 0) {
+                return SyncResponse(400, responseJson(false, "null", validationErrors), false)
+            }
+
+            val savedRevision = writeGithubContentFile(configuration, fullPath, current.revision, nextContent, target.commitMessage)
+            SyncResponse(200, okJson(JSONObject()
+                .put("type", target.type)
+                .put("path", target.path)
+                .put("revision", savedRevision)
+                .toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun sendUnresolvedMasterReferences(output: OutputStream) {
+        val response = unresolvedMasterReferencesResponse()
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun unresolvedMasterReferencesResponse(): SyncResponse {
+        return try {
+            val build = fetchRuntimeWorkoutData()
+            if (build.errors.length() > 0) {
+                return SyncResponse(400, responseJson(false, "null", build.errors), false)
+            }
+            SyncResponse(200, okJson(buildUnresolvedReferences(build.warnings).toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun masterWriteEnvironment(): Pair<SyncResponse?, JSONObject?> {
+        if (configurationStatus() != "available") {
+            return Pair(SyncResponse(400, failJson("CONFIG_REQUIRED", "Configuration is required."), false), null)
+        }
+        if (credentialState() != "available" || readCredentialToken().isNullOrBlank()) {
+            return Pair(SyncResponse(401, failJson("CREDENTIAL_REQUIRED", "Credential is required."), false), null)
+        }
+        return Pair(null, JSONObject(loadConfigurationJson()))
+    }
+
+    private fun masterWriteTarget(type: String): MasterWriteTarget? = when (type) {
+        "MACHINE_MASTER" -> MasterWriteTarget("MACHINE_MASTER", "master/machines.json", "Update machine master")
+        "GYM_MASTER" -> MasterWriteTarget("GYM_MASTER", "master/gyms.json", "Update gym master")
+        else -> null
+    }
+
+    private fun otherMasterWriteTarget(type: String): MasterWriteTarget =
+        if (type == "MACHINE_MASTER") masterWriteTarget("GYM_MASTER")!! else masterWriteTarget("MACHINE_MASTER")!!
+
+    private fun readGithubContentFile(configuration: JSONObject, path: String): GithubContent {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
+        val response = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, path))
+        val revision = response.optString("sha").trim()
+        val encoded = response.optString("content").replace("\\s".toRegex(), "")
+        if (revision.isBlank() || encoded.isBlank()) {
+            throw AfException("GITHUB_SERVER_ERROR", "GitHub contents response is invalid.")
+        }
+        val content = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
+        return GithubContent(revision, content)
+    }
+
+    private fun writeGithubContentFile(configuration: JSONObject, path: String, revision: String, content: String, commitMessage: String): String {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val payload = JSONObject()
+            .put("message", commitMessage)
+            .put("content", Base64.encodeToString(content.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP))
+            .put("sha", revision)
+            .put("branch", ref)
+            .toString()
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "PUT"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            doOutput = true
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            setRequestProperty("Content-Type", "application/json")
+            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        return try {
+            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                if (status == 409) throw AfException("MASTER_WRITE_CONFLICT", "Master document revision has changed.")
+                throw mapGithubError(status, path)
+            }
+            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            val savedRevision = JSONObject(response).optJSONObject("content")?.optString("sha").orEmpty().trim()
+            if (savedRevision.isBlank()) throw AfException("MASTER_WRITE_FAILED", "GitHub write result is ambiguous.")
+            savedRevision
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun validateMasterWrite(type: String, currentContent: String, nextContent: String, otherContent: String): JSONArray {
+        val errors = JSONArray()
+        if (type == "GYM_MASTER") validateMainGymTransition(currentContent, nextContent, errors)
+        if (errors.length() > 0) return errors
+
+        if (type == "MACHINE_MASTER") {
+            validateMachineMasterDocument(nextContent, errors)
+            validateGymMasterDocument(otherContent, errors)
+        } else {
+            validateMachineMasterDocument(otherContent, errors)
+            validateGymMasterDocument(nextContent, errors)
+        }
+        return errors
+    }
+
+    private fun validateMainGymTransition(currentContent: String, nextContent: String, errors: JSONArray) {
+        val current = runCatching { JSONObject(currentContent).optJSONArray("gyms") ?: JSONArray() }.getOrElse { JSONArray() }
+        val next = runCatching { JSONObject(nextContent).optJSONArray("gyms") ?: JSONArray() }.getOrElse { JSONArray() }
+        val hadMain = (0 until current.length()).any { current.optJSONObject(it)?.optBoolean("main", false) == true }
+        val hasMain = (0 until next.length()).any { next.optJSONObject(it)?.optBoolean("main", false) == true }
+        if (hadMain && !hasMain) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Configured Main Gym cannot be cleared."))
+        }
+    }
+
+    private fun validateMachineMasterDocument(content: String, errors: JSONArray) {
+        try {
+            val root = JSONObject(content)
+            val machines = root.optJSONArray("machines")
+            if (root.optInt("schema_version", Int.MIN_VALUE) != 1 || machines == null) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master contract is invalid."))
+                return
+            }
+
+            val ids = mutableSetOf<String>()
+            for (index in 0 until machines.length()) {
+                val machine = machines.optJSONObject(index)
+                val id = machine?.optString("machine_id").orEmpty().trim()
+                val name = machine?.optString("name").orEmpty().trim()
+                val bodyPart = machine?.optString("body_part").orEmpty().trim()
+                val aliases = machine?.optJSONArray("aliases")
+                if (id.isBlank() || name.isBlank() || bodyPart !in bodyParts || aliases == null || !hasBoolean(machine, "active") || !hasBoolean(machine, "deleted")) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master item is invalid."))
+                    return
+                }
+                if (!ids.add(id)) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate machine_id: $id."))
+                    return
+                }
+                for (sourceId in readStringList(machine?.optJSONArray("source_ids"))) {
+                    if (!ids.add(sourceId)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate machine source_id: $sourceId."))
+                        return
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master JSON is invalid."))
+        }
+    }
+
+    private fun validateGymMasterDocument(content: String, errors: JSONArray) {
+        try {
+            val root = JSONObject(content)
+            val gyms = root.optJSONArray("gyms")
+            if (root.optInt("schema_version", Int.MIN_VALUE) != 1 || gyms == null) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master contract is invalid."))
+                return
+            }
+
+            val ids = mutableSetOf<String>()
+            var mainGymCount = 0
+            for (index in 0 until gyms.length()) {
+                val gym = gyms.optJSONObject(index)
+                val id = gym?.optString("gym_id").orEmpty().trim()
+                val name = gym?.optString("name").orEmpty().trim()
+                if (id.isBlank() || name.isBlank() || !hasBoolean(gym, "active") || !hasBoolean(gym, "deleted") || !hasBoolean(gym, "main")) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master item is invalid."))
+                    return
+                }
+                if (!ids.add(id)) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate gym_id: $id."))
+                    return
+                }
+                for (sourceId in readStringList(gym?.optJSONArray("source_ids"))) {
+                    if (!ids.add(sourceId)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate gym source_id: $sourceId."))
+                        return
+                    }
+                }
+                if (gym?.optBoolean("main", false) == true) {
+                    mainGymCount++
+                    if (!gym.optBoolean("active", false) || gym.optBoolean("deleted", false)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Main gym must be active and not logically deleted."))
+                        return
+                    }
+                }
+            }
+
+            if (mainGymCount > 1) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master must have at most one main gym."))
+            }
+        } catch (_: Exception) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master JSON is invalid."))
+        }
+    }
+
+    private fun hasBoolean(document: JSONObject?, name: String): Boolean =
+        document?.has(name) == true && document.get(name) is Boolean
+
+    private fun buildUnresolvedReferences(warnings: JSONArray): JSONArray {
+        val groups = linkedMapOf<String, JSONObject>()
+        for (index in 0 until warnings.length()) {
+            val warning = warnings.optJSONObject(index) ?: continue
+            val code = warning.optString("code")
+            if (code != "MASTER_REFERENCE_MISSING" && code != "MASTER_REFERENCE_DELETED") continue
+            val kind = warning.optString("referenceKind")
+            val referenceId = warning.optString("originalId")
+            if (referenceId.isBlank()) continue
+            val type = if (kind == "gym") "GYM_MASTER" else "MACHINE_MASTER"
+            val key = "$type:$referenceId"
+            val group = groups.getOrPut(key) {
+                JSONObject()
+                    .put("type", type)
+                    .put("referenceId", referenceId)
+                    .put("resolutionState", warning.optString("resolutionState"))
+                    .put("affectedWorkouts", JSONArray())
+            }
+            group.getJSONArray("affectedWorkouts").put(JSONObject()
+                .put("filePath", warning.optString("filePath"))
+                .put("line", if (warning.isNull("line")) JSONObject.NULL else warning.opt("line"))
+                .put("message", warning.optString("message")))
+        }
+        val result = JSONArray()
+        groups.values.forEach(result::put)
+        return result
+    }
+
+    private fun masterWriteStatus(code: String): Int = when (code) {
+        "MASTER_WRITE_CONFLICT" -> 409
+        "GITHUB_UNAUTHORIZED" -> 401
+        "GITHUB_FORBIDDEN" -> 403
+        "GITHUB_RESOURCE_NOT_FOUND" -> 404
+        "GITHUB_RATE_LIMIT" -> 429
+        "GITHUB_TIMEOUT", "GITHUB_CONNECTION_FAILED" -> 503
+        "GITHUB_SERVER_ERROR", "MASTER_WRITE_FAILED" -> 500
+        else -> 400
     }
 
     private fun sendConfigurationUpdate(output: OutputStream, updateJson: String) {
@@ -1298,7 +1624,7 @@ class AndroidLocalhostServer(
         401 -> AfException("GITHUB_UNAUTHORIZED", "GitHub token is unauthorized.")
         403 -> AfException("GITHUB_FORBIDDEN", "GitHub access is forbidden.")
         404 -> AfException("GITHUB_RESOURCE_NOT_FOUND", "GitHub resource not found: $path.")
-        429 -> AfException("GITHUB_RATE_LIMITED", "GitHub rate limit reached.")
+        429 -> AfException("GITHUB_RATE_LIMIT", "GitHub rate limit reached.")
         else -> AfException("GITHUB_CONNECTION_FAILED", "GitHub server error: HTTP $status.")
     }
 
