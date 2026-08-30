@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web'
 import {
   initializeAppNavigation,
   pageTransitionClassName,
+  deriveApplicationAccessPolicy,
   getAfStatus,
   getConfiguration,
   getCredentialStatus,
@@ -12,6 +13,8 @@ import {
   type AfConfiguration,
   type AfError,
   type AfStatus,
+  type ApplicationAccessPolicy,
+  type ApplicationRecoveryAction,
   type CredentialStatus,
   type ResourceConfiguration,
   type TimeoutConfiguration,
@@ -25,6 +28,11 @@ import {
   resolveCredentialLimitDate,
   type CredentialExpiryPreset,
 } from './credential-expiry'
+import {
+  buildSetupSteps,
+  isSetupReady,
+  type SetupStep,
+} from './setup-assistant'
 
 const resourceTypes = ['WORKOUT', 'MACHINE_MASTER', 'GYM_MASTER'] as const
 const resourceKinds = ['file', 'directory'] as const
@@ -42,6 +50,7 @@ const statusLabels: Record<string, string> = {
   running: '実行中',
   starting: '起動中',
   stopping: '終了中',
+  unconfigured: '初期設定未完了',
   unavailable: '利用不可',
   unknown: '不明',
 }
@@ -82,6 +91,16 @@ function App() {
 
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
+  const accessPolicy = createMemo(() => {
+    const currentStatus = status()
+    return currentStatus ? deriveApplicationAccessPolicy(currentStatus.readiness, currentStatus.runtimeData) : null
+  })
+  const setupSteps = createMemo(() => buildSetupSteps({
+    status: status(),
+    credential: credential(),
+    repository: repository(),
+    resources: resources(),
+  }))
 
   onMount(() => {
     const navigation = initializeAppNavigation({
@@ -264,6 +283,20 @@ function App() {
     setResources((current) => current.filter((_, itemIndex) => itemIndex !== index))
   }
 
+  function runSetupStep(step: SetupStep) {
+    if (step.action === 'repository') return void saveRepository()
+    if (step.action === 'credential') return void saveCredential()
+    if (step.action === 'resources') return void saveResources()
+    return void syncNow()
+  }
+
+  function runRecoveryAction(action: ApplicationRecoveryAction) {
+    if (action === 'retry-sync') return void syncNow()
+    if (action === 'reload') return void refresh()
+    if (action === 'update-credential') return void saveCredential()
+    scrollToTop()
+  }
+
   return (
     <main ref={shellElement} class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
@@ -289,6 +322,15 @@ function App() {
       </Show>
 
       <section class="settings-grid">
+        <SetupAssistant
+          status={status()}
+          accessPolicy={accessPolicy()}
+          steps={setupSteps()}
+          canOperate={canOperate()}
+          onRunStep={runSetupStep}
+          onRunRecovery={runRecoveryAction}
+        />
+
         <StatusSection status={status()} credential={credential()} />
 
         <section class="panel">
@@ -448,6 +490,94 @@ function App() {
   )
 }
 
+function SetupAssistant(props: {
+  status: AfStatus | null
+  accessPolicy: ApplicationAccessPolicy | null
+  steps: SetupStep[]
+  canOperate: boolean
+  onRunStep: (step: SetupStep) => void
+  onRunRecovery: (action: ApplicationRecoveryAction) => void
+}) {
+  const ready = createMemo(() => isSetupReady(props.status))
+  const readiness = createMemo(() => props.status?.readiness)
+
+  return (
+    <section class={`panel wide-panel setup-panel ${ready() ? 'ready' : 'active'}`}>
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-progress-check" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Initial Setup</p>
+            <h2>セットアップ</h2>
+          </div>
+        </div>
+        <span class={`status-pill ${readiness()?.state ?? 'unknown'}`}>{displayStatus(readiness()?.state)}</span>
+      </div>
+      <div class="setup-summary">
+        <strong>{ready() ? '通常利用できます。' : '通常利用に必要な設定を完了してください。'}</strong>
+        <span>
+          {ready()
+            ? 'Main Gymは任意設定のため、未設定でもセットアップ完了です。'
+            : '完了判定はApplication Readinessで行います。'}
+        </span>
+      </div>
+      <div class="setup-steps">
+        <For each={props.steps}>
+          {(step) => (
+            <article class={`setup-step ${step.state}`}>
+              <div class="setup-step__status" aria-hidden="true">
+                <i class={`mdi ${step.state === 'complete' ? 'mdi-check' : step.state === 'current' ? 'mdi-arrow-right' : 'mdi-lock-outline'}`} />
+              </div>
+              <div class="setup-step__body">
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+              <button
+                class="secondary-action"
+                type="button"
+                disabled={!props.canOperate || step.state === 'blocked'}
+                onClick={() => props.onRunStep(step)}
+              >
+                {step.actionLabel}
+              </button>
+            </article>
+          )}
+        </For>
+      </div>
+      <Show when={(readiness()?.requiredActions.length ?? 0) > 0}>
+        <div class="required-actions">
+          <p class="eyebrow">Required Actions</p>
+          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{action}</span>}</For>
+        </div>
+      </Show>
+      <Show when={props.accessPolicy && (props.accessPolicy.fallbackActive || props.accessPolicy.recoveryActions.length > 0) ? props.accessPolicy : null}>
+        {(policy) => (
+          <div class="recovery-actions">
+            <p class="eyebrow">Recovery</p>
+            <Show when={policy().fallbackActive}>
+              <span class="recovery-note">Remote取得に失敗しています。既存Runtime Dataで継続利用中です。</span>
+            </Show>
+            <div class="button-row">
+              <For each={policy().recoveryActions}>
+                {(action) => (
+                  <button
+                    class="secondary-action"
+                    type="button"
+                    disabled={!props.canOperate}
+                    onClick={() => props.onRunRecovery(action)}
+                  >
+                    {recoveryActionLabel(action)}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
+      </Show>
+    </section>
+  )
+}
+
 function StatusSection(props: { status: AfStatus | null; credential: CredentialStatus | null }) {
   const githubStatus = createMemo(() => resolveGithubStatus(props.status, props.credential))
 
@@ -474,6 +604,8 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
               : '-'
           }
         />
+        <StatusItem label="Readiness" value={displayStatus(props.status?.readiness?.state)} />
+        <StatusItem label="Runtime Data" value={runtimeDataSummary(props.status)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>
@@ -522,6 +654,21 @@ function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): 
 function displayStatus(value?: string) {
   if (!value) return '-'
   return statusLabels[value] ?? value
+}
+
+function recoveryActionLabel(action: ApplicationRecoveryAction) {
+  if (action === 'complete-setup') return 'Setup'
+  if (action === 'update-credential') return 'Credential'
+  if (action === 'retry-sync') return 'Retry Sync'
+  if (action === 'reload') return 'Reload'
+  return 'Settings'
+}
+
+function runtimeDataSummary(status: AfStatus | null) {
+  if (!status) return '-'
+  if (status.runtimeData.fallbackActive) return `Fallback / ${status.runtimeData.currentGeneratedAt ?? '-'}`
+  if (status.runtimeData.currentAvailable) return `Available / ${status.runtimeData.currentGeneratedAt ?? '-'}`
+  return displayStatus(status.components.runtimeData)
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

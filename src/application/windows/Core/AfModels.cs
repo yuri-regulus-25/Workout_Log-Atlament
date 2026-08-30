@@ -133,7 +133,8 @@ public sealed record RuntimeDataFile(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("generatedAt")] DateTimeOffset GeneratedAt,
     [property: JsonPropertyName("sessions")] IReadOnlyList<WorkoutSession> Sessions,
-    [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors);
+    [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors,
+    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings);
 
 public sealed record WorkoutSession(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -147,15 +148,22 @@ public sealed record WorkoutSession(
 
 public sealed record Gym(
     [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("short_name")] string? ShortName);
+    [property: JsonPropertyName("name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name,
+    [property: JsonPropertyName("short_name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ShortName,
+    [property: JsonPropertyName("resolution")] MasterReferenceResolution Resolution);
 
 public sealed record WorkoutMachine(
     [property: JsonPropertyName("machine_id")] string MachineId,
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("body_part")] string BodyPart,
+    [property: JsonPropertyName("name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name,
+    [property: JsonPropertyName("body_part"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? BodyPart,
+    [property: JsonPropertyName("resolution")] MasterReferenceResolution Resolution,
     [property: JsonPropertyName("sets")] IReadOnlyList<MachineSet> Sets,
     [property: JsonPropertyName("notes")] IReadOnlyList<string> Notes);
+
+public sealed record MasterReferenceResolution(
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("originalId")] string OriginalId,
+    [property: JsonPropertyName("resolvedId")] string? ResolvedId);
 
 public sealed record MachineSet(
     [property: JsonPropertyName("set")] int Set,
@@ -176,6 +184,8 @@ public sealed record SessionCondition(
 
 public sealed record AfStatus(
     [property: JsonPropertyName("versions")] StatusVersions Versions,
+    [property: JsonPropertyName("readiness")] ApplicationReadiness Readiness,
+    [property: JsonPropertyName("runtimeData")] RuntimeDataStatusFacts RuntimeData,
     [property: JsonPropertyName("application")] ApplicationState Application,
     [property: JsonPropertyName("operations")] OperationStateSnapshot Operations,
     [property: JsonPropertyName("components")] ComponentStateSnapshot Components,
@@ -196,6 +206,19 @@ public sealed record WindowsPackageVersion(
 public sealed record AndroidPackageVersion(
     [property: JsonPropertyName("versionName")] string VersionName,
     [property: JsonPropertyName("versionCode")] int VersionCode);
+
+public sealed record ApplicationReadiness(
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("requiredActions")] IReadOnlyList<string> RequiredActions,
+    [property: JsonPropertyName("unavailableComponents")] IReadOnlyList<string> UnavailableComponents,
+    [property: JsonPropertyName("degradedComponents")] IReadOnlyList<string> DegradedComponents);
+
+public sealed record RuntimeDataStatusFacts(
+    [property: JsonPropertyName("currentAvailable")] bool CurrentAvailable,
+    [property: JsonPropertyName("currentGeneratedAt")] DateTimeOffset? CurrentGeneratedAt,
+    [property: JsonPropertyName("latestRemoteRetrieval")] string LatestRemoteRetrieval,
+    [property: JsonPropertyName("latestValidation")] string LatestValidation,
+    [property: JsonPropertyName("fallbackActive")] bool FallbackActive);
 
 public sealed record ApplicationState(
     [property: JsonPropertyName("status")] string Status,
@@ -230,4 +253,5 @@ public sealed record RuntimeSourceFile(string Path, string Content);
 public sealed record RuntimeBuildResult(
     IReadOnlyList<WorkoutSession> Sessions,
     IReadOnlyList<AfError> Errors,
+    IReadOnlyList<RuntimeWarning> Warnings,
     bool TechnicalInvalid);

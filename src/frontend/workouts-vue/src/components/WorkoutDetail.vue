@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
-  formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
+  getGymDisplayName,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
   getMachineVolume,
   getSessionSetCount,
   getSessionVolume,
@@ -28,7 +30,7 @@ defineProps<{
     <div v-else class="detail-stack">
       <div class="detail-title">
         <strong>{{ formatDisplayDate(session.date) }}</strong>
-        <span>{{ session.gym.name }}</span>
+        <span>{{ getGymDisplayName(session.gym) }}</span>
       </div>
 
       <dl class="detail-metrics">
@@ -49,8 +51,8 @@ defineProps<{
       <article v-for="machine in session.machines" :key="machine.machine_id" class="machine-card">
         <div class="machine-header">
           <div>
-            <h3>{{ machine.name }}</h3>
-            <p>{{ formatBodyPart(machine.body_part) }}</p>
+            <h3>{{ getMachineDisplayName(machine) }}</h3>
+            <p>{{ getMachineBodyPartDisplay(machine) }}</p>
           </div>
           <strong>{{ formatTotalWeight(getMachineVolume(machine)) }}</strong>
         </div>

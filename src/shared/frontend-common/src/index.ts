@@ -7,9 +7,22 @@ export type AfError = {
   recoverable: boolean
 }
 
+export type RuntimeWarning = {
+  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED'
+  referenceKind: 'gym' | 'machine'
+  resolutionState: 'missing' | 'deleted'
+  originalId: string
+  resolvedId: string | null
+  sessionId: string
+  filePath?: string
+  line?: number | null
+  message: string
+}
+
 export type AfResponse<T> = {
   success: boolean
   errors: AfError[]
+  warnings?: RuntimeWarning[]
   data: T | null
 }
 
@@ -31,6 +44,8 @@ export type AfStatus = {
       }
     }
   }
+  readiness: ApplicationReadiness
+  runtimeData: RuntimeDataStatusFacts
   application: {
     status: string
     degraded: boolean
@@ -59,6 +74,142 @@ export type AfStatus = {
     }
   }
   requiredActions: string[]
+}
+
+export type ApplicationReadinessState = 'unconfigured' | 'ready' | 'degraded' | 'unavailable'
+
+export type ApplicationReadiness = {
+  state: ApplicationReadinessState
+  requiredActions: string[]
+  unavailableComponents: string[]
+  degradedComponents: string[]
+}
+
+export type RuntimeDataStatusFacts = {
+  currentAvailable: boolean
+  currentGeneratedAt: string | null
+  latestRemoteRetrieval: 'unknown' | 'succeeded' | 'failed' | 'skipped'
+  latestValidation: 'unknown' | 'succeeded' | 'failed' | 'skipped'
+  fallbackActive: boolean
+}
+
+export type ApplicationRecoveryAction = 'open-settings' | 'complete-setup' | 'update-credential' | 'retry-sync' | 'reload'
+
+export type ApplicationAccessPolicy = {
+  state: ApplicationReadinessState
+  normalApplicationsAvailable: boolean
+  settingsAvailable: boolean
+  setupAvailable: boolean
+  recoveryActions: ApplicationRecoveryAction[]
+  restrictedComponents: string[]
+  fallbackActive: boolean
+}
+
+export function deriveApplicationReadiness(status: Pick<AfStatus, 'application' | 'components' | 'requiredActions'>): ApplicationReadiness {
+  const requiredActions = Array.from(new Set(status.requiredActions)).sort()
+  const unavailableComponents = [
+    status.components.configuration === 'unavailable' ? 'configuration' : '',
+    status.components.credential === 'unavailable' ? 'credential' : '',
+    status.components.runtimeData === 'unavailable' ? 'runtimeData' : '',
+  ].filter(Boolean)
+  const degradedComponents = [
+    status.components.github === 'degraded' ? 'github' : '',
+    status.components.runtimeData === 'degraded' ? 'runtimeData' : '',
+  ].filter(Boolean)
+
+  if (requiredActions.includes('CONFIGURATION_REQUIRED') || requiredActions.includes('CREDENTIAL_REQUIRED')) {
+    return { state: 'unconfigured', requiredActions, unavailableComponents, degradedComponents }
+  }
+
+  if (!status.application.acceptingRequests || status.application.status === 'failed' || unavailableComponents.includes('runtimeData')) {
+    return { state: 'unavailable', requiredActions, unavailableComponents, degradedComponents }
+  }
+
+  if (status.application.status === 'degraded' || degradedComponents.length > 0 || unavailableComponents.length > 0 || requiredActions.length > 0) {
+    return { state: 'degraded', requiredActions, unavailableComponents, degradedComponents }
+  }
+
+  return { state: 'ready', requiredActions, unavailableComponents: [], degradedComponents: [] }
+}
+
+export function deriveApplicationAccessPolicy(
+  readiness: ApplicationReadiness,
+  runtimeData?: RuntimeDataStatusFacts,
+): ApplicationAccessPolicy {
+  const restrictedComponents = Array.from(new Set([
+    ...readiness.unavailableComponents,
+    ...readiness.degradedComponents,
+  ])).sort()
+  const fallbackActive = runtimeData?.fallbackActive ?? (
+    readiness.state === 'degraded' &&
+    readiness.degradedComponents.includes('github') &&
+    !readiness.unavailableComponents.includes('runtimeData')
+  )
+
+  if (readiness.state === 'unconfigured') {
+    return {
+      state: readiness.state,
+      normalApplicationsAvailable: false,
+      settingsAvailable: true,
+      setupAvailable: true,
+      recoveryActions: uniqueActions(['open-settings', 'complete-setup']),
+      restrictedComponents,
+      fallbackActive: false,
+    }
+  }
+
+  if (readiness.state === 'unavailable') {
+    return {
+      state: readiness.state,
+      normalApplicationsAvailable: false,
+      settingsAvailable: true,
+      setupAvailable: false,
+      recoveryActions: recoveryActionsFor(readiness),
+      restrictedComponents,
+      fallbackActive: false,
+    }
+  }
+
+  if (readiness.state === 'degraded') {
+    return {
+      state: readiness.state,
+      normalApplicationsAvailable: true,
+      settingsAvailable: true,
+      setupAvailable: false,
+      recoveryActions: recoveryActionsFor(readiness),
+      restrictedComponents,
+      fallbackActive,
+    }
+  }
+
+  return {
+    state: readiness.state,
+    normalApplicationsAvailable: true,
+    settingsAvailable: true,
+    setupAvailable: false,
+    recoveryActions: [],
+    restrictedComponents: [],
+    fallbackActive: false,
+  }
+}
+
+function recoveryActionsFor(readiness: ApplicationReadiness): ApplicationRecoveryAction[] {
+  const actions: ApplicationRecoveryAction[] = []
+  if (readiness.requiredActions.includes('RUNTIME_DATA_REQUIRED') || readiness.unavailableComponents.includes('runtimeData')) {
+    actions.push('retry-sync')
+  }
+  if (readiness.unavailableComponents.includes('credential')) {
+    actions.push('update-credential')
+  }
+  if (readiness.degradedComponents.includes('github')) {
+    actions.push('retry-sync')
+  }
+  actions.push('open-settings', 'reload')
+  return uniqueActions(actions)
+}
+
+function uniqueActions(actions: ApplicationRecoveryAction[]): ApplicationRecoveryAction[] {
+  return Array.from(new Set(actions))
 }
 
 export type RepositoryConfiguration = {

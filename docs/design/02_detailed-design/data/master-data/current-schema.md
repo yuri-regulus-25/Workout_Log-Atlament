@@ -90,11 +90,11 @@ Master write pipeline では AF が同等の whole-master validation を最終�
 - `new-write` mode: referenced Gym/Machine は `active:true` かつ `deleted:false` でなければ invalid。
 - Missing Gym/Machine reference は mode に関係なく invalid。
 
-Historical display/resolution では `resolveHistoricalWorkoutReferences` / `resolveHistoricalWorkoutReferenceReport` を使用し、reference を `active`、`inactive`、`deleted`、`missing` に分類する。`inactive` と `deleted` は historical reference として解決済みであり、`missing` だけが unresolved reference である。Workout Log SoT はこの分類のために rewrite しない。`source_ids` で解決した場合、raw Workout value は保持され、runtime/frontend には canonical Master ID と display fields が返る。
+Historical reference report では `resolveHistoricalWorkoutReferences` / `resolveHistoricalWorkoutReferenceReport` を使用し、reference を `active`、`inactive`、`deleted`、`missing` に分類する。Runtime resolution では `deleted` と `missing` を warnings として扱い、Workout Log SoT はこの分類のために rewrite しない。`source_ids` で解決した場合、raw Workout value は保持され、runtime/frontend には canonical Master ID と display fields が返る。
 
 Main Gym dependent weight/volume metrics は `getMainGym*Metric` family を使用する。Main Gym context が configured の場合だけ `available` state として Main Gym sessions に限定した値を返す。Main Gym が未設定の場合は `unconfigured`、constraint 違反の場合は `invalid` を返し、比較可能な kg 値を作らない。
 
-`active:false` および `deleted:true` は historical Workout reference として valid である。現行 code は ID により record を resolve し、既存 log で使用される inactive/deleted record を missing として reject しない。
+`active:false` は historical Workout reference として valid である。`deleted:true` は Master record として存在するが、Runtime resolution では `deleted` warning になり Master 由来表示値を返さない。
 
 新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
 
@@ -119,4 +119,4 @@ Master Data は Workout Data の normalize に使用される。
 - raw `gym_id` は normalized `gym.id`、`gym.name`、optional `gym.short_name` になる。
 - raw `machine_id` は normalized `machine_id`、`name`、`body_part` になる。
 
-Reference された gym または machine を resolve できない場合、その sync/load operation の Runtime Data は accept されない。
+Normalized `gym` / machine は Master reference `resolution` を持つ。Reference が `missing` または `deleted` の場合も Runtime Data は accept され、top-level `warnings` に original ID と reason を保持する。Master 由来表示値は shared display helper が `?` として投影する。

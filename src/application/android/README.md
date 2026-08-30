@@ -141,6 +141,7 @@ Settings画面では次を確認する。
 - Repository設定を保存できる。
 - GitHub tokenを保存できる。
 - `Sync immediately` でRuntime Dataを取得できる。
+- Master Reference が missing/deleted の Workout は warning 付き Runtime Data として保持される。
 - Remote同期失敗時、保存済みRuntime DataがあればLocal Fallbackで継続する。
 - 再起動後、Startup Syncが実行される。
 - status上でConfiguration / Credential / Runtime Dataが利用可能になる。

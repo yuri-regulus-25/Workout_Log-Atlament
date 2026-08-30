@@ -83,6 +83,22 @@ async function respondStatus(response) {
 
   writeJson(response, 200, ok({
     versions,
+    readiness: readinessJson({
+      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
+      acceptingRequests: true,
+      configurationStatus: 'unknown',
+      credentialStatus: 'unknown',
+      githubStatus: 'unknown',
+      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
+      requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
+    }),
+    runtimeData: {
+      currentAvailable: runtimeAvailable,
+      currentGeneratedAt: null,
+      latestRemoteRetrieval: 'skipped',
+      latestValidation: runtimeAvailable ? 'succeeded' : 'failed',
+      fallbackActive: false,
+    },
     application: {
       status: runtimeAvailable ? 'ready' : 'degraded',
       degraded: !runtimeAvailable,
@@ -111,7 +127,36 @@ async function respondStatus(response) {
       },
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
-  }, runtime.errors))
+  }, runtime.errors, runtime.warnings))
+}
+
+function readinessJson(status) {
+  const requiredActions = Array.from(new Set(status.requiredActions)).sort()
+  const unavailableComponents = [
+    status.configurationStatus === 'unavailable' ? 'configuration' : '',
+    status.credentialStatus === 'unavailable' ? 'credential' : '',
+    status.runtimeDataStatus === 'unavailable' ? 'runtimeData' : '',
+  ].filter(Boolean)
+  const degradedComponents = [
+    status.githubStatus === 'degraded' ? 'github' : '',
+    status.runtimeDataStatus === 'degraded' ? 'runtimeData' : '',
+  ].filter(Boolean)
+
+  let state = 'ready'
+  if (requiredActions.includes('CONFIGURATION_REQUIRED') || requiredActions.includes('CREDENTIAL_REQUIRED')) {
+    state = 'unconfigured'
+  } else if (!status.acceptingRequests || status.applicationStatus === 'failed' || unavailableComponents.includes('runtimeData')) {
+    state = 'unavailable'
+  } else if (status.applicationStatus === 'degraded' || degradedComponents.length > 0 || unavailableComponents.length > 0 || requiredActions.length > 0) {
+    state = 'degraded'
+  }
+
+  return {
+    state,
+    requiredActions,
+    unavailableComponents,
+    degradedComponents,
+  }
 }
 
 async function loadVersions() {
@@ -139,7 +184,7 @@ async function respondRuntimeWorkouts(response) {
     return
   }
 
-  writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors))
+  writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors, runtime.warnings))
 }
 
 async function respondMasterDocument(request, response, path) {
@@ -219,27 +264,20 @@ async function respondMasterWriteBoundary(response) {
 async function respondUnresolvedMasterReferences(response) {
   const runtime = await loadRuntimeWorkoutData()
   const groups = new Map()
-  for (const error of runtime.errors) {
-    const machinePrefix = 'Unknown machine_id: '
-    const gymPrefix = 'Unknown gym_id: '
-    const isMachine = error.message.includes(machinePrefix)
-    const isGym = error.message.includes(gymPrefix)
-    if (!isMachine && !isGym) continue
-
-    const prefix = isMachine ? machinePrefix : gymPrefix
-    const referenceId = error.message.slice(error.message.indexOf(prefix) + prefix.length).trim().replace(/\.$/, '')
+  for (const warning of runtime.warnings) {
+    const isMachine = warning.referenceKind === 'machine'
     const type = isMachine ? 'MACHINE_MASTER' : 'GYM_MASTER'
+    const referenceId = warning.originalId
     const key = `${type}:${referenceId}`
     const affected = groups.get(key) ?? {
       type,
       referenceId,
       affectedWorkouts: [],
     }
-    const location = error.message.split(': ')[0] ?? ''
     affected.affectedWorkouts.push({
-      filePath: location,
-      line: null,
-      message: error.message,
+      filePath: warning.filePath ?? '',
+      line: warning.line ?? null,
+      message: warning.message,
     })
     groups.set(key, affected)
   }
@@ -298,6 +336,7 @@ async function loadRuntimeWorkoutData() {
       success: false,
       sessions: [],
       errors: masterResult.issues.map(toAfError),
+      warnings: [],
     }
   }
 
@@ -309,6 +348,7 @@ async function loadRuntimeWorkoutData() {
       success: false,
       sessions: [],
       errors,
+      warnings: workoutResult.warnings ?? [],
     }
   }
 
@@ -316,6 +356,7 @@ async function loadRuntimeWorkoutData() {
     success: true,
     sessions: workoutResult.sessions,
     errors,
+    warnings: workoutResult.warnings ?? [],
   }
 }
 
@@ -349,10 +390,11 @@ async function collectWorkoutFiles(directory) {
   return files.flat().sort()
 }
 
-function ok(data, errors = []) {
+function ok(data, errors = [], warnings = []) {
   return {
     success: true,
     errors,
+    warnings,
     data,
   }
 }
@@ -361,6 +403,7 @@ function fail(code, message, recoverable) {
   return {
     success: false,
     errors: [{ code, message, recoverable }],
+    warnings: [],
     data: null,
   }
 }
@@ -369,6 +412,7 @@ function failMany(errors) {
   return {
     success: false,
     errors,
+    warnings: [],
     data: null,
   }
 }

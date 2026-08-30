@@ -54,11 +54,10 @@ Write sequence:
 1. 対象 content を GET して current SHA を取得する。
 2. Request の `expectedRevision` と current SHA を比較する。
 3. 対象 document と相手側 Master document を合わせて whole-master validation する。
-4. Runtime Data が参照中の Gym/Machine を logical delete しないことを確認する。
-5. Fixed commit message、base64 content、current SHA、configured branch で PUT する。
+4. Fixed commit message、base64 content、current SHA、configured branch で PUT する。
 
 Stale SHA は PUT せず `MASTER_WRITE_CONFLICT` を返す。GitHub PUT が 409 を返した場合も同じ code へ map する。PUT response に new SHA がない場合は `MASTER_WRITE_FAILED` とする。
 
-Unresolved Master resolution も Master write として処理する。既存 record への解決は `source_ids` の追加、新規 record への解決は通常 Create flow であり、Workout Data file は GitHub に PUT しない。
+Runtime Data が参照中の Gym/Machine の logical delete は Master write として許可する。参照側は次回 sync/runtime rebuild で unresolved warning として扱い、Workout Data file は書き換えない。Unresolved Master resolution も Master write として処理する。既存 record への解決は `source_ids` の追加、新規 record への解決は通常 Create flow であり、Workout Data file は GitHub に PUT しない。
 
 Master write は Production Repository を直接触る integration test を前提にしない。Windows unit/integration tests は fake `HttpMessageHandler` で GitHub status、network error、timeout、ambiguous write response を再現する。

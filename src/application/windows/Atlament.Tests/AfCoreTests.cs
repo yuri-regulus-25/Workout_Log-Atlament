@@ -49,7 +49,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public void MasterResolveFailureRejectsRuntimeBuild()
+    public void MasterResolveFailureKeepsRuntimeBuildWithWarnings()
     {
         var builder = new RuntimeDataBuilder();
         var files = new[]
@@ -62,9 +62,10 @@ public sealed class AfCoreTests
         var result = builder.Build(files, MachineMaster, GymMaster);
 
         Assert.False(result.TechnicalInvalid);
-        Assert.Empty(result.Sessions);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterMachineNotFound);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterGymNotFound);
+        Assert.Empty(result.Errors);
+        Assert.Equal(3, result.Sessions.Count);
+        Assert.Contains(result.Warnings, warning => warning.Code == "MASTER_REFERENCE_MISSING" && warning.ReferenceKind == "machine" && warning.OriginalId == "missing-machine");
+        Assert.Contains(result.Warnings, warning => warning.Code == "MASTER_REFERENCE_MISSING" && warning.ReferenceKind == "gym" && warning.OriginalId == "missing-gym");
     }
 
     [Fact]
@@ -109,15 +110,15 @@ public sealed class AfCoreTests
                 "valid",
                 "2026-08-24",
                 "complete",
-                new Gym("known-gym", "Known Gym", "KG"),
+                new Gym("known-gym", "Known Gym", "KG", new MasterReferenceResolution("resolved", "known-gym", "known-gym")),
                 null,
                 new[]
                 {
-                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new MasterReferenceResolution("resolved", "known-machine", "known-machine"), new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
 
-            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false));
+            var saveErrors = store.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false));
             var (loaded, loadErrors) = store.LoadCurrent();
 
             Assert.Empty(saveErrors);
@@ -125,6 +126,7 @@ public sealed class AfCoreTests
             Assert.NotNull(loaded);
             Assert.Equal("valid", Assert.Single(loaded!.Sessions).SessionId);
             Assert.Empty(loaded.Errors);
+            Assert.Empty(loaded.Warnings);
         }
         finally
         {
@@ -381,6 +383,9 @@ public sealed class AfCoreTests
             Assert.Contains("CONFIGURATION_REQUIRED", status.Data!.RequiredActions);
             Assert.Contains("CREDENTIAL_REQUIRED", status.Data.RequiredActions);
             Assert.Contains("RUNTIME_DATA_REQUIRED", status.Data.RequiredActions);
+            Assert.Equal("unconfigured", status.Data.Readiness.State);
+            Assert.Contains("configuration", status.Data.Readiness.UnavailableComponents);
+            Assert.Contains("credential", status.Data.Readiness.UnavailableComponents);
         }
         finally
         {
@@ -455,6 +460,10 @@ public sealed class AfCoreTests
             var afterCredential = application.GetStatus().Data!;
             Assert.Equal(200, credential.StatusCode);
             Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterCredential.RequiredActions);
+            Assert.Equal("unavailable", afterCredential.Readiness.State);
+            Assert.DoesNotContain("CONFIGURATION_REQUIRED", afterCredential.Readiness.RequiredActions);
+            Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterCredential.Readiness.RequiredActions);
+            Assert.Contains("RUNTIME_DATA_REQUIRED", afterCredential.Readiness.RequiredActions);
 
             var sync = await application.ManualSyncAsync(CancellationToken.None);
             var afterSync = application.GetStatus().Data!;
@@ -462,6 +471,178 @@ public sealed class AfCoreTests
             Assert.DoesNotContain("RUNTIME_DATA_REQUIRED", afterSync.RequiredActions);
             Assert.Empty(afterSync.RequiredActions);
             Assert.Equal("ready", afterSync.Application.Status);
+            Assert.Equal("ready", afterSync.Readiness.State);
+            Assert.Empty(afterSync.Readiness.RequiredActions);
+            Assert.Empty(afterSync.Readiness.UnavailableComponents);
+            Assert.True(afterSync.RuntimeData.CurrentAvailable);
+            Assert.NotNull(afterSync.RuntimeData.CurrentGeneratedAt);
+            Assert.Equal("succeeded", afterSync.RuntimeData.LatestRemoteRetrieval);
+            Assert.Equal("succeeded", afterSync.RuntimeData.LatestValidation);
+            Assert.False(afterSync.RuntimeData.FallbackActive);
+
+            var expiredCredential = application.UpdateCredential(new CredentialUpdate("github-token", "2026-01-01"));
+            var afterExpiredCredential = application.GetStatus().Data!;
+            Assert.Equal(200, expiredCredential.StatusCode);
+            Assert.DoesNotContain("CREDENTIAL_REQUIRED", afterExpiredCredential.Readiness.RequiredActions);
+            Assert.Equal("degraded", afterExpiredCredential.Readiness.State);
+            Assert.Contains("credential", afterExpiredCredential.Readiness.UnavailableComponents);
+            Assert.DoesNotContain("runtimeData", afterExpiredCredential.Readiness.UnavailableComponents);
+            Assert.True(afterExpiredCredential.RuntimeData.CurrentAvailable);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UnresolvedMasterReferencesDoNotDegradeRuntimeHealth()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse("""
+                        [
+                          { "path": "data/workouts/2026-08-24.json", "type": "file" }
+                        ]
+                        """);
+                }
+
+                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "missing-gym", "missing-machine").Content);
+                }
+
+                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(MachineMaster.Content);
+                }
+
+                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(GymMaster.Content);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var status = application.GetStatus().Data!;
+            var runtime = application.GetRuntimeWorkouts();
+
+            Assert.True(runtime.Success);
+            Assert.Empty(runtime.Errors);
+            Assert.NotEmpty(runtime.Warnings);
+            Assert.Equal("ready", status.Readiness.State);
+            Assert.False(status.Application.Degraded);
+            Assert.False(status.RuntimeData.FallbackActive);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RemoteFailureWithCurrentRuntimeDataPublishesFallbackStatus()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var failRemote = false;
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                if (failRemote)
+                {
+                    throw new HttpRequestException("offline");
+                }
+
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse("""
+                        [
+                          { "path": "data/workouts/2026-08-24.json", "type": "file" }
+                        ]
+                        """);
+                }
+
+                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
+                }
+
+                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(MachineMaster.Content);
+                }
+
+                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(GymMaster.Content);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var paths = new WindowsPathProvider(root);
+            var configurationStore = new ConfigurationStore(paths);
+            Assert.Empty(configurationStore.Save(Configuration("data")));
+            var credentialStore = new CredentialStore(paths);
+            Assert.Equal("available", credentialStore.Save(new CredentialUpdate("github-token", "2026-12-31")).State);
+            var application = new AtlamentApplication(
+                configurationStore,
+                credentialStore,
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            await application.StartAsync(CancellationToken.None);
+            await WaitForStartupAsync(application);
+            var ready = application.GetStatus().Data!;
+            Assert.Equal("ready", ready.Readiness.State);
+            Assert.False(ready.RuntimeData.FallbackActive);
+
+            failRemote = true;
+            var fallback = await application.ManualSyncAsync(CancellationToken.None);
+            var status = application.GetStatus().Data!;
+
+            Assert.Equal(200, fallback.StatusCode);
+            Assert.False(fallback.Response.Success);
+            Assert.True(fallback.Response.Data!.Degraded);
+            Assert.Equal("degraded", status.Readiness.State);
+            Assert.True(status.RuntimeData.CurrentAvailable);
+            Assert.Equal("failed", status.RuntimeData.LatestRemoteRetrieval);
+            Assert.Equal("skipped", status.RuntimeData.LatestValidation);
+            Assert.True(status.RuntimeData.FallbackActive);
         }
         finally
         {
@@ -883,7 +1064,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public async Task MasterDocumentWriteRejectsDeletingReferencedMachineBeforeGithubWrite()
+    public async Task MasterDocumentWriteAllowsDeletingReferencedMachine()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
         try
@@ -900,16 +1081,48 @@ public sealed class AfCoreTests
                 "valid",
                 "2026-08-24",
                 "complete",
-                new Gym("known-gym", "Known Gym", "KG"),
+                new Gym("known-gym", "Known Gym", "KG", new MasterReferenceResolution("resolved", "known-gym", "known-gym")),
                 null,
                 new[]
                 {
-                    new WorkoutMachine("known-machine", "Known Machine", "chest", new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
+                    new WorkoutMachine("known-machine", "Known Machine", "chest", new MasterReferenceResolution("resolved", "known-machine", "known-machine"), new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
 
-            var http = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+            var requests = new List<HttpRequestMessage>();
+            var http = new RecordingAsyncHttpMessageHandler(async request =>
+            {
+                requests.Add(CloneRequest(request));
+                if (request.Method == HttpMethod.Get)
+                {
+                    if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                    {
+                        return JsonResponse($$"""
+                            {
+                              "sha": "gym-sha",
+                              "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"known-gym\",\"name\":\"Known Gym\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                            }
+                            """);
+                    }
+
+                    return JsonResponse($$"""
+                        {
+                          "sha": "current-sha",
+                          "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
+                        }
+                        """);
+                }
+
+                _ = await request.Content!.ReadAsStringAsync();
+                return JsonResponse("""
+                    {
+                      "content": {
+                        "sha": "saved-sha"
+                      }
+                    }
+                    """);
+            });
             var application = new AtlamentApplication(
                 configurationStore,
                 credentialStore,
@@ -921,8 +1134,8 @@ public sealed class AfCoreTests
 
             await application.StartAsync(CancellationToken.None);
             await WaitForStartupAsync(application);
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), false)));
-            http.RequestedUrls.Clear();
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
+            requests.Clear();
 
             var result = await application.WriteMasterDocumentAsync(
                 "MACHINE_MASTER",
@@ -931,10 +1144,11 @@ public sealed class AfCoreTests
                     "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":false,\"deleted\":true}]}"),
                 CancellationToken.None);
 
-            Assert.Equal(400, result.StatusCode);
-            Assert.False(result.Response.Success);
-            Assert.Contains(result.Response.Errors, error => error.Code == AfErrorCodes.MasterWriteInvalid);
-            Assert.Empty(http.RequestedUrls);
+            Assert.Equal(200, result.StatusCode);
+            Assert.True(result.Response.Success);
+            Assert.Equal("saved-sha", result.Response.Data!.Revision);
+            Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Get, HttpMethod.Put }, requests.Select(request => request.Method));
+            Assert.Contains(requests, request => request.Method == HttpMethod.Put && request.RequestUri!.AbsoluteUri.Contains("/contents/data/master/machines.json", StringComparison.Ordinal));
         }
         finally
         {

@@ -37,7 +37,7 @@ Inventory target:
 
 ### Common Envelope
 
-`success`, `errors`, and `data` are consumed by shared clients and Settings error handling. `errors[].code`, `errors[].message`, and `errors[].recoverable` are retained as the shared error contract.
+`success`, `errors`, `warnings`, and `data` are consumed by shared clients and Settings error handling. `errors[].code`, `errors[].message`, and `errors[].recoverable` are retained as the shared error contract. Runtime Master reference warnings use `warnings[]` so unresolved Master references do not imply request failure or fallback.
 
 ### Status Data
 
@@ -48,6 +48,8 @@ Retained fields:
 - `versions.nativePackages.windows.version`: Settings display for Windows package version.
 - `versions.nativePackages.android.versionName`: Settings display for Android package version.
 - `versions.nativePackages.android.versionCode`: Settings display for Android package code.
+- `readiness.state`, `readiness.requiredActions`, `readiness.unavailableComponents`, `readiness.degradedComponents`: shared setup/readiness/runtime state contract for frontend gating.
+- `runtimeData.currentAvailable`, `runtimeData.currentGeneratedAt`, `runtimeData.latestRemoteRetrieval`, `runtimeData.latestValidation`, `runtimeData.fallbackActive`: minimum runtime-data freshness and fallback facts for shared recovery policy.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
 - `operations.manualSync`: Portal manual sync state display.
@@ -95,3 +97,17 @@ The legacy `/api/common/*` alias is removed from producers and documentation. Un
 ## Phase4 Read Information Extension
 
 `GET /api/v1/common/status` now publishes native package metadata under `versions.nativePackages`. This adds only package version information already held by platform build metadata or the shipped `version.json`; component status and data freshness fields were not added because Phase3 status already represents the existing component states and no lightweight cross-platform last-successful-sync persistence exists yet.
+
+## Phase8-A Readiness Model
+
+`GET /api/v1/common/status` now publishes `readiness` as the shared application readiness model. Frontends should consume this domain state instead of deriving setup/runtime failure independently. Main Gym unconfigured state is intentionally excluded from readiness and remains a feature-level optional context.
+
+## Phase8-C Access and Recovery
+
+Shared frontend clients derive Application Access Policy from `readiness`. `unconfigured` blocks normal applications while keeping Settings/Setup recovery available. `ready` allows normal applications. `degraded` keeps normal applications available and restricts only affected components. `unavailable` blocks unsafe normal application access and exposes recovery actions such as Settings, credential update, retry sync, or reload.
+
+Configured credential failures are runtime failures rather than setup absence. Remote fetch failure with existing Runtime Data remains a degraded fallback state: GitHub is degraded, Runtime Data stays available, and normal applications may continue using the previous successful data.
+
+## Phase8-D Unified Status and Credential Lifecycle
+
+Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, and active fallback. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.

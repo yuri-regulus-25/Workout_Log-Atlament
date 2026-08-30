@@ -22,6 +22,7 @@ import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.security.KeyStore
 import java.time.LocalDate
 import java.util.concurrent.ExecutorService
@@ -34,20 +35,31 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
+internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted: Boolean): String = when {
+    resolvedId.isNullOrBlank() -> "missing"
+    deleted -> "deleted"
+    else -> "resolved"
+}
+
+internal fun androidMasterReferenceWarningCode(deleted: Boolean): String =
+    if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
+
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
 ) : Closeable {
     private data class RuntimeSourceFile(val path: String, val content: String)
     private data class SyncResponse(val status: Int, val body: String, val success: Boolean)
-    private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray)
+    private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray, val warnings: JSONArray)
     private data class RuntimeFetchedResources(
         val workoutFiles: List<RuntimeSourceFile>,
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
-    private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String)
-    private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
+    private data class MasterWriteTarget(val type: String, val path: String, val commitMessage: String)
+    private data class GithubContent(val revision: String, val content: String)
+    private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
+    private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
     private class AfException(val code: String, override val message: String) : Exception(message)
     private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
@@ -68,6 +80,8 @@ class AndroidLocalhostServer(
     @Volatile private var credentialUpdateStatus = "idle"
     @Volatile private var shutdownStatus = "idle"
     @Volatile private var githubComponentStatus = "unknown"
+    @Volatile private var latestRemoteRetrieval = "unknown"
+    @Volatile private var latestValidation = "unknown"
     private val running = AtomicBoolean(false)
     private val shutdownRequested = AtomicBoolean(false)
     private val acceptExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -169,10 +183,13 @@ class AndroidLocalhostServer(
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
             method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
             method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
+            method == "GET" && route == "/master-write/unresolved" -> sendUnresolvedMasterReferences(output)
+            method == "GET" && route.startsWith("/master-write/documents/") -> sendMasterDocument(output, route.substringAfterLast('/'))
             method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
             method == "POST" && route == "/configuration" -> sendConfigurationUpdate(output, body)
             method == "POST" && route == "/credential" -> sendCredentialUpdate(output, body)
             method == "POST" && route == "/sync" -> sendManualSync(output)
+            method == "PUT" && route.startsWith("/master-write/documents/") -> sendMasterDocumentWrite(output, route.substringAfterLast('/'), body)
             method == "POST" && route == "/shutdown" -> sendShutdown(output)
             else -> sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
         }
@@ -256,6 +273,8 @@ class AndroidLocalhostServer(
                 }
               }
             },
+            "readiness": ${readinessJson()},
+            "runtimeData": ${runtimeDataFactsJson()},
             "application": {
               "status": "${applicationStatus()}",
               "degraded": ${applicationStatus() == "degraded"},
@@ -287,6 +306,21 @@ class AndroidLocalhostServer(
         }
     }.getOrDefault(JSONObject())
 
+    private fun runtimeDataFactsJson(): String {
+        val currentAvailable = runtimeDataStatus() == "available"
+        val generatedAt = if (runtimeDataFile.exists()) "\"${Instant.ofEpochMilli(runtimeDataFile.lastModified())}\"" else "null"
+        val fallbackActive = (latestRemoteRetrieval == "failed" || latestValidation == "failed") && currentAvailable
+        return """
+            {
+              "currentAvailable": $currentAvailable,
+              "currentGeneratedAt": $generatedAt,
+              "latestRemoteRetrieval": "$latestRemoteRetrieval",
+              "latestValidation": "$latestValidation",
+              "fallbackActive": $fallbackActive
+            }
+        """.trimIndent()
+    }
+
     private fun hostingStatusJson(): String = """
         {
           "portal": "${assetStatus("frontend/index.html")}",
@@ -314,13 +348,37 @@ class AndroidLocalhostServer(
     private fun applicationStatus(): String =
         if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
 
+    private fun readinessJson(): String {
+        val requiredActions = requiredActionNames().sorted()
+        val unavailableComponents = mutableListOf<String>()
+        if (configurationStatus() == "unavailable") unavailableComponents.add("configuration")
+        if (credentialComponentStatus() == "unavailable") unavailableComponents.add("credential")
+        if (runtimeDataStatus() == "unavailable") unavailableComponents.add("runtimeData")
+        val degradedComponents = mutableListOf<String>()
+        if (githubStatus() == "degraded") degradedComponents.add("github")
+        val state = when {
+            requiredActions.contains("CONFIGURATION_REQUIRED") || requiredActions.contains("CREDENTIAL_REQUIRED") -> "unconfigured"
+            unavailableComponents.contains("runtimeData") -> "unavailable"
+            applicationStatus() == "degraded" || degradedComponents.isNotEmpty() || unavailableComponents.isNotEmpty() || requiredActions.isNotEmpty() -> "degraded"
+            else -> "ready"
+        }
+        return """
+            {
+              "state": "$state",
+              "requiredActions": ${requiredActions.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "unavailableComponents": ${unavailableComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "degradedComponents": ${degradedComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }}
+            }
+        """.trimIndent()
+    }
+
     private fun requiredActionsJson(): String =
         requiredActionNames().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
 
     private fun requiredActionNames(): List<String> {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
         if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
-        if (credentialState() != "available") actions.add(0, "CREDENTIAL_REQUIRED")
+        if (!hasEncryptedCredential()) actions.add(0, "CREDENTIAL_REQUIRED")
         if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
         return actions
     }
@@ -379,6 +437,327 @@ class AndroidLocalhostServer(
                 .put("rawJsonWriteAllowed", false)
                 .put("genericGitWriteAllowed", false))
             .toString(2)
+    }
+
+    private fun sendMasterDocument(output: OutputStream, type: String) {
+        val response = masterDocumentResponse(type)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun masterDocumentResponse(type: String): SyncResponse {
+        val target = masterWriteTarget(type)
+            ?: return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master write target is not allowed."), false)
+        val environment = masterWriteEnvironment()
+        if (environment.first != null) return environment.first!!
+        val configuration = environment.second!!
+        val repository = configuration.getJSONObject("repository")
+        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
+
+        return try {
+            val content = readGithubContentFile(configuration, fullPath)
+            SyncResponse(200, okJson(JSONObject()
+                .put("type", target.type)
+                .put("path", target.path)
+                .put("revision", content.revision)
+                .put("content", content.content)
+                .toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun sendMasterDocumentWrite(output: OutputStream, type: String, body: String) {
+        val response = masterDocumentWriteResponse(type, body)
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun masterDocumentWriteResponse(type: String, body: String): SyncResponse {
+        val target = masterWriteTarget(type)
+            ?: return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master write target is not allowed."), false)
+        val request = try {
+            if (body.isBlank()) JSONObject() else JSONObject(body)
+        } catch (_: Exception) {
+            return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master document write request is invalid."), false)
+        }
+        val expectedRevision = request.optString("expectedRevision").trim()
+        val nextContent = request.optString("content")
+        if (expectedRevision.isBlank() || nextContent.isBlank()) {
+            return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master document write request is invalid."), false)
+        }
+
+        val environment = masterWriteEnvironment()
+        if (environment.first != null) return environment.first!!
+        val configuration = environment.second!!
+        val repository = configuration.getJSONObject("repository")
+        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
+
+        return try {
+            val current = readGithubContentFile(configuration, fullPath)
+            if (current.revision != expectedRevision) {
+                return SyncResponse(409, failJson("MASTER_WRITE_CONFLICT", "Master document revision has changed."), false)
+            }
+
+            val other = readGithubContentFile(configuration, combineRemote(repository.optString("rootPath"), otherMasterWriteTarget(type).path))
+            val validationErrors = validateMasterWrite(type, current.content, nextContent, other.content)
+            if (validationErrors.length() > 0) {
+                return SyncResponse(400, responseJson(false, "null", validationErrors), false)
+            }
+
+            val savedRevision = writeGithubContentFile(configuration, fullPath, current.revision, nextContent, target.commitMessage)
+            SyncResponse(200, okJson(JSONObject()
+                .put("type", target.type)
+                .put("path", target.path)
+                .put("revision", savedRevision)
+                .toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun sendUnresolvedMasterReferences(output: OutputStream) {
+        val response = unresolvedMasterReferencesResponse()
+        sendJson(output, response.status, response.body)
+    }
+
+    private fun unresolvedMasterReferencesResponse(): SyncResponse {
+        return try {
+            val build = fetchRuntimeWorkoutData()
+            if (build.errors.length() > 0) {
+                return SyncResponse(400, responseJson(false, "null", build.errors), false)
+            }
+            SyncResponse(200, okJson(buildUnresolvedReferences(build.warnings).toString(2)), true)
+        } catch (ex: AfException) {
+            SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
+        } catch (_: Exception) {
+            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+        }
+    }
+
+    private fun masterWriteEnvironment(): Pair<SyncResponse?, JSONObject?> {
+        if (configurationStatus() != "available") {
+            return Pair(SyncResponse(400, failJson("CONFIG_REQUIRED", "Configuration is required."), false), null)
+        }
+        if (credentialState() != "available" || readCredentialToken().isNullOrBlank()) {
+            return Pair(SyncResponse(401, failJson("CREDENTIAL_REQUIRED", "Credential is required."), false), null)
+        }
+        return Pair(null, JSONObject(loadConfigurationJson()))
+    }
+
+    private fun masterWriteTarget(type: String): MasterWriteTarget? = when (type) {
+        "MACHINE_MASTER" -> MasterWriteTarget("MACHINE_MASTER", "master/machines.json", "Update machine master")
+        "GYM_MASTER" -> MasterWriteTarget("GYM_MASTER", "master/gyms.json", "Update gym master")
+        else -> null
+    }
+
+    private fun otherMasterWriteTarget(type: String): MasterWriteTarget =
+        if (type == "MACHINE_MASTER") masterWriteTarget("GYM_MASTER")!! else masterWriteTarget("MACHINE_MASTER")!!
+
+    private fun readGithubContentFile(configuration: JSONObject, path: String): GithubContent {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
+        val response = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, path))
+        val revision = response.optString("sha").trim()
+        val encoded = response.optString("content").replace("\\s".toRegex(), "")
+        if (revision.isBlank() || encoded.isBlank()) {
+            throw AfException("GITHUB_SERVER_ERROR", "GitHub contents response is invalid.")
+        }
+        val content = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
+        return GithubContent(revision, content)
+    }
+
+    private fun writeGithubContentFile(configuration: JSONObject, path: String, revision: String, content: String, commitMessage: String): String {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val payload = JSONObject()
+            .put("message", commitMessage)
+            .put("content", Base64.encodeToString(content.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP))
+            .put("sha", revision)
+            .put("branch", ref)
+            .toString()
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "PUT"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            doOutput = true
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            setRequestProperty("Content-Type", "application/json")
+            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        return try {
+            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                if (status == 409) throw AfException("MASTER_WRITE_CONFLICT", "Master document revision has changed.")
+                throw mapGithubError(status, path)
+            }
+            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            val savedRevision = JSONObject(response).optJSONObject("content")?.optString("sha").orEmpty().trim()
+            if (savedRevision.isBlank()) throw AfException("MASTER_WRITE_FAILED", "GitHub write result is ambiguous.")
+            savedRevision
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun validateMasterWrite(type: String, currentContent: String, nextContent: String, otherContent: String): JSONArray {
+        val errors = JSONArray()
+        if (type == "GYM_MASTER") validateMainGymTransition(currentContent, nextContent, errors)
+        if (errors.length() > 0) return errors
+
+        if (type == "MACHINE_MASTER") {
+            validateMachineMasterDocument(nextContent, errors)
+            validateGymMasterDocument(otherContent, errors)
+        } else {
+            validateMachineMasterDocument(otherContent, errors)
+            validateGymMasterDocument(nextContent, errors)
+        }
+        return errors
+    }
+
+    private fun validateMainGymTransition(currentContent: String, nextContent: String, errors: JSONArray) {
+        val current = runCatching { JSONObject(currentContent).optJSONArray("gyms") ?: JSONArray() }.getOrElse { JSONArray() }
+        val next = runCatching { JSONObject(nextContent).optJSONArray("gyms") ?: JSONArray() }.getOrElse { JSONArray() }
+        val hadMain = (0 until current.length()).any { current.optJSONObject(it)?.optBoolean("main", false) == true }
+        val hasMain = (0 until next.length()).any { next.optJSONObject(it)?.optBoolean("main", false) == true }
+        if (hadMain && !hasMain) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Configured Main Gym cannot be cleared."))
+        }
+    }
+
+    private fun validateMachineMasterDocument(content: String, errors: JSONArray) {
+        try {
+            val root = JSONObject(content)
+            val machines = root.optJSONArray("machines")
+            if (root.optInt("schema_version", Int.MIN_VALUE) != 1 || machines == null) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master contract is invalid."))
+                return
+            }
+
+            val ids = mutableSetOf<String>()
+            for (index in 0 until machines.length()) {
+                val machine = machines.optJSONObject(index)
+                val id = machine?.optString("machine_id").orEmpty().trim()
+                val name = machine?.optString("name").orEmpty().trim()
+                val bodyPart = machine?.optString("body_part").orEmpty().trim()
+                val aliases = machine?.optJSONArray("aliases")
+                if (id.isBlank() || name.isBlank() || bodyPart !in bodyParts || aliases == null || !hasBoolean(machine, "active") || !hasBoolean(machine, "deleted")) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master item is invalid."))
+                    return
+                }
+                if (!ids.add(id)) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate machine_id: $id."))
+                    return
+                }
+                for (sourceId in readStringList(machine?.optJSONArray("source_ids"))) {
+                    if (!ids.add(sourceId)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate machine source_id: $sourceId."))
+                        return
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Machine master JSON is invalid."))
+        }
+    }
+
+    private fun validateGymMasterDocument(content: String, errors: JSONArray) {
+        try {
+            val root = JSONObject(content)
+            val gyms = root.optJSONArray("gyms")
+            if (root.optInt("schema_version", Int.MIN_VALUE) != 1 || gyms == null) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master contract is invalid."))
+                return
+            }
+
+            val ids = mutableSetOf<String>()
+            var mainGymCount = 0
+            for (index in 0 until gyms.length()) {
+                val gym = gyms.optJSONObject(index)
+                val id = gym?.optString("gym_id").orEmpty().trim()
+                val name = gym?.optString("name").orEmpty().trim()
+                if (id.isBlank() || name.isBlank() || !hasBoolean(gym, "active") || !hasBoolean(gym, "deleted") || !hasBoolean(gym, "main")) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master item is invalid."))
+                    return
+                }
+                if (!ids.add(id)) {
+                    errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate gym_id: $id."))
+                    return
+                }
+                for (sourceId in readStringList(gym?.optJSONArray("source_ids"))) {
+                    if (!ids.add(sourceId)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Duplicate gym source_id: $sourceId."))
+                        return
+                    }
+                }
+                if (gym?.optBoolean("main", false) == true) {
+                    mainGymCount++
+                    if (!gym.optBoolean("active", false) || gym.optBoolean("deleted", false)) {
+                        errors.put(errorJson("MASTER_WRITE_INVALID", "Main gym must be active and not logically deleted."))
+                        return
+                    }
+                }
+            }
+
+            if (mainGymCount > 1) {
+                errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master must have at most one main gym."))
+            }
+        } catch (_: Exception) {
+            errors.put(errorJson("MASTER_WRITE_INVALID", "Gym master JSON is invalid."))
+        }
+    }
+
+    private fun hasBoolean(document: JSONObject?, name: String): Boolean =
+        document?.has(name) == true && document.get(name) is Boolean
+
+    private fun buildUnresolvedReferences(warnings: JSONArray): JSONArray {
+        val groups = linkedMapOf<String, JSONObject>()
+        for (index in 0 until warnings.length()) {
+            val warning = warnings.optJSONObject(index) ?: continue
+            val code = warning.optString("code")
+            if (code != "MASTER_REFERENCE_MISSING" && code != "MASTER_REFERENCE_DELETED") continue
+            val kind = warning.optString("referenceKind")
+            val referenceId = warning.optString("originalId")
+            if (referenceId.isBlank()) continue
+            val type = if (kind == "gym") "GYM_MASTER" else "MACHINE_MASTER"
+            val key = "$type:$referenceId"
+            val group = groups.getOrPut(key) {
+                JSONObject()
+                    .put("type", type)
+                    .put("referenceId", referenceId)
+                    .put("resolutionState", warning.optString("resolutionState"))
+                    .put("affectedWorkouts", JSONArray())
+            }
+            group.getJSONArray("affectedWorkouts").put(JSONObject()
+                .put("filePath", warning.optString("filePath"))
+                .put("line", if (warning.isNull("line")) JSONObject.NULL else warning.opt("line"))
+                .put("message", warning.optString("message")))
+        }
+        val result = JSONArray()
+        groups.values.forEach(result::put)
+        return result
+    }
+
+    private fun masterWriteStatus(code: String): Int = when (code) {
+        "MASTER_WRITE_CONFLICT" -> 409
+        "GITHUB_UNAUTHORIZED" -> 401
+        "GITHUB_FORBIDDEN" -> 403
+        "GITHUB_RESOURCE_NOT_FOUND" -> 404
+        "GITHUB_RATE_LIMIT" -> 429
+        "GITHUB_TIMEOUT", "GITHUB_CONNECTION_FAILED" -> 503
+        "GITHUB_SERVER_ERROR", "MASTER_WRITE_FAILED" -> 500
+        else -> 400
     }
 
     private fun sendConfigurationUpdate(output: OutputStream, updateJson: String) {
@@ -498,10 +877,11 @@ class AndroidLocalhostServer(
             errorsArray("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub configuration check failed.")
         }
     }
-    private fun okJson(dataJson: String, errorsJson: String = "[]"): String = """
+    private fun okJson(dataJson: String, errorsJson: String = "[]", warningsJson: String = "[]"): String = """
         {
           "success": true,
           "errors": $errorsJson,
+          "warnings": $warningsJson,
           "data": $dataJson
         }
     """.trimIndent()
@@ -733,18 +1113,24 @@ class AndroidLocalhostServer(
             runtimeDataFile.parentFile?.mkdirs()
             runtimeDataFile.writeText(build.payload, StandardCharsets.UTF_8)
             githubComponentStatus = "available"
+            latestRemoteRetrieval = "succeeded"
+            latestValidation = "succeeded"
             writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
                   "degraded": false
                 }
-            """.trimIndent()), true)
+            """.trimIndent(), warningsJson = build.warnings.toString()), true)
         } catch (ex: AfException) {
             githubComponentStatus = "degraded"
+            latestRemoteRetrieval = "failed"
+            latestValidation = "skipped"
             writeLog("WARN", "Remote sync failed: ${ex.message}")
             failedSync(errorsArray(ex.code, ex.message))
         } catch (ex: Exception) {
             githubComponentStatus = "degraded"
+            latestRemoteRetrieval = "failed"
+            latestValidation = "skipped"
             val message = ex.message ?: "GitHub sync failed."
             writeLog("WARN", "Remote sync failed: $message")
             failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
@@ -753,6 +1139,8 @@ class AndroidLocalhostServer(
 
     private fun failedSync(errors: JSONArray): SyncResponse {
         githubComponentStatus = "degraded"
+        if (latestRemoteRetrieval == "unknown") latestRemoteRetrieval = "succeeded"
+        if (latestValidation == "unknown" || latestValidation == "succeeded") latestValidation = "failed"
         return if (runtimeDataFile.exists()) {
             // Preserve offline usability: remote sync failure becomes degraded success from the
             // user's perspective when cached runtime data is still available.
@@ -826,32 +1214,34 @@ class AndroidLocalhostServer(
         val gymMaster = fetched.gymMaster
 
         val errors = JSONArray()
+        val warnings = JSONArray()
         val machines = machineMaster?.let { parseMachineMaster(it, errors) }
         val gyms = gymMaster?.let { parseGymMaster(it, errors) }
         if (machineMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required machine master resource is missing."))
         if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
         if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors)
+        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors, warnings)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
             if (file.path.endsWith(".jsonl", ignoreCase = true)) {
                 file.content.split("\r\n", "\n").forEachIndexed { index, line ->
-                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors)?.let(sessions::put)
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors, warnings)?.let(sessions::put)
                 }
             } else if (file.path.endsWith(".json", ignoreCase = true)) {
-                buildSession(file.path, null, file.content, machines, gyms, errors)?.let(sessions::put)
+                buildSession(file.path, null, file.content, machines, gyms, errors, warnings)?.let(sessions::put)
             }
         }
 
-        if (errors.length() > 0) return RuntimeBuildResult(null, errors)
+        if (errors.length() > 0) return RuntimeBuildResult(null, errors, warnings)
 
         val payload = JSONObject()
             .put("success", true)
             .put("errors", JSONArray())
+            .put("warnings", warnings)
             .put("data", JSONObject().put("sessions", sessions))
             .toString(2)
-        return RuntimeBuildResult(payload, errors)
+        return RuntimeBuildResult(payload, errors, warnings)
     }
 
     private fun fetchConfiguredResources(configuration: JSONObject): RuntimeFetchedResources {
@@ -916,6 +1306,7 @@ class AndroidLocalhostServer(
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("machine_id").orEmpty().trim()
+                val sourceIds = readStringList(item?.optJSONArray("source_ids"))
                 val name = item?.optString("name").orEmpty().trim()
                 val bodyPart = item?.optString("body_part").orEmpty().trim()
                 val hasActive = item?.has("active") == true
@@ -927,7 +1318,15 @@ class AndroidLocalhostServer(
                     errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine_id: $id."))
                     return emptyMap()
                 }
-                result[id] = MachineMasterItem(id, name, bodyPart)
+                val record = MachineMasterItem(id, sourceIds, name, bodyPart, item?.optBoolean("deleted", false) ?: false)
+                result[id] = record
+                for (sourceId in sourceIds) {
+                    if (result.containsKey(sourceId)) {
+                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine source_id: $sourceId."))
+                        return emptyMap()
+                    }
+                    result[sourceId] = record
+                }
             }
             result
         } catch (_: Exception) {
@@ -949,6 +1348,7 @@ class AndroidLocalhostServer(
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("gym_id").orEmpty().trim()
+                val sourceIds = readStringList(item?.optJSONArray("source_ids"))
                 val name = item?.optString("name").orEmpty().trim()
                 val hasActive = item?.has("active") == true
                 if (id.isBlank() || name.isBlank() || !hasActive) {
@@ -960,7 +1360,15 @@ class AndroidLocalhostServer(
                     return emptyMap()
                 }
                 val shortName = item?.optString("short_name")?.takeIf { it.isNotBlank() }
-                result[id] = GymMasterItem(id, name, shortName)
+                val record = GymMasterItem(id, sourceIds, name, shortName, item?.optBoolean("deleted", false) ?: false)
+                result[id] = record
+                for (sourceId in sourceIds) {
+                    if (result.containsKey(sourceId)) {
+                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate gym source_id: $sourceId."))
+                        return emptyMap()
+                    }
+                    result[sourceId] = record
+                }
             }
             result
         } catch (_: Exception) {
@@ -975,7 +1383,8 @@ class AndroidLocalhostServer(
         content: String,
         machines: Map<String, MachineMasterItem>,
         gyms: Map<String, GymMasterItem>,
-        errors: JSONArray
+        errors: JSONArray,
+        warnings: JSONArray
     ): JSONObject? {
         val root = try {
             JSONObject(content)
@@ -1001,14 +1410,13 @@ class AndroidLocalhostServer(
         }
 
         val gym = gyms[gymId]
-        if (gym == null) {
-            errors.put(errorJson("MASTER_GYM_NOT_FOUND", location(filePath, line) + "Gym master is not found: $gymId."))
-            return null
+        if (gym == null || gym.deleted) {
+            warnings.put(referenceWarningJson("gym", gymId, gym?.id, gym?.deleted ?: false, sessionId, filePath, line))
         }
 
         val normalizedMachines = JSONArray()
         for (index in 0 until machineItems.length()) {
-            val normalized = buildMachine(filePath, line, machineItems.optJSONObject(index), machines, errors) ?: return null
+            val normalized = buildMachine(filePath, line, machineItems.optJSONObject(index), machines, errors, warnings, sessionId) ?: return null
             normalizedMachines.put(normalized)
         }
         if (status == "complete" && normalizedMachines.length() == 0) {
@@ -1016,12 +1424,21 @@ class AndroidLocalhostServer(
             return null
         }
 
+        val normalizedGym = JSONObject()
+            .put("id", gym?.id ?: gymId)
+            .put("resolution", referenceResolutionJson(gymId, gym?.id, gym?.deleted ?: false))
+        if (gym != null && !gym.deleted) {
+            normalizedGym
+                .put("name", gym.name)
+                .put("short_name", gym.shortName ?: JSONObject.NULL)
+        }
+
         return JSONObject()
             .put("schema_version", schemaVersion)
             .put("session_id", sessionId)
             .put("date", date)
             .put("status", status)
-            .put("gym", JSONObject().put("id", gym.id).put("name", gym.name).put("short_name", gym.shortName ?: JSONObject.NULL))
+            .put("gym", normalizedGym)
             .put("condition", root.optJSONObject("condition") ?: JSONObject.NULL)
             .put("machines", normalizedMachines)
             .put("notes", readStringArray(root.optJSONArray("notes")))
@@ -1032,7 +1449,9 @@ class AndroidLocalhostServer(
         line: Int?,
         item: JSONObject?,
         masters: Map<String, MachineMasterItem>,
-        errors: JSONArray
+        errors: JSONArray,
+        warnings: JSONArray,
+        sessionId: String
     ): JSONObject? {
         val machineId = item?.optString("machine_id").orEmpty().trim()
         val setItems = item?.optJSONArray("sets")
@@ -1042,9 +1461,8 @@ class AndroidLocalhostServer(
         }
 
         val master = masters[machineId]
-        if (master == null) {
-            errors.put(errorJson("MASTER_MACHINE_NOT_FOUND", location(filePath, line) + "Machine master is not found: $machineId."))
-            return null
+        if (master == null || master.deleted) {
+            warnings.put(referenceWarningJson("machine", machineId, master?.id, master?.deleted ?: false, sessionId, filePath, line))
         }
 
         val sets = JSONArray()
@@ -1064,12 +1482,47 @@ class AndroidLocalhostServer(
                 .put("note", set.optString("note").takeIf { it.isNotBlank() } ?: JSONObject.NULL))
         }
 
-        return JSONObject()
-            .put("machine_id", machineId)
-            .put("name", master.name)
-            .put("body_part", master.bodyPart)
+        val normalized = JSONObject()
+            .put("machine_id", master?.id ?: machineId)
+            .put("resolution", referenceResolutionJson(machineId, master?.id, master?.deleted ?: false))
             .put("sets", sets)
             .put("notes", readStringArray(item.optJSONArray("notes")))
+        if (master != null && !master.deleted) {
+            normalized
+                .put("name", master.name)
+                .put("body_part", master.bodyPart)
+        }
+        return normalized
+    }
+
+    private fun referenceResolutionJson(originalId: String, resolvedId: String?, deleted: Boolean): JSONObject {
+        return JSONObject()
+            .put("state", androidMasterReferenceResolutionState(resolvedId, deleted))
+            .put("originalId", originalId)
+            .put("resolvedId", resolvedId ?: JSONObject.NULL)
+    }
+
+    private fun referenceWarningJson(
+        referenceKind: String,
+        originalId: String,
+        resolvedId: String?,
+        deleted: Boolean,
+        sessionId: String,
+        filePath: String,
+        line: Int?
+    ): JSONObject {
+        val resolutionState = if (deleted) "deleted" else "missing"
+        val subject = if (referenceKind == "gym") "Gym" else "Machine"
+        return JSONObject()
+            .put("code", androidMasterReferenceWarningCode(deleted))
+            .put("referenceKind", referenceKind)
+            .put("resolutionState", resolutionState)
+            .put("originalId", originalId)
+            .put("resolvedId", resolvedId ?: JSONObject.NULL)
+            .put("sessionId", sessionId)
+            .put("filePath", filePath)
+            .put("line", line ?: JSONObject.NULL)
+            .put("message", "$subject master reference is $resolutionState: $originalId.")
     }
 
     private fun readStringArray(array: JSONArray?): JSONArray {
@@ -1078,6 +1531,16 @@ class AndroidLocalhostServer(
         for (index in 0 until array.length()) {
             val value = array.optString(index)
             if (value.isNotBlank()) result.put(value)
+        }
+        return result
+    }
+
+    private fun readStringList(array: JSONArray?): List<String> {
+        val result = mutableListOf<String>()
+        if (array == null) return result
+        for (index in 0 until array.length()) {
+            val value = array.optString(index).trim()
+            if (value.isNotBlank()) result.add(value)
         }
         return result
     }
@@ -1161,7 +1624,7 @@ class AndroidLocalhostServer(
         401 -> AfException("GITHUB_UNAUTHORIZED", "GitHub token is unauthorized.")
         403 -> AfException("GITHUB_FORBIDDEN", "GitHub access is forbidden.")
         404 -> AfException("GITHUB_RESOURCE_NOT_FOUND", "GitHub resource not found: $path.")
-        429 -> AfException("GITHUB_RATE_LIMITED", "GitHub rate limit reached.")
+        429 -> AfException("GITHUB_RATE_LIMIT", "GitHub rate limit reached.")
         else -> AfException("GITHUB_CONNECTION_FAILED", "GitHub server error: HTTP $status.")
     }
 
@@ -1184,6 +1647,7 @@ class AndroidLocalhostServer(
         {
           "success": false,
           "errors": ${errorsJson(code, message)},
+          "warnings": [],
           "data": null
         }
     """.trimIndent()
@@ -1192,6 +1656,7 @@ class AndroidLocalhostServer(
         {
           "success": $success,
           "errors": ${errors.toString()},
+          "warnings": [],
           "data": $dataJson
         }
     """.trimIndent()

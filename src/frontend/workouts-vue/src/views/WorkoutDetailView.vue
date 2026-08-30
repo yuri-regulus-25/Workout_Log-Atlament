@@ -5,9 +5,11 @@ import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import {
   compareWorkoutSessions,
-  formatBodyPart,
   formatDisplayDate,
   formatTotalWeight,
+  getGymDisplayName,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
   resolveWorkoutNeighborsByDate,
 } from '@workout-lab/workout-core'
 import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
@@ -164,7 +166,7 @@ function machineNames(machines: Array<{ machineName: string }>): string {
           <div class="card-heading__icon"><i class="mdi mdi-text-box-outline" aria-hidden="true" /></div>
           <div class="card-heading__text">
             <p class="eyebrow">Workout Detail</p>
-            <h2>ワークアウト詳細 - {{ session.gym.name }}</h2>
+            <h2>ワークアウト詳細 - {{ getGymDisplayName(session.gym) }}</h2>
           </div>
         </div>
       </div>
@@ -173,9 +175,9 @@ function machineNames(machines: Array<{ machineName: string }>): string {
         <article v-for="machine in session.machines" :key="machine.machine_id" class="machine-card">
           <div class="machine-header">
             <div>
-              <h3>{{ machine.name }}</h3>
+              <h3>{{ getMachineDisplayName(machine) }}</h3>
               <p>
-                {{ formatBodyPart(machine.body_part) }} ·
+                {{ getMachineBodyPartDisplay(machine) }} ·
                 {{ machine.sets.length }} {{ machine.sets.length === 1 ? "set" : "sets" }} ·
                 {{ getMachineReps(machine).toLocaleString() }} reps ·
                 {{ formatTotalWeight(getMachinePresentation(machine).volume) }}

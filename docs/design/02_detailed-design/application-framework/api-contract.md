@@ -18,6 +18,7 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 {
   "success": true,
   "errors": [],
+  "warnings": [],
   "data": {}
 }
 ```
@@ -29,6 +30,22 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
   "code": "ERROR_CODE",
   "message": "Human readable message.",
   "recoverable": true
+}
+```
+
+`warnings` entry は Runtime Data を accept しながら報告する user-actionable warning である。Master reference warning は以下を持つ。
+
+```json
+{
+  "code": "MASTER_REFERENCE_MISSING",
+  "referenceKind": "machine",
+  "resolutionState": "missing",
+  "originalId": "legacy-machine-id",
+  "resolvedId": null,
+  "sessionId": "2026-08-24-01",
+  "filePath": "data/workouts/2026/08/2026-08-24.json",
+  "line": null,
+  "message": "Machine master reference is missing: legacy-machine-id."
 }
 ```
 
@@ -60,6 +77,15 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 - `versions.nativePackages.windows.version`
 - `versions.nativePackages.android.versionName`
 - `versions.nativePackages.android.versionCode`
+- `readiness.state`: `unconfigured`, `ready`, `degraded`, or `unavailable`
+- `readiness.requiredActions`
+- `readiness.unavailableComponents`
+- `readiness.degradedComponents`
+- `runtimeData.currentAvailable`
+- `runtimeData.currentGeneratedAt`
+- `runtimeData.latestRemoteRetrieval`: `unknown`, `succeeded`, `failed`, or `skipped`
+- `runtimeData.latestValidation`: `unknown`, `succeeded`, `failed`, or `skipped`
+- `runtimeData.fallbackActive`
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`
@@ -74,6 +100,23 @@ CONFIGURATION_REQUIRED
 CREDENTIAL_REQUIRED
 RUNTIME_DATA_REQUIRED
 ```
+
+## Application Readiness
+
+Readiness は frontend が個別に初期設定/利用可能/障害状態を推測しないための共通 domain contract である。Windows、Android、Node development runtime、shared frontend client は同じ state 名を使用する。
+
+| State | Meaning |
+|---|---|
+| `unconfigured` | Repository/branch configuration または credential が不足しており、初期設定が未完了。 |
+| `ready` | 通常利用に必要な configuration、credential、Runtime Data が揃っている。 |
+| `degraded` | Runtime Data は利用可能だが、GitHub access、credential validity、fallback operation など一部 component が劣化している。 |
+| `unavailable` | 初期設定済みだが Runtime Data がなく、通常 application を安全に利用できない。 |
+
+Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。Credential が設定済みで期限切れ/無効になった場合は setup 未完了へ戻さず、credential component の runtime failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
+
+Shared frontend client は `readiness` と `runtimeData` facts から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。`runtimeData.fallbackActive` が `true` の場合は Remote取得またはvalidationに失敗したが、既存正常Runtime Dataで継続利用中である。
+
+Windows / Android の入力状態別 contract は [Runtime Contract Matrix](./runtime-contract-matrix.md) を正とする。
 
 ## Configuration Data
 
@@ -181,11 +224,11 @@ Successful write response data:
 ]
 ```
 
-Unresolved list は current remote Workout/Master files を read して build validation error から生成する。Raw Workout JSON は更新しない。
+Unresolved list は current remote Workout/Master files を read して Runtime warning から生成する。Raw Workout JSON は更新しない。
 
 Write は GitHub Contents API の current SHA と `expectedRevision` を比較してから 1 回の PUT を実行する。Mismatch は `MASTER_WRITE_CONFLICT` であり、client は再取得して表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
 
-Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine を logical delete する write も reject する。
+Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine の logical delete は許可し、参照側は次回 sync/runtime rebuild で unresolved warning として扱う。
 
 Unresolved reference を既存 Master record へ resolve する場合は、Master record の optional `source_ids` に unresolved raw ID を追加する。Runtime normalization は `machine_id` / `gym_id` に加えて `source_ids` を lookup key として扱い、normalized output は canonical Master ID を返す。新規 Master record で resolve する場合は unresolved raw ID を canonical ID として通常 Create flow を通す。
 
@@ -237,3 +280,5 @@ Sync data:
 ```
 
 `degraded` は remote sync 失敗時に local runtime data で継続した場合に `true` になる。
+
+Unresolved Master reference は `resolved` / `missing` / `deleted` を Runtime entity の `resolution` と top-level `warnings` に保持する。`missing` / `deleted` だけでは `/sync` の `degraded`、status の `fallbackActive`、readiness degradation を発火しない。Workout は Runtime Data として accept され、sets/reps/weight/count aggregate の対象に残る。

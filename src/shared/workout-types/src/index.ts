@@ -19,6 +19,28 @@ export type BodyPart =
   | 'cardio'
   | 'other'
 
+export type MasterReferenceResolutionState = 'resolved' | 'missing' | 'deleted'
+
+export type MasterReferenceKind = 'gym' | 'machine'
+
+export type MasterReferenceResolution = {
+  state: MasterReferenceResolutionState
+  originalId: string
+  resolvedId: string | null
+}
+
+export type RuntimeWarning = {
+  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED'
+  referenceKind: MasterReferenceKind
+  resolutionState: Exclude<MasterReferenceResolutionState, 'resolved'>
+  originalId: string
+  resolvedId: string | null
+  sessionId: string
+  filePath?: string
+  line?: number | null
+  message: string
+}
+
 export type RawWorkoutMachine = {
   machine_id: string
   sets: MachineSet[]
@@ -38,8 +60,9 @@ export type RawWorkoutSession = {
 
 export type WorkoutMachine = {
   machine_id: string
-  name: string
-  body_part: BodyPart
+  name?: string
+  body_part?: BodyPart
+  resolution?: MasterReferenceResolution
   sets: MachineSet[]
   notes?: string[]
 }
@@ -55,8 +78,9 @@ export type SessionCondition = {
 
 export type Gym = {
   id: string
-  name: string
+  name?: string
   short_name?: string
+  resolution?: MasterReferenceResolution
 }
 
 export type WorkoutStatus = 'complete' | 'partial'
@@ -153,5 +177,6 @@ export type WorkoutParseIssue = {
 export type WorkoutLoadResult = {
   sessions: WorkoutSession[]
   issues: WorkoutParseIssue[]
+  warnings?: RuntimeWarning[]
   masterData?: WorkoutMasterData
 }

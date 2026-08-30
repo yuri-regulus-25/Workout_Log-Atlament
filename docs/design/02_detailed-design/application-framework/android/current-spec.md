@@ -96,7 +96,15 @@ Unknown API route は現行 Android implementation では JSON 501 response を�
 
 Android は GitHub resource を fetch し、Master file と Workout file を parse し、normalized runtime data を app internal storage へ write する。
 
-現行 implementation は required raw field を validate し、Master reference を resolve し、invalid runtime build を reject する。Normalized session は `/api/v1/common/runtime/workouts` 経由で公開する。
+現行 implementation は required raw field を validate し、Master direct reference と Master `source_ids` reference を `resolved` / `missing` / `deleted` に分類する。`source_ids` で解決できた場合、normalized runtime ID は canonical Master ID になり、`resolution.originalId` は raw Workout reference ID を保持する。Invalid runtime build は reject するが、missing/deleted Master reference は Runtime warning として報告し、session は Runtime Data として accept する。Normalized session は `/api/v1/common/runtime/workouts` 経由で公開する。
+
+Runtime readiness、fallback、required actions、unresolved Master reference の共通意味論は [Runtime Contract Matrix](../runtime-contract-matrix.md) を正とする。
+
+## Master Maintenance API
+
+Android は Windows と同じ Master Maintenance endpoint を公開する。`/master-write/boundary` は fixed target と write security state を返し、`/master-write/documents/{type}` は GitHub Contents API の current SHA を revision として read/write する。Write は `expectedRevision` の一致、fixed human commit message、server-side whole-master validation、Main Gym lifecycle invariant を適用する。Runtime Data が参照中の Gym/Machine logical delete は許可し、Workout/raw/general Git write endpoint は公開しない。
+
+`/master-write/unresolved` は remote Workout/Master resources を read し、Runtime warning から unresolved references を生成する。Raw Workout JSON は更新しない。
 
 ## Version and Packaging
 
