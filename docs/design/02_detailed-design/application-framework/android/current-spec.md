@@ -100,6 +100,12 @@ Android は GitHub resource を fetch し、Master file と Workout file を par
 
 Runtime readiness、fallback、required actions、unresolved Master reference の共通意味論は [Runtime Contract Matrix](../runtime-contract-matrix.md) を正とする。
 
+## Master Maintenance API
+
+Android は Windows と同じ Master Maintenance endpoint を公開する。`/master-write/boundary` は fixed target と write security state を返し、`/master-write/documents/{type}` は GitHub Contents API の current SHA を revision として read/write する。Write は `expectedRevision` の一致、fixed human commit message、server-side whole-master validation、Main Gym lifecycle invariant を適用する。Runtime Data が参照中の Gym/Machine logical delete は許可し、Workout/raw/general Git write endpoint は公開しない。
+
+`/master-write/unresolved` は remote Workout/Master resources を read し、Runtime warning から unresolved references を生成する。Raw Workout JSON は更新しない。
+
 ## Version and Packaging
 
 Android version metadata は `src/application/android/app/build.gradle.kts` にある。
