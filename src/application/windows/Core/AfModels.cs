@@ -133,7 +133,8 @@ public sealed record RuntimeDataFile(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("generatedAt")] DateTimeOffset GeneratedAt,
     [property: JsonPropertyName("sessions")] IReadOnlyList<WorkoutSession> Sessions,
-    [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors);
+    [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors,
+    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings);
 
 public sealed record WorkoutSession(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -147,15 +148,22 @@ public sealed record WorkoutSession(
 
 public sealed record Gym(
     [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("short_name")] string? ShortName);
+    [property: JsonPropertyName("name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name,
+    [property: JsonPropertyName("short_name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ShortName,
+    [property: JsonPropertyName("resolution")] MasterReferenceResolution Resolution);
 
 public sealed record WorkoutMachine(
     [property: JsonPropertyName("machine_id")] string MachineId,
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("body_part")] string BodyPart,
+    [property: JsonPropertyName("name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name,
+    [property: JsonPropertyName("body_part"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? BodyPart,
+    [property: JsonPropertyName("resolution")] MasterReferenceResolution Resolution,
     [property: JsonPropertyName("sets")] IReadOnlyList<MachineSet> Sets,
     [property: JsonPropertyName("notes")] IReadOnlyList<string> Notes);
+
+public sealed record MasterReferenceResolution(
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("originalId")] string OriginalId,
+    [property: JsonPropertyName("resolvedId")] string? ResolvedId);
 
 public sealed record MachineSet(
     [property: JsonPropertyName("set")] int Set,
@@ -245,4 +253,5 @@ public sealed record RuntimeSourceFile(string Path, string Content);
 public sealed record RuntimeBuildResult(
     IReadOnlyList<WorkoutSession> Sessions,
     IReadOnlyList<AfError> Errors,
+    IReadOnlyList<RuntimeWarning> Warnings,
     bool TechnicalInvalid);

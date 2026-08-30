@@ -3,6 +3,8 @@ import type {
   MachineMaster,
   MachineMasterItem,
   MachineSet,
+  MasterReferenceResolution,
+  RuntimeWarning,
   GymMaster,
   GymMasterItem,
   WorkoutMachine,
@@ -46,6 +48,7 @@ type AfError = {
 type RuntimeWorkoutApiResponse = {
   success?: boolean
   errors?: AfError[]
+  warnings?: RuntimeWarning[]
   data?: {
     sessions?: WorkoutSession[]
   } | null
@@ -209,6 +212,7 @@ async function fetchRuntimeWorkoutData({
             filePath: '<af-runtime>',
             message: `${error.code}: ${error.message}`,
           })),
+          warnings: payload.warnings ?? [],
         }
       }
 
@@ -235,13 +239,14 @@ export function loadWorkoutSessionsFromFiles(
   files: WorkoutFile[],
   masterData = sampleMasterData,
 ): WorkoutLoadResult {
-  const result: WorkoutLoadResult = { sessions: [], issues: [], masterData }
+  const result: WorkoutLoadResult = { sessions: [], issues: [], warnings: [], masterData }
   const masterLookup = createMasterLookup(masterData, result.issues)
 
   for (const file of files) {
     const parsed = parseWorkoutFile(file.path, file.content, masterLookup)
     result.sessions.push(...parsed.sessions)
     result.issues.push(...parsed.issues)
+    result.warnings?.push(...(parsed.warnings ?? []))
   }
 
   result.sessions.sort((a, b) => a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id))
@@ -301,7 +306,7 @@ export function parseWorkoutJsonl(
   content: string,
   masterDataOrLookup: WorkoutMasterData | MasterLookup = sampleMasterData,
 ): WorkoutLoadResult {
-  const result: WorkoutLoadResult = { sessions: [], issues: [] }
+  const result: WorkoutLoadResult = { sessions: [], issues: [], warnings: [] }
   const masterLookup = isMasterLookup(masterDataOrLookup)
     ? masterDataOrLookup
     : createMasterLookup(masterDataOrLookup, result.issues)
@@ -319,6 +324,7 @@ export function parseWorkoutJsonl(
         const normalized = normalizeWorkoutRecord(parsed, masterLookup, path, index + 1)
         result.sessions.push(...normalized.sessions)
         result.issues.push(...normalized.issues)
+        result.warnings?.push(...(normalized.warnings ?? []))
       } catch (error) {
         result.issues.push({
           filePath: path,
@@ -338,6 +344,7 @@ export function normalizeWorkoutRecord(
   line?: number,
 ): WorkoutLoadResult {
   const issues: WorkoutParseIssue[] = []
+  const warnings: RuntimeWarning[] = []
   const masterLookup = isMasterLookup(masterDataOrLookup)
     ? masterDataOrLookup
     : createMasterLookup(masterDataOrLookup, issues)
@@ -386,12 +393,6 @@ export function normalizeWorkoutRecord(
     issues.push({ filePath, line, message: 'Missing required array field: machines.' })
   }
 
-  const gym = gymId ? masterLookup.gymsById.get(gymId) : undefined
-
-  if (gymId && !gym) {
-    issues.push({ filePath, line, message: `Unknown gym_id: ${gymId}.` })
-  }
-
   if (
     schemaVersion === null ||
     !sessionId ||
@@ -399,15 +400,37 @@ export function normalizeWorkoutRecord(
     !isIsoDate(date) ||
     !status ||
     !gymId ||
-    !gym ||
     !Array.isArray(machinesValue)
   ) {
     return { sessions: [], issues }
   }
 
+  const gym = masterLookup.gymsById.get(gymId)
+  const normalizedGym = gym
+    ? {
+        id: gym.gym_id,
+        ...(!gym.deleted ? { name: gym.name, short_name: gym.short_name } : {}),
+        resolution: resolveMasterReference(gymId, gym.gym_id, gym.deleted),
+      }
+    : {
+        id: gymId,
+        resolution: resolveMasterReference(gymId, null, false),
+      }
+  if (!gym || gym.deleted) {
+    warnings.push(createReferenceWarning({
+      referenceKind: 'gym',
+      originalId: gymId,
+      resolvedId: gym?.gym_id ?? null,
+      deleted: Boolean(gym?.deleted),
+      sessionId,
+      filePath,
+      line,
+    }))
+  }
+
   const machineIssueCountBefore = issues.length
   const machines = machinesValue
-    .map((machine, index) => normalizeMachine(machine, index, masterLookup, issues, filePath, line))
+    .map((machine, index) => normalizeMachine(machine, index, masterLookup, issues, warnings, sessionId, filePath, line))
     .filter((machine): machine is WorkoutMachine => machine !== null)
   const machineIssues = issues.slice(machineIssueCountBefore)
 
@@ -432,13 +455,13 @@ export function normalizeWorkoutRecord(
     session_id: sessionId,
     date,
     status,
-    gym: { id: gym.gym_id, name: gym.name, short_name: gym.short_name },
+    gym: normalizedGym,
     condition: normalizeCondition(value['condition'], issues, filePath, line),
     machines,
     notes: readStringArray(value, 'notes') ?? [],
   }
 
-  return { sessions: [session], issues }
+  return { sessions: [session], issues, warnings }
 }
 
 function isMasterResolveIssue(issue: WorkoutParseIssue): boolean {
@@ -450,6 +473,8 @@ function normalizeMachine(
   index: number,
   masterLookup: MasterLookup,
   issues: WorkoutParseIssue[],
+  warnings: RuntimeWarning[],
+  sessionId: string,
   filePath: string,
   line?: number,
 ): WorkoutMachine | null {
@@ -479,10 +504,16 @@ function normalizeMachine(
   }
 
   const masterMachine = masterLookup.machinesById.get(machineId)
-
-  if (!masterMachine) {
-    issues.push({ filePath, line, message: `Unknown machine_id: ${machineId}.` })
-    return null
+  if (!masterMachine || masterMachine.deleted) {
+    warnings.push(createReferenceWarning({
+      referenceKind: 'machine',
+      originalId: machineId,
+      resolvedId: masterMachine?.machine_id ?? null,
+      deleted: Boolean(masterMachine?.deleted),
+      sessionId,
+      filePath,
+      line,
+    }))
   }
 
   if (setsValue.length === 0) {
@@ -508,11 +539,54 @@ function normalizeMachine(
   }
 
   return {
-    machine_id: masterMachine.machine_id,
-    name: masterMachine.name,
-    body_part: masterMachine.body_part,
+    machine_id: masterMachine?.machine_id ?? machineId,
+    ...(masterMachine && !masterMachine.deleted
+      ? { name: masterMachine.name, body_part: masterMachine.body_part }
+      : {}),
+    resolution: resolveMasterReference(machineId, masterMachine?.machine_id ?? null, Boolean(masterMachine?.deleted)),
     sets,
     notes: readStringArray(value, 'notes') ?? [],
+  }
+}
+
+function resolveMasterReference(
+  originalId: string,
+  resolvedId: string | null,
+  deleted: boolean,
+): MasterReferenceResolution {
+  if (!resolvedId) return { state: 'missing', originalId, resolvedId: null }
+  return { state: deleted ? 'deleted' : 'resolved', originalId, resolvedId }
+}
+
+function createReferenceWarning({
+  referenceKind,
+  originalId,
+  resolvedId,
+  deleted,
+  sessionId,
+  filePath,
+  line,
+}: {
+  referenceKind: 'gym' | 'machine'
+  originalId: string
+  resolvedId: string | null
+  deleted: boolean
+  sessionId: string
+  filePath: string
+  line?: number
+}): RuntimeWarning {
+  const resolutionState = deleted ? 'deleted' : 'missing'
+  const subject = referenceKind === 'gym' ? 'Gym' : 'Machine'
+  return {
+    code: deleted ? 'MASTER_REFERENCE_DELETED' : 'MASTER_REFERENCE_MISSING',
+    referenceKind,
+    resolutionState,
+    originalId,
+    resolvedId,
+    sessionId,
+    filePath,
+    line: line ?? null,
+    message: `${subject} master reference is ${resolutionState}: ${originalId}.`,
   }
 }
 

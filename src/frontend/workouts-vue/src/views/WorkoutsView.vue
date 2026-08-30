@@ -78,7 +78,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
-import { getCalendarMonthAggregates, getCurrentLocalYearMonth } from '@workout-lab/workout-core'
+import {
+  getCalendarMonthAggregates,
+  getCurrentLocalYearMonth,
+  getGymDisplayName,
+  getMachineDisplayName,
+} from '@workout-lab/workout-core'
 import WorkoutFilters from '../components/WorkoutFilters.vue'
 import WorkoutGrid from '../components/WorkoutGrid.vue'
 import { defaultWorkoutListFilters, filterWorkoutSessions } from '../workout-list-filters'
@@ -127,7 +132,7 @@ const machineOptions = computed(() => {
 
   for (const session of workoutSessions.value) {
     for (const machine of session.machines) {
-      names.add(machine.name)
+      names.add(getMachineDisplayName(machine))
     }
   }
 
@@ -139,7 +144,9 @@ const bodyPartOptions = computed(() => {
 
   for (const session of workoutSessions.value) {
     for (const machine of session.machines) {
-      bodyParts.add(machine.body_part)
+      if (machine.body_part) {
+        bodyParts.add(machine.body_part)
+      }
     }
   }
 
@@ -150,7 +157,7 @@ const gymOptions = computed(() => {
   const gyms = new Set<string>()
 
   for (const session of workoutSessions.value) {
-    gyms.add(session.gym.name)
+    gyms.add(getGymDisplayName(session.gym))
   }
 
   return Array.from(gyms).sort()

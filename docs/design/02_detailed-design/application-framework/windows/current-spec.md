@@ -70,9 +70,9 @@ Windows は以下を map する。
 
 ## Runtime Data
 
-Windows は configured GitHub resource を fetch し、normalized runtime data を build し、validation 成功後にのみ `runtime/current/runtime-data.json` へ write する。
+Windows は configured GitHub resource を fetch し、normalized runtime data を build し、validation 成功後に `runtime/current/runtime-data.json` へ write する。
 
-Remote sync は required resource missing、technical validation failure、Master Resolve failure の場合、current fetched set を reject する。以前の valid local runtime が存在する場合、application は degraded/local fallback mode で継続できる。
+Remote sync は required resource missing または technical validation failure の場合、current fetched set を reject する。以前の valid local runtime が存在する場合、application は degraded/local fallback mode で継続できる。Master reference が missing/deleted の場合は Runtime warning として報告し、session は Runtime Data として accept する。
 
 ## Configuration and Credential
 

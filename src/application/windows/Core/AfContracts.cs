@@ -5,20 +5,41 @@ namespace Atlament.Core;
 public sealed record AfResponse<T>(
     [property: JsonPropertyName("success")] bool Success,
     [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors,
-    [property: JsonPropertyName("data")] T? Data);
+    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings,
+    [property: JsonPropertyName("data")] T? Data)
+{
+    public AfResponse(bool success, IReadOnlyList<AfError> errors, T? data)
+        : this(success, errors, Array.Empty<RuntimeWarning>(), data)
+    {
+    }
+}
 
 public sealed record AfError(
     [property: JsonPropertyName("code")] string Code,
     [property: JsonPropertyName("message")] string Message,
     [property: JsonPropertyName("recoverable")] bool Recoverable);
 
+public sealed record RuntimeWarning(
+    [property: JsonPropertyName("code")] string Code,
+    [property: JsonPropertyName("referenceKind")] string ReferenceKind,
+    [property: JsonPropertyName("resolutionState")] string ResolutionState,
+    [property: JsonPropertyName("originalId")] string OriginalId,
+    [property: JsonPropertyName("resolvedId")] string? ResolvedId,
+    [property: JsonPropertyName("sessionId")] string SessionId,
+    [property: JsonPropertyName("filePath")] string FilePath,
+    [property: JsonPropertyName("line")] int? Line,
+    [property: JsonPropertyName("message")] string Message);
+
 public static class AfResponses
 {
     public static AfResponse<T> Ok<T>(T data, IReadOnlyList<AfError>? errors = null) =>
-        new(true, errors ?? Array.Empty<AfError>(), data);
+        new(true, errors ?? Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), data);
+
+    public static AfResponse<T> Ok<T>(T data, IReadOnlyList<AfError>? errors, IReadOnlyList<RuntimeWarning>? warnings) =>
+        new(true, errors ?? Array.Empty<AfError>(), warnings ?? Array.Empty<RuntimeWarning>(), data);
 
     public static AfResponse<T> Fail<T>(AfError error) =>
-        new(false, new[] { error }, default);
+        new(false, new[] { error }, Array.Empty<RuntimeWarning>(), default);
 }
 
 public static class AfErrorCodes

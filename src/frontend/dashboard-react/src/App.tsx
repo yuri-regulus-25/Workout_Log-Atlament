@@ -14,6 +14,7 @@ import {
   getBodyPartSummary,
   getMainGymMonthlyVolumeMetric,
   getMainGymVolumeTrendMetric,
+  getGymDisplayName,
   getNumericDelta,
   getMonthlySessions,
   getRecentSessions,
@@ -324,7 +325,7 @@ function App() {
             <>
               <p className="large-number">{getTotalVolume(latestWorkout).toLocaleString()} kg</p>
               <p className="muted">
-                {latestWorkout.gym.name}<br />
+                {getGymDisplayName(latestWorkout.gym)}<br />
                 {getTotalSets(latestWorkout)} sets<br />
                 {latestWorkout.machines.length} machines
               </p>

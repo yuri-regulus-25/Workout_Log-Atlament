@@ -17,13 +17,15 @@ import { pageTransitionClassName } from '@workout-lab/frontend-common/page-trans
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg';
 import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
-import type { WorkoutSession } from '@workout-lab/workout-types';
+import type { BodyPart, WorkoutMachine, WorkoutSession } from '@workout-lab/workout-types';
 import {
   formatBodyPart,
   formatDisplayDate,
   formatMachineTitleFromId,
   formatWeightKg,
   getEstimated1RM,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
   getMachineHistory,
   getMachineOptions,
   getMainGymAverageSetWeightMetric,
@@ -62,7 +64,11 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly invalidMachineId = signal(this.pathMachineId ?? '');
   protected readonly selectedMachineId = signal<string>('abdominal');
   protected readonly bodyPartOptions = computed(() =>
-    Array.from(new Set(this.machineOptions().map((machine) => machine.body_part))).sort(),
+    Array.from(new Set(
+      this.machineOptions()
+        .map((machine) => machine.body_part)
+        .filter((bodyPart): bodyPart is BodyPart => bodyPart !== undefined),
+    )).sort(),
   );
   protected readonly filteredMachineOptions = computed(() => {
     const query = this.machineSearchQuery().trim().toLocaleLowerCase();
@@ -71,7 +77,7 @@ export class App implements AfterViewInit, OnDestroy {
     return this.machineOptions().filter((machine) => {
       const matchesQuery =
         query.length === 0 ||
-        machine.name.toLocaleLowerCase().includes(query) ||
+        getMachineDisplayName(machine).toLocaleLowerCase().includes(query) ||
         machine.machine_id.toLocaleLowerCase().includes(query);
       const matchesBodyPart = bodyPart.length === 0 || machine.body_part === bodyPart;
 
@@ -127,11 +133,14 @@ export class App implements AfterViewInit, OnDestroy {
     formatMachineTitleFromId(this.selectedMachineId()),
   );
   protected readonly selectedMachineJapaneseName = computed(
-    () => this.selectedMachine()?.name ?? this.selectedMachineTitle(),
+    () => {
+      const machine = this.selectedMachine();
+      return machine ? getMachineDisplayName(machine) : this.selectedMachineTitle();
+    },
   );
   protected readonly selectedBodyPart = computed(() => {
     const machine = this.selectedMachine();
-    return machine ? formatBodyPart(machine.body_part) : '—';
+    return machine ? getMachineBodyPartDisplay(machine) : '—';
   });
 
   protected readonly mainGymSessions = computed(() =>
@@ -277,8 +286,12 @@ export class App implements AfterViewInit, OnDestroy {
     this.reconcileSelectedMachineWithFilters();
   }
 
-  protected formatBodyPartLabel(bodyPart: string): string {
+  protected formatBodyPartLabel(bodyPart: BodyPart): string {
     return formatBodyPart(bodyPart);
+  }
+
+  protected displayMachineName(machine: WorkoutMachine): string {
+    return getMachineDisplayName(machine);
   }
 
   private getPathMachineId(): string | undefined {

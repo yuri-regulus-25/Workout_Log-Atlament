@@ -1,3 +1,4 @@
+import { getGymDisplayName, getGymShortDisplayName, getMachineDisplayName } from '@workout-lab/workout-core'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 
 export type WorkoutListFilters = {
@@ -30,23 +31,23 @@ export function filterWorkoutSessions(
     .filter((session) => {
       const searchTarget = [
         session.date,
-        session.gym.name,
-        session.gym.short_name ?? '',
+        getGymDisplayName(session.gym),
+        getGymShortDisplayName(session.gym),
         ...session.machines.flatMap((machine) => [
-          machine.name,
+          getMachineDisplayName(machine),
           machine.machine_id,
-          machine.body_part,
+          machine.body_part ?? '',
         ]),
       ].join(' ').toLocaleLowerCase()
 
       const matchesSearch = query.length === 0 || searchTarget.includes(query)
       const matchesMachine =
         filters.selectedMachine === 'all' ||
-        session.machines.some((machine) => machine.name === filters.selectedMachine)
+        session.machines.some((machine) => getMachineDisplayName(machine) === filters.selectedMachine)
       const matchesBodyPart =
         filters.selectedBodyPart === 'all' ||
         session.machines.some((machine) => machine.body_part === filters.selectedBodyPart)
-      const matchesGym = filters.selectedGym === 'all' || session.gym.name === filters.selectedGym
+      const matchesGym = filters.selectedGym === 'all' || getGymDisplayName(session.gym) === filters.selectedGym
       const matchesFrom = filters.dateFrom.length === 0 || session.date >= filters.dateFrom
       const matchesTo = filters.dateTo.length === 0 || session.date <= filters.dateTo
 

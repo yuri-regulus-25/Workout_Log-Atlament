@@ -34,6 +34,9 @@ import {
   getNumericDelta,
   getLastTrainedDateByBodyPart,
   getMachineFrequencyRanking,
+  getGymDisplayName,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
   getPersonalRecords,
   getRecentSessions,
   getSessionAggregates,
@@ -148,6 +151,63 @@ describe('workout-core', () => {
 
     expect(summary[0].volume).toBeGreaterThanOrEqual(summary.at(-1)?.volume ?? 0)
     expect(summary.map((item) => item.bodyPart)).toContain('legs')
+  })
+
+  it('keeps unresolved master references in workout totals but excludes them from body part classification', () => {
+    const unresolvedSessions: WorkoutSession[] = [
+      {
+        schema_version: 1,
+        session_id: '2026-08-24-01',
+        date: '2026-08-24',
+        status: 'complete',
+        gym: {
+          id: 'missing-gym',
+          resolution: { state: 'missing', originalId: 'missing-gym', resolvedId: null },
+        },
+        machines: [
+          {
+            machine_id: 'missing-machine',
+            resolution: { state: 'missing', originalId: 'missing-machine', resolvedId: null },
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      },
+    ]
+
+    expect(getSessionAggregates(unresolvedSessions)[0]).toMatchObject({
+      gym: '?',
+      machineCount: 1,
+      setCount: 1,
+      repCount: 12,
+    })
+    expect(getTotalVolume(unresolvedSessions[0])).toBe(480)
+    expect(getBodyPartSummary(unresolvedSessions)).toEqual([])
+    expect(getSetsByBodyPart(unresolvedSessions)).toEqual([])
+  })
+
+  it('projects deleted master-derived display values as fallback text without body part placeholders', () => {
+    const deletedSession: WorkoutSession = {
+      schema_version: 1,
+      session_id: '2026-08-24-02',
+      date: '2026-08-24',
+      status: 'complete',
+      gym: {
+        id: 'deleted-gym',
+        resolution: { state: 'deleted', originalId: 'deleted-gym', resolvedId: 'deleted-gym' },
+      },
+      machines: [
+        {
+          machine_id: 'deleted-machine',
+          resolution: { state: 'deleted', originalId: 'deleted-machine', resolvedId: 'deleted-machine' },
+          sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+        },
+      ],
+    }
+
+    expect(getGymDisplayName(deletedSession.gym)).toBe('?')
+    expect(getMachineDisplayName(deletedSession.machines[0])).toBe('?')
+    expect(getMachineBodyPartDisplay(deletedSession.machines[0])).toBe('?')
+    expect(deletedSession.machines[0]).not.toHaveProperty('body_part')
   })
 
   it('returns personal record candidates', () => {
@@ -819,6 +879,12 @@ describe('workout-core', () => {
           { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
         ]),
         gym: { id: 'other-gym', name: 'Other Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-08-03-01', '2026-08-03', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 200, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', resolution: { state: 'missing', originalId: 'main-gym', resolvedId: null } },
       },
       {
         ...createSessionWithMachines('2026-09-01-01', '2026-09-01', [

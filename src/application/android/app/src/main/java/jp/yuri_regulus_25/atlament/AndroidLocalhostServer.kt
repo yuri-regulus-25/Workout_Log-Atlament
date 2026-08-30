@@ -41,14 +41,14 @@ class AndroidLocalhostServer(
 ) : Closeable {
     private data class RuntimeSourceFile(val path: String, val content: String)
     private data class SyncResponse(val status: Int, val body: String, val success: Boolean)
-    private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray)
+    private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray, val warnings: JSONArray)
     private data class RuntimeFetchedResources(
         val workoutFiles: List<RuntimeSourceFile>,
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
-    private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String)
-    private data class GymMasterItem(val id: String, val name: String, val shortName: String?)
+    private data class MachineMasterItem(val id: String, val name: String, val bodyPart: String, val deleted: Boolean)
+    private data class GymMasterItem(val id: String, val name: String, val shortName: String?, val deleted: Boolean)
     private class AfException(val code: String, override val message: String) : Exception(message)
     private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
@@ -542,10 +542,11 @@ class AndroidLocalhostServer(
             errorsArray("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub configuration check failed.")
         }
     }
-    private fun okJson(dataJson: String, errorsJson: String = "[]"): String = """
+    private fun okJson(dataJson: String, errorsJson: String = "[]", warningsJson: String = "[]"): String = """
         {
           "success": true,
           "errors": $errorsJson,
+          "warnings": $warningsJson,
           "data": $dataJson
         }
     """.trimIndent()
@@ -784,7 +785,7 @@ class AndroidLocalhostServer(
                 {
                   "degraded": false
                 }
-            """.trimIndent()), true)
+            """.trimIndent(), warningsJson = build.warnings.toString()), true)
         } catch (ex: AfException) {
             githubComponentStatus = "degraded"
             latestRemoteRetrieval = "failed"
@@ -878,32 +879,34 @@ class AndroidLocalhostServer(
         val gymMaster = fetched.gymMaster
 
         val errors = JSONArray()
+        val warnings = JSONArray()
         val machines = machineMaster?.let { parseMachineMaster(it, errors) }
         val gyms = gymMaster?.let { parseGymMaster(it, errors) }
         if (machineMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required machine master resource is missing."))
         if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
         if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors)
+        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors, warnings)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
             if (file.path.endsWith(".jsonl", ignoreCase = true)) {
                 file.content.split("\r\n", "\n").forEachIndexed { index, line ->
-                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors)?.let(sessions::put)
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors, warnings)?.let(sessions::put)
                 }
             } else if (file.path.endsWith(".json", ignoreCase = true)) {
-                buildSession(file.path, null, file.content, machines, gyms, errors)?.let(sessions::put)
+                buildSession(file.path, null, file.content, machines, gyms, errors, warnings)?.let(sessions::put)
             }
         }
 
-        if (errors.length() > 0) return RuntimeBuildResult(null, errors)
+        if (errors.length() > 0) return RuntimeBuildResult(null, errors, warnings)
 
         val payload = JSONObject()
             .put("success", true)
             .put("errors", JSONArray())
+            .put("warnings", warnings)
             .put("data", JSONObject().put("sessions", sessions))
             .toString(2)
-        return RuntimeBuildResult(payload, errors)
+        return RuntimeBuildResult(payload, errors, warnings)
     }
 
     private fun fetchConfiguredResources(configuration: JSONObject): RuntimeFetchedResources {
@@ -979,7 +982,7 @@ class AndroidLocalhostServer(
                     errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine_id: $id."))
                     return emptyMap()
                 }
-                result[id] = MachineMasterItem(id, name, bodyPart)
+                result[id] = MachineMasterItem(id, name, bodyPart, item?.optBoolean("deleted", false) ?: false)
             }
             result
         } catch (_: Exception) {
@@ -1012,7 +1015,7 @@ class AndroidLocalhostServer(
                     return emptyMap()
                 }
                 val shortName = item?.optString("short_name")?.takeIf { it.isNotBlank() }
-                result[id] = GymMasterItem(id, name, shortName)
+                result[id] = GymMasterItem(id, name, shortName, item?.optBoolean("deleted", false) ?: false)
             }
             result
         } catch (_: Exception) {
@@ -1027,7 +1030,8 @@ class AndroidLocalhostServer(
         content: String,
         machines: Map<String, MachineMasterItem>,
         gyms: Map<String, GymMasterItem>,
-        errors: JSONArray
+        errors: JSONArray,
+        warnings: JSONArray
     ): JSONObject? {
         val root = try {
             JSONObject(content)
@@ -1053,14 +1057,13 @@ class AndroidLocalhostServer(
         }
 
         val gym = gyms[gymId]
-        if (gym == null) {
-            errors.put(errorJson("MASTER_GYM_NOT_FOUND", location(filePath, line) + "Gym master is not found: $gymId."))
-            return null
+        if (gym == null || gym.deleted) {
+            warnings.put(referenceWarningJson("gym", gymId, gym?.id, gym?.deleted ?: false, sessionId, filePath, line))
         }
 
         val normalizedMachines = JSONArray()
         for (index in 0 until machineItems.length()) {
-            val normalized = buildMachine(filePath, line, machineItems.optJSONObject(index), machines, errors) ?: return null
+            val normalized = buildMachine(filePath, line, machineItems.optJSONObject(index), machines, errors, warnings, sessionId) ?: return null
             normalizedMachines.put(normalized)
         }
         if (status == "complete" && normalizedMachines.length() == 0) {
@@ -1068,12 +1071,21 @@ class AndroidLocalhostServer(
             return null
         }
 
+        val normalizedGym = JSONObject()
+            .put("id", gym?.id ?: gymId)
+            .put("resolution", referenceResolutionJson(gymId, gym?.id, gym?.deleted ?: false))
+        if (gym != null && !gym.deleted) {
+            normalizedGym
+                .put("name", gym.name)
+                .put("short_name", gym.shortName ?: JSONObject.NULL)
+        }
+
         return JSONObject()
             .put("schema_version", schemaVersion)
             .put("session_id", sessionId)
             .put("date", date)
             .put("status", status)
-            .put("gym", JSONObject().put("id", gym.id).put("name", gym.name).put("short_name", gym.shortName ?: JSONObject.NULL))
+            .put("gym", normalizedGym)
             .put("condition", root.optJSONObject("condition") ?: JSONObject.NULL)
             .put("machines", normalizedMachines)
             .put("notes", readStringArray(root.optJSONArray("notes")))
@@ -1084,7 +1096,9 @@ class AndroidLocalhostServer(
         line: Int?,
         item: JSONObject?,
         masters: Map<String, MachineMasterItem>,
-        errors: JSONArray
+        errors: JSONArray,
+        warnings: JSONArray,
+        sessionId: String
     ): JSONObject? {
         val machineId = item?.optString("machine_id").orEmpty().trim()
         val setItems = item?.optJSONArray("sets")
@@ -1094,9 +1108,8 @@ class AndroidLocalhostServer(
         }
 
         val master = masters[machineId]
-        if (master == null) {
-            errors.put(errorJson("MASTER_MACHINE_NOT_FOUND", location(filePath, line) + "Machine master is not found: $machineId."))
-            return null
+        if (master == null || master.deleted) {
+            warnings.put(referenceWarningJson("machine", machineId, master?.id, master?.deleted ?: false, sessionId, filePath, line))
         }
 
         val sets = JSONArray()
@@ -1116,12 +1129,52 @@ class AndroidLocalhostServer(
                 .put("note", set.optString("note").takeIf { it.isNotBlank() } ?: JSONObject.NULL))
         }
 
-        return JSONObject()
-            .put("machine_id", machineId)
-            .put("name", master.name)
-            .put("body_part", master.bodyPart)
+        val normalized = JSONObject()
+            .put("machine_id", master?.id ?: machineId)
+            .put("resolution", referenceResolutionJson(machineId, master?.id, master?.deleted ?: false))
             .put("sets", sets)
             .put("notes", readStringArray(item.optJSONArray("notes")))
+        if (master != null && !master.deleted) {
+            normalized
+                .put("name", master.name)
+                .put("body_part", master.bodyPart)
+        }
+        return normalized
+    }
+
+    private fun referenceResolutionJson(originalId: String, resolvedId: String?, deleted: Boolean): JSONObject {
+        val state = when {
+            resolvedId.isNullOrBlank() -> "missing"
+            deleted -> "deleted"
+            else -> "resolved"
+        }
+        return JSONObject()
+            .put("state", state)
+            .put("originalId", originalId)
+            .put("resolvedId", resolvedId ?: JSONObject.NULL)
+    }
+
+    private fun referenceWarningJson(
+        referenceKind: String,
+        originalId: String,
+        resolvedId: String?,
+        deleted: Boolean,
+        sessionId: String,
+        filePath: String,
+        line: Int?
+    ): JSONObject {
+        val resolutionState = if (deleted) "deleted" else "missing"
+        val subject = if (referenceKind == "gym") "Gym" else "Machine"
+        return JSONObject()
+            .put("code", if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING")
+            .put("referenceKind", referenceKind)
+            .put("resolutionState", resolutionState)
+            .put("originalId", originalId)
+            .put("resolvedId", resolvedId ?: JSONObject.NULL)
+            .put("sessionId", sessionId)
+            .put("filePath", filePath)
+            .put("line", line ?: JSONObject.NULL)
+            .put("message", "$subject master reference is $resolutionState: $originalId.")
     }
 
     private fun readStringArray(array: JSONArray?): JSONArray {
@@ -1236,6 +1289,7 @@ class AndroidLocalhostServer(
         {
           "success": false,
           "errors": ${errorsJson(code, message)},
+          "warnings": [],
           "data": null
         }
     """.trimIndent()
@@ -1244,6 +1298,7 @@ class AndroidLocalhostServer(
         {
           "success": $success,
           "errors": ${errors.toString()},
+          "warnings": [],
           "data": $dataJson
         }
     """.trimIndent()
