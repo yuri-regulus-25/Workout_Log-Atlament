@@ -29,6 +29,10 @@ Windows AF と Android AF は同じ入力状態に対して同じ Runtime contra
 | validation failed + no LKG | absent | `unavailable` after setup is complete | runtimeData `unavailable` | `false` | `RUNTIME_DATA_REQUIRED` | `success:false`, no adopted runtime |
 | unresolved Master missing/deleted only | new Runtime Data adopted with warnings | `ready` when other inputs are healthy | github/runtimeData `available` | `false` | none | `success:true`, `degraded:false`, warnings populated |
 | Main Gym unconfigured only | Runtime Data adopted | `ready` when other inputs are healthy | github/runtimeData `available` | `false` | none | `success:true`, Main Gym metrics report feature-level `unconfigured` |
+| Broken Workout Resource only | Runtime Data adopted from other Healthy/Degraded Workout Resources; Broken Resource quarantined as a whole | `degraded` | runtimeData `degraded` | `false` | none | `success:true`, `degraded:true`, Broken count surfaced |
+| Broken Master with LKG | LKG retained; new current Runtime not adopted | `degraded` | runtimeData `available` or `degraded` | `true` | none | `success:false`, `degraded:true` |
+| Broken Master without LKG | absent | `unavailable` after setup is complete | runtimeData `unavailable` | `false` | `RUNTIME_DATA_REQUIRED` | `success:false`, no adopted runtime |
+| Degraded Resource only | Resource adopted with warning | `ready` when other inputs are healthy | github/runtimeData `available` | `false` | none | `success:true`, `degraded:false`, warnings populated |
 
 ## Runtime Master Reference Assertions
 
@@ -50,6 +54,12 @@ Windows AF と Android AF は同じ入力状態に対して同じ Runtime contra
 - `runtimeData.latestRemoteRetrieval`
 - `runtimeData.latestValidation`
 - `runtimeData.fallbackActive`
+- `runtimeData.quarantinedWorkoutResourceCount`
+- `recovery.brokenResourceCount`
+- `recovery.brokenWorkoutResourceCount`
+- `recovery.brokenMasterResourceCount`
+- `recovery.recoverableResourceCount`
+- `recovery.activeDraftCount`
 - `requiredActions`
 
 `GET /runtime/workouts` and `POST /sync` use warnings for unresolved Master references. Errors remain reserved for genuine validation, configuration, credential, network, or persistence failures.

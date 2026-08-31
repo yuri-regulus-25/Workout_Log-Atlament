@@ -34,6 +34,8 @@ No generic quarantine mutation, Raw write, batch Recovery, Undo, arbitrary commi
 
 Existing `AfResponse<T>` / `AfCallResult<T>` envelope is reused.
 
+Platform parity is public-shape parity plus truthful capability semantics. Windows provides Recovery Git commit when the configured GitHub write boundary is available. Android exposes the same endpoint set and read/draft/validate semantics; when Android cannot safely provide the Recovery Git write boundary, `RecoveryCapabilities.commit=false` and `POST /commit` returns `RECOVERY_UNAVAILABLE`. Node development runtime mirrors the public shape for local development and must not fake commit success.
+
 ## Conceptual DTOs
 
 ```text
@@ -339,3 +341,12 @@ v2.1.0 Data Recovery is complete when:
 - Git success and reflection failure are distinguishable.
 - Windows/Android/Node expose the same public Recovery contract.
 - Frontend provides human-readable Recovery without Raw editor or generic Git capability.
+
+Manufacturing close status:
+
+```text
+Design        CLOSED
+Manufacturing COMPLETE
+User Test     NOT STARTED
+Release       NOT READY
+```

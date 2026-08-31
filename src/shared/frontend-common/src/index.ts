@@ -46,6 +46,7 @@ export type AfStatus = {
   }
   readiness: ApplicationReadiness
   runtimeData: RuntimeDataStatusFacts
+  recovery?: RecoveryStatusFacts
   application: {
     status: string
     degraded: boolean
@@ -91,6 +92,15 @@ export type RuntimeDataStatusFacts = {
   latestRemoteRetrieval: 'unknown' | 'succeeded' | 'failed' | 'skipped'
   latestValidation: 'unknown' | 'succeeded' | 'failed' | 'skipped'
   fallbackActive: boolean
+  quarantinedWorkoutResourceCount?: number
+}
+
+export type RecoveryStatusFacts = {
+  brokenResourceCount: number
+  brokenWorkoutResourceCount: number
+  brokenMasterResourceCount: number
+  recoverableResourceCount: number
+  activeDraftCount: number
 }
 
 export type ApplicationRecoveryAction = 'open-settings' | 'complete-setup' | 'update-credential' | 'retry-sync' | 'reload'
@@ -299,6 +309,169 @@ export type MasterDocumentWriteResult = {
   revision: string
 }
 
+export type ResourceType = 'WORKOUT' | 'MACHINE_MASTER' | 'GYM_MASTER'
+
+export type ResourceHealth = 'healthy' | 'degraded' | 'broken'
+
+export type ResourceIssueSeverity = 'warning' | 'broken'
+
+export type ResourceIssueLocation = {
+  line?: number | null
+  recordId?: string | null
+  sessionId?: string | null
+  fieldPath?: string | null
+}
+
+export type ResourceIssue = {
+  code: string
+  severity: ResourceIssueSeverity
+  message: string
+  location?: ResourceIssueLocation | null
+  details?: unknown
+}
+
+export type ResourceInspection = {
+  path: string
+  revision: string
+  resourceType: ResourceType
+  inspectionVersion: number
+  health: ResourceHealth
+  issues: ResourceIssue[]
+}
+
+export type RecoveryEligibility = {
+  eligible: boolean
+  reasonCode?: string | null
+}
+
+export type RecoveryCapabilities = {
+  sourceView: boolean
+  draft: boolean
+  validate: boolean
+  commit: boolean
+}
+
+export type BrokenResourceSummary = {
+  resourceKey: string
+  path: string
+  revision: string
+  resourceType: ResourceType
+  health: 'broken'
+  issues: ResourceIssue[]
+  recoveryEligible: boolean
+  hasDraft: boolean
+}
+
+export type RecoverySourceView = {
+  resourceKey: string
+  path: string
+  revision: string
+  resourceType: ResourceType
+  content: string
+  readOnly: true
+}
+
+export type RecoveryDraftState = 'none' | 'active' | 'stale' | 'incompatible' | 'corrupted'
+
+export type RecoveryField =
+  | {
+      fieldPath: string
+      state: 'unresolved'
+      source: 'original' | 'suggestion'
+    }
+  | {
+      fieldPath: string
+      state: 'recovered' | 'confirmed'
+      source: 'original' | 'user' | 'suggestion'
+      value: unknown
+    }
+
+export type RecoverySuggestion = {
+  fieldPath: string
+  suggestedValue: unknown
+  message?: string
+}
+
+export type RecoveryDraft = {
+  schemaVersion: 1
+  sourcePath: string
+  sourceRevision: string
+  resourceType: ResourceType
+  inspectionVersion: number
+  draftRevision: number
+  fields: RecoveryField[]
+  suggestions: RecoverySuggestion[]
+}
+
+export type RecoveryDraftSnapshot = {
+  state: RecoveryDraftState
+  draft: RecoveryDraft | null
+}
+
+export type RecoveryDraftUpdate = {
+  expectedDraftRevision: number
+  fields: RecoveryField[]
+}
+
+export type RecoveryCommitRequest = {
+  expectedSourceRevision: string
+  expectedDraftRevision: number
+}
+
+export type RecoveryErrorCode =
+  | 'RECOVERY_RESOURCE_NOT_FOUND'
+  | 'RECOVERY_RESOURCE_NOT_BROKEN'
+  | 'RECOVERY_UNAVAILABLE'
+  | 'RECOVERY_SOURCE_UNAVAILABLE'
+  | 'RECOVERY_SOURCE_VIEW_TOO_LARGE'
+  | 'RECOVERY_SCHEMA_UNSUPPORTED'
+  | 'RECOVERY_DRAFT_REQUIRED'
+  | 'RECOVERY_DRAFT_CONFLICT'
+  | 'RECOVERY_DRAFT_STALE'
+  | 'RECOVERY_DRAFT_INCOMPATIBLE'
+  | 'RECOVERY_DRAFT_CORRUPTED'
+  | 'RECOVERY_DRAFT_SAVE_FAILED'
+  | 'RECOVERY_VALIDATION_FAILED'
+  | 'RECOVERY_WRITE_CONFLICT'
+  | 'RECOVERY_WRITE_FAILED'
+  | 'RECOVERY_REFLECTION_FAILED'
+
+export type RecoveryResourceDetail = {
+  resourceKey: string
+  inspection: ResourceInspection
+  eligibility: RecoveryEligibility
+  capabilities: RecoveryCapabilities
+  draft: RecoveryDraftSnapshot
+}
+
+export type RecoveryValidationResult = {
+  sourceRevision: string
+  draftRevision: number
+  health: ResourceHealth
+  issues: ResourceIssue[]
+  commitAllowed: boolean
+  replacementPath: string
+  replacementContent?: string | null
+  changeSummary: string[]
+  pathChange?: { from: string; to: string } | null
+}
+
+export type RecoveryCommitResult = {
+  committed: boolean
+  sourcePath: string
+  sourceRevision: string
+  replacementPath: string
+  replacementRevision: string
+  commitRevision: string
+  pathChange?: { from: string; to: string } | null
+  reflection: {
+    succeeded: boolean
+    health?: ResourceHealth | null
+    errors: AfError[]
+    warnings: RuntimeWarning[]
+  }
+}
+
 export type UnresolvedAffectedWorkout = {
   filePath: string
   line?: number | null
@@ -374,6 +547,60 @@ export async function updateMasterDocument(
 ): Promise<AfCallResult<MasterDocumentWriteResult>> {
   return callAf<MasterDocumentWriteResult>(`/api/v1/common/master-write/documents/${type}`, {
     method: 'PUT',
+    body: JSON.stringify(request),
+  })
+}
+
+export async function listRecoveryResources(): Promise<AfCallResult<BrokenResourceSummary[]>> {
+  return callAf<BrokenResourceSummary[]>('/api/v1/common/recovery/resources')
+}
+
+export async function getRecoveryResource(resourceKey: string): Promise<AfCallResult<RecoveryResourceDetail>> {
+  return callAf<RecoveryResourceDetail>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}`)
+}
+
+export async function getRecoverySource(resourceKey: string): Promise<AfCallResult<RecoverySourceView>> {
+  return callAf<RecoverySourceView>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/source`)
+}
+
+export async function getRecoveryDraft(resourceKey: string): Promise<AfCallResult<RecoveryDraftSnapshot>> {
+  return callAf<RecoveryDraftSnapshot>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/draft`)
+}
+
+export async function createRecoveryDraft(resourceKey: string): Promise<AfCallResult<RecoveryDraftSnapshot>> {
+  return callAf<RecoveryDraftSnapshot>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/draft`, {
+    method: 'POST',
+  })
+}
+
+export async function updateRecoveryDraft(
+  resourceKey: string,
+  update: RecoveryDraftUpdate,
+): Promise<AfCallResult<RecoveryDraftSnapshot>> {
+  return callAf<RecoveryDraftSnapshot>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(update),
+  })
+}
+
+export async function deleteRecoveryDraft(resourceKey: string): Promise<AfCallResult<RecoveryDraftSnapshot>> {
+  return callAf<RecoveryDraftSnapshot>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/draft`, {
+    method: 'DELETE',
+  })
+}
+
+export async function validateRecoveryDraft(resourceKey: string): Promise<AfCallResult<RecoveryValidationResult>> {
+  return callAf<RecoveryValidationResult>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/validate`, {
+    method: 'POST',
+  })
+}
+
+export async function commitRecoveryDraft(
+  resourceKey: string,
+  request: RecoveryCommitRequest,
+): Promise<AfCallResult<RecoveryCommitResult>> {
+  return callAf<RecoveryCommitResult>(`/api/v1/common/recovery/resources/${encodeURIComponent(resourceKey)}/commit`, {
+    method: 'POST',
     body: JSON.stringify(request),
   })
 }

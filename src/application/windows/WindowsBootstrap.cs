@@ -36,7 +36,8 @@ public sealed class WindowsBootstrap : IAsyncDisposable
         var builder = new RuntimeDataBuilder();
         var github = new GithubAccessService();
         var hosting = new HostingStatusService(paths);
-        var application = new AtlamentApplication(configuration, credential, runtime, builder, github, hosting, log);
+        var recovery = new RecoveryService(new RecoveryDraftStore(paths));
+        var application = new AtlamentApplication(configuration, credential, runtime, builder, github, hosting, log, recovery);
         var httpHost = new AfHttpHost(application, hosting, log, uiContext);
         var bootstrap = new WindowsBootstrap(mutex, paths, application, httpHost);
 

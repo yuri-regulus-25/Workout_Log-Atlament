@@ -8,13 +8,21 @@ v2.1.0は、invalid/brokenなData ResourceをRuntimeへ無理に通すのでは�
 - Large design decisions: **Closed**
 - Middle design decisions: **Closed**
 - Small design decisions: **Closed**
-- Current phase: **Implementation / PR planning**
+- Current phase: **Manufacturing complete / user test preparation**
+
+## Manufacturing Status
+
+- Design: **CLOSED**
+- Manufacturing: **COMPLETE**
+- User Test: **NOT STARTED**
+- Release: **NOT READY**
 
 Frozen implementation-oriented contracts:
 
 - [04_recovery_architecture_contract.md](./04_recovery_architecture_contract.md) — Resource/Inspection、Runtime、Draft、Validation、Git、UI、責務境界
 - [05_recovery_api_and_implementation_plan.md](./05_recovery_api_and_implementation_plan.md) — API、DTO、実装責務、Tests、実装順序、PR分割
 - [06_recovery_decision_index.md](./06_recovery_decision_index.md) — Planning decision index
+- [07_recovery_user_test_checklist.md](./07_recovery_user_test_checklist.md) — Human user test scenarios for the next phase
 
 ## Architecture Principles
 - Broken Resourceを直接編集しない。

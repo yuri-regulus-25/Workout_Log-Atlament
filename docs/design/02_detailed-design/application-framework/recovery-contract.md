@@ -28,6 +28,8 @@ POST   /recovery/resources/{resourceKey}/commit
 
 All endpoints use the existing AF response envelope. `resourceKey` is opaque and must not be decoded by Frontend business logic.
 
+Windows, Android, Node development runtime, shared frontend client, and Maintenance UI publish the same public DTO names and endpoint set. Platform-specific capability differences must be represented through `RecoveryCapabilities` and stable error codes, not fake successful responses.
+
 ## Resource Contract
 
 - One JSON / JSONL file is one Resource.
@@ -78,6 +80,23 @@ Same-path replacement may use existing Contents API semantics. Path relocation m
 ## Commit Result / Reflection
 
 After Git success AF attempts re-inspection and Runtime reflection. Git success is not rolled back when reflection fails. The API/UI must distinguish Git failure, Git success + reflection failure, and full Recovery success.
+
+Windows performs the Recovery Git write through the native GitHub write boundary when configured. Android exposes the same public endpoint set and read/draft/validate semantics; if packaged Android cannot safely execute the Recovery Git write boundary, `capabilities.commit` is `false` and `POST /commit` returns `RECOVERY_UNAVAILABLE`. Node development runtime must not return fake commit success.
+
+## Status Facts
+
+`GET /status` publishes Recovery/quarantine facts:
+
+```text
+runtimeData.quarantinedWorkoutResourceCount
+recovery.brokenResourceCount
+recovery.brokenWorkoutResourceCount
+recovery.brokenMasterResourceCount
+recovery.recoverableResourceCount
+recovery.activeDraftCount
+```
+
+Workout Resource quarantine keeps Runtime available with degraded readiness and does not set `fallbackActive`. Whole-runtime LKG fallback is reserved for remote/validation failure or Broken Master handling where the current runtime cannot be safely adopted.
 
 ## Error Codes
 

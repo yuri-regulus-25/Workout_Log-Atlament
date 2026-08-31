@@ -7,9 +7,9 @@ Design state:
 - Large decisions: closed
 - Middle decisions: closed
 - Small design decisions: closed
-- Next phase: implementation / PR decomposition
+- Next phase: human user test / UI-UX test
 
-This document freezes the implementation-oriented contract for v2.1.0 Data Recovery.
+This document freezes the implementation-oriented contract for v2.1.0 Data Recovery. Manufacturing is complete; release remains not ready until human user testing is executed and reviewed.
 
 ## 1. Resource / Inspection
 
@@ -190,6 +190,8 @@ Frontend displays those facts and collects explicit human choices. It must not i
 All Git writes go through native AF dedicated write boundaries. Frontend gets no Git credentials and no generic Git/raw JSON write capability.
 
 Windows and Android expose the same public Recovery semantics/API shape. OS-specific persistence/implementation details may differ internally.
+
+Android public parity is truthful capability parity: read/detail/source/draft/validate endpoints are exposed with the shared shape, while Recovery Git commit must report `capabilities.commit=false` and `RECOVERY_UNAVAILABLE` when the packaged Android runtime cannot safely perform the Recovery Git write boundary. Fake commit success is prohibited.
 
 ## 8. Status / Readiness
 

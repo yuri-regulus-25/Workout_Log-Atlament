@@ -33,6 +33,8 @@ All Large decisions are closed.
 
 All remaining Middle decisions were derived automatically from the Large contract and these choices.
 
+Manufacturing close fixed the remaining platform parity interpretation: Android must expose the shared public Recovery endpoint/DTO shape, but Recovery Git commit is truthful capability-gated and returns `RECOVERY_UNAVAILABLE` instead of fake success when the Android package cannot safely execute the write boundary.
+
 ## Small Design Closure
 
 Small design freezes implementation-facing contracts for:
@@ -58,3 +60,12 @@ Resource-level Workout quarantine semantics + Runtime continuation
 ```
 
 This is the first recommended implementation slice because it establishes the core v2.1.0 safety property independently of Recovery UI and Git write support.
+
+## Current Manufacturing State
+
+```text
+Design        CLOSED
+Manufacturing COMPLETE
+User Test     NOT STARTED
+Release       NOT READY
+```

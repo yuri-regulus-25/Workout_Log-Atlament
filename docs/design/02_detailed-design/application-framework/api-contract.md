@@ -64,6 +64,15 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 | GET | `/master-write/unresolved` | Workout Data 上の未解決 Master reference 一覧。 |
 | GET | `/master-write/documents/{type}` | Master document の current revision と content。 |
 | PUT | `/master-write/documents/{type}` | Expected revision 付き Master document write。 |
+| GET | `/recovery/resources` | Current Broken Resource inventory。 |
+| GET | `/recovery/resources/{resourceKey}` | Recovery Resource inspection/detail。 |
+| GET | `/recovery/resources/{resourceKey}/source` | Read-only raw source view。 |
+| GET | `/recovery/resources/{resourceKey}/draft` | Local Recovery Draft snapshot。 |
+| POST | `/recovery/resources/{resourceKey}/draft` | Local Recovery Draft create/resume。 |
+| PUT | `/recovery/resources/{resourceKey}/draft` | Expected draft revision 付き autosave。 |
+| DELETE | `/recovery/resources/{resourceKey}/draft` | Local Recovery Draft discard。 |
+| POST | `/recovery/resources/{resourceKey}/validate` | Whole Resource Recovery candidate validation。 |
+| POST | `/recovery/resources/{resourceKey}/commit` | Validated Recovery replacement commit。Android は write capability unavailable の場合 `RECOVERY_UNAVAILABLE` を返す。 |
 | POST | `/shutdown` | Application shutdown request。 |
 
 Legacy `/api/common/*` alias は現行 contract では公開しない。Unknown `/api/*` route は frontend HTML へ fall through せず、platform error response を返す。
@@ -86,6 +95,12 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 - `runtimeData.latestRemoteRetrieval`: `unknown`, `succeeded`, `failed`, or `skipped`
 - `runtimeData.latestValidation`: `unknown`, `succeeded`, `failed`, or `skipped`
 - `runtimeData.fallbackActive`
+- `runtimeData.quarantinedWorkoutResourceCount`
+- `recovery.brokenResourceCount`
+- `recovery.brokenWorkoutResourceCount`
+- `recovery.brokenMasterResourceCount`
+- `recovery.recoverableResourceCount`
+- `recovery.activeDraftCount`
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`
@@ -284,3 +299,24 @@ Sync data:
 `degraded` は remote sync 失敗時に local runtime data で継続した場合に `true` になる。
 
 Unresolved Master reference は `resolved` / `missing` / `deleted` を Runtime entity の `resolution` と top-level `warnings` に保持する。`missing` / `deleted` だけでは `/sync` の `degraded`、status の `fallbackActive`、readiness degradation を発火しない。Workout は Runtime Data として accept され、sets/reps/weight/count aggregate の対象に残る。
+
+## Recovery Contract
+
+Recovery endpoints are purpose-specific and do not expose Raw JSON write, arbitrary path write, generic Git operations, credential material, automatic merge, force push, or bulk recovery.
+
+Current v2.1.0 public shape is shared by Windows AF, Android AF, Node development runtime, shared frontend client, and Maintenance UI:
+
+- `BrokenResourceSummary`
+- `RecoveryResourceDetail`
+- `ResourceInspection`
+- `RecoveryEligibility`
+- `RecoveryCapabilities`
+- `RecoveryDraftSnapshot`
+- `RecoveryDraft`
+- `RecoveryField`
+- `RecoverySuggestion`
+- `RecoveryValidationResult`
+- `RecoveryCommitRequest`
+- `RecoveryCommitResult`
+
+Windows provides Recovery Git commit when the configured GitHub write boundary is available. Android exposes the same endpoint set and read/draft/validate semantics, but must return truthful capability and `RECOVERY_UNAVAILABLE` for commit when the packaged runtime cannot safely perform the Recovery Git write boundary. Node development runtime mirrors the public shape for local development and must not fake commit success.

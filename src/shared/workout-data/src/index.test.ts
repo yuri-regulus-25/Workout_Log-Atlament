@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   loadSampleWorkoutSessions,
   loadWorkoutSessionsFromFiles,
+  createWorkoutRecoveryDraft,
   parseMachineMaster,
   parseGymMaster,
   parseWorkoutJson,
@@ -40,6 +41,15 @@ describe('workout-data', () => {
     )
 
     expect(result.issues).toEqual([])
+    expect(result.inspections).toEqual([
+      expect.objectContaining({
+        path: 'workouts/2026/08/2026-08-22.json',
+        resourceType: 'WORKOUT',
+        inspectionVersion: 1,
+        health: 'healthy',
+        issues: [],
+      }),
+    ])
     expect(result.sessions[0].date).toBe('2026-08-22')
     expect(result.sessions[0].gym.name).toBe('エニタイムフィットネス 横須賀汐入店')
     expect(result.sessions[0].machines[0]).toMatchObject({
@@ -59,6 +69,11 @@ describe('workout-data', () => {
     )
 
     expect(result.issues).toEqual([])
+    expect(result.inspections?.[0]).toMatchObject({
+      path: 'workouts/2026/08/2026-08-22.jsonl',
+      health: 'healthy',
+      issues: [],
+    })
     expect(result.sessions.map((session) => session.session_id)).toEqual([
       '2026-08-22-01',
       '2026-08-22-02',
@@ -483,6 +498,143 @@ describe('workout-data', () => {
 
     expect(result.sessions).toHaveLength(1)
     expect(result.issues).toHaveLength(1)
+  })
+
+  it('quarantines a broken JSON resource with retained inspection issue', () => {
+    const result = parseWorkoutJson('workouts/broken.json', '{')
+
+    expect(result.sessions).toEqual([])
+    expect(result.issues).toHaveLength(1)
+    expect(result.inspections).toEqual([
+      expect.objectContaining({
+        path: 'workouts/broken.json',
+        health: 'broken',
+        issues: [
+          expect.objectContaining({
+            code: 'WORKOUT_JSON_INVALID',
+            severity: 'broken',
+          }),
+        ],
+      }),
+    ])
+  })
+
+  it('quarantines an entire JSONL resource when one line is broken', () => {
+    const result = parseWorkoutJsonl(
+      'workouts/mixed.jsonl',
+      [
+        '{"schema_version":1,"session_id":"valid-1","date":"2026-08-22","status":"complete","gym_id":"af-shioiri","machines":[{"machine_id":"abdominal","sets":[{"set":1,"weight_kg":40,"reps":12}]}]}',
+        '{"schema_version":1,"session_id":"broken"',
+        '{"schema_version":1,"session_id":"valid-2","date":"2026-08-24","status":"complete","gym_id":"af-shioiri","machines":[{"machine_id":"abdominal","sets":[{"set":1,"weight_kg":41,"reps":10}]}]}',
+      ].join('\n'),
+    )
+
+    expect(result.sessions).toEqual([])
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]).toMatchObject({ filePath: 'workouts/mixed.jsonl', line: 2 })
+    expect(result.inspections?.[0]).toMatchObject({
+      path: 'workouts/mixed.jsonl',
+      health: 'broken',
+      issues: [
+        expect.objectContaining({
+          code: 'WORKOUT_JSON_INVALID',
+          severity: 'broken',
+          location: expect.objectContaining({ line: 2 }),
+        }),
+      ],
+    })
+  })
+
+  it('adopts healthy resources around a broken resource', () => {
+    const valid = (sessionId: string, date: string) => JSON.stringify({
+      schema_version: 1,
+      session_id: sessionId,
+      date,
+      status: 'partial',
+      gym_id: 'af-shioiri',
+      machines: [],
+    })
+    const result = loadWorkoutSessionsFromFiles([
+      { path: 'workouts/a.json', content: valid('a', '2026-08-20') },
+      { path: 'workouts/b.json', content: '{' },
+      { path: 'workouts/c.json', content: valid('c', '2026-08-22') },
+    ])
+
+    expect(result.sessions.map((session) => session.session_id)).toEqual(['a', 'c'])
+    expect(result.inspections?.map((inspection) => [inspection.path, inspection.health])).toEqual([
+      ['workouts/a.json', 'healthy'],
+      ['workouts/b.json', 'broken'],
+      ['workouts/c.json', 'healthy'],
+    ])
+  })
+
+  it('classifies unresolved master references as degraded while adopting the workout', () => {
+    const result = parseWorkoutJson(
+      'workouts/degraded.json',
+      JSON.stringify({
+        schema_version: 1,
+        session_id: 'degraded',
+        date: '2026-08-22',
+        status: 'partial',
+        gym_id: 'af-shioiri',
+        machines: [
+          {
+            machine_id: 'unknown-machine',
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      }),
+    )
+
+    expect(result.sessions.map((session) => session.session_id)).toEqual(['degraded'])
+    expect(result.issues).toEqual([])
+    expect(result.inspections?.[0]).toMatchObject({
+      health: 'degraded',
+      issues: [
+        expect.objectContaining({
+          code: 'MASTER_REFERENCE_MISSING',
+          severity: 'warning',
+          location: expect.objectContaining({ sessionId: 'degraded' }),
+        }),
+      ],
+    })
+  })
+
+  it('creates a revision-bound recovery draft from structurally readable workout fields', () => {
+    const draft = createWorkoutRecoveryDraft(
+      'workouts/broken.json',
+      'source-revision-a',
+      JSON.stringify({
+        schema_version: 1,
+        session_id: 'broken',
+        date: '2026-08-22',
+        status: 'complete',
+        gym_id: 'af-shioiri',
+        condition: null,
+      }),
+    )
+
+    expect(draft).toMatchObject({
+      schemaVersion: 1,
+      sourcePath: 'workouts/broken.json',
+      sourceRevision: 'source-revision-a',
+      resourceType: 'WORKOUT',
+      inspectionVersion: 1,
+      draftRevision: 1,
+      suggestions: [],
+    })
+    expect(draft.fields).toEqual(expect.arrayContaining([
+      { fieldPath: '/session_id', state: 'recovered', source: 'original', value: 'broken' },
+      { fieldPath: '/condition', state: 'recovered', source: 'original', value: null },
+      { fieldPath: '/machines', state: 'unresolved', source: 'original' },
+    ]))
+  })
+
+  it('keeps parse-impossible recovery draft fields unresolved without inventing values', () => {
+    const draft = createWorkoutRecoveryDraft('workouts/unreadable.json', 'rev-a', '{')
+
+    expect(draft.fields).toContainEqual({ fieldPath: '/date', state: 'unresolved', source: 'original' })
+    expect(draft.fields.some((field) => 'value' in field)).toBe(false)
   })
 
   it('validates machine master records', () => {
