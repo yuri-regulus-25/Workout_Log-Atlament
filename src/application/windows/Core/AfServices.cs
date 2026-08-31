@@ -2346,16 +2346,19 @@ public sealed class GithubAccessService
         string? token,
         CancellationToken cancellationToken)
     {
-        var rawUrl = $"https://raw.githubusercontent.com/{configuration.Repository.Owner}/{configuration.Repository.Repository}/{Uri.EscapeDataString(configuration.Repository.Ref)}/{EscapeRemotePath(path)}";
-        using var request = CreateRequest(rawUrl, token);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var content = await ReadGithubContentAsync(configuration, path, token, cancellationToken);
+        if (content.Errors.Count > 0)
         {
-            return (null, MapGithubError(response.StatusCode, path));
+            return (null, content.Errors.First());
         }
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return (new RuntimeSourceFile(path, content, CreateContentRevision(content)), null);
+        var decoded = DecodeGithubContent(content.Content!);
+        if (decoded is null)
+        {
+            return (null, new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true));
+        }
+
+        return (new RuntimeSourceFile(path, decoded, CreateContentRevision(decoded)), null);
     }
 
     private async Task<(string? Revision, string? Content, IReadOnlyList<AfError> Errors)> ReadGithubContentAsync(

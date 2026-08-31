@@ -722,24 +722,24 @@ public sealed class AfCoreTests
                     return JsonResponse("""{ "content": { "sha": "replacement-blob-sha" }, "commit": { "sha": "recovery-commit-sha" } }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/master/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal))
                 {
-                    return JsonResponse(brokenSource);
+                    return JsonResponse($$"""{ "sha": "source-blob-sha", "content": "{{EncodeContent(brokenSource)}}" }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=recovery-commit-sha", StringComparison.Ordinal))
                 {
-                    return JsonResponse(remoteWorkoutContent);
+                    return JsonResponse($$"""{ "sha": "replacement-blob-sha", "content": "{{EncodeContent(remoteWorkoutContent)}}" }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/master/machines.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json?ref=recovery-commit-sha", StringComparison.Ordinal))
                 {
-                    return JsonResponse(MachineMaster.Content);
+                    return JsonResponse($$"""{ "sha": "machine-sha", "content": "{{EncodeContent(MachineMaster.Content)}}" }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/master/gyms.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/gyms.json?ref=recovery-commit-sha", StringComparison.Ordinal))
                 {
-                    return JsonResponse(GymMaster.Content);
+                    return JsonResponse($$"""{ "sha": "gym-sha", "content": "{{EncodeContent(GymMaster.Content)}}" }""");
                 }
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -769,6 +769,10 @@ public sealed class AfCoreTests
             var (runtime, runtimeErrors) = new RuntimeDataStore(paths).LoadCurrent();
             Assert.Empty(runtimeErrors);
             Assert.Equal("recover-me", Assert.Single(runtime!.Sessions).SessionId);
+            var inventory = await application.ListRecoveryResourcesAsync(CancellationToken.None);
+            Assert.Equal(200, inventory.StatusCode);
+            Assert.Empty(inventory.Response.Data!);
+            Assert.DoesNotContain(http.RequestedUrls, url => url.Contains("raw.githubusercontent.com", StringComparison.Ordinal));
         }
         finally
         {
@@ -801,9 +805,9 @@ public sealed class AfCoreTests
                     return JsonResponse($$"""[{ "path": "{{sourcePath}}", "type": "file" }]""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal))
                 {
-                    return JsonResponse(brokenSource);
+                    return JsonResponse($$"""{ "sha": "source-blob-sha", "content": "{{EncodeContent(brokenSource)}}" }""");
                 }
 
                 if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
@@ -969,11 +973,15 @@ public sealed class AfCoreTests
                     """);
             }
 
-            if (url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
-                url.Contains("/data/master/machines.json", StringComparison.Ordinal) ||
-                url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+            if (url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal))
             {
-                return JsonResponse("{}");
+                return JsonResponse($$"""{ "sha": "workout-sha", "content": "{{EncodeContent("{}")}}" }""");
+            }
+
+            if (url.Contains("/contents/data/master/machines.json?ref=master", StringComparison.Ordinal) ||
+                url.Contains("/contents/data/master/gyms.json?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""{ "sha": "master-sha", "content": "{{EncodeContent("{}")}}" }""");
             }
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -989,7 +997,8 @@ public sealed class AfCoreTests
             "data/master/machines.json",
             "data/master/gyms.json"
         }, files.Select(file => file.Path));
-        Assert.Contains(http.RequestedUrls, url => url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal));
+        Assert.Contains(http.RequestedUrls, url => url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal));
+        Assert.DoesNotContain(http.RequestedUrls, url => url.Contains("raw.githubusercontent.com", StringComparison.Ordinal));
         Assert.DoesNotContain(http.RequestedUrls, url => url.Contains("/readme.md", StringComparison.Ordinal));
     }
 
@@ -1008,11 +1017,15 @@ public sealed class AfCoreTests
                     """);
             }
 
-            if (url.Contains("/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal) ||
-                url.Contains("/master/machines.json", StringComparison.Ordinal) ||
-                url.Contains("/master/gyms.json", StringComparison.Ordinal))
+            if (url.Contains("/contents/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal))
             {
-                return JsonResponse("{}");
+                return JsonResponse($$"""{ "sha": "workout-sha", "content": "{{EncodeContent("{}")}}" }""");
+            }
+
+            if (url.Contains("/contents/master/machines.json?ref=master", StringComparison.Ordinal) ||
+                url.Contains("/contents/master/gyms.json?ref=master", StringComparison.Ordinal))
+            {
+                return JsonResponse($$"""{ "sha": "master-sha", "content": "{{EncodeContent("{}")}}" }""");
             }
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -1405,9 +1418,10 @@ public sealed class AfCoreTests
                         """);
                 }
 
-                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                if (url.Contains("/contents/data/workouts/2026-08-24.json?ref=master", StringComparison.Ordinal))
                 {
-                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
+                    var workout = Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content;
+                    return JsonResponse($$"""{ "sha": "workout-sha", "content": "{{EncodeContent(workout)}}" }""");
                 }
 
                 if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
@@ -1428,16 +1442,6 @@ public sealed class AfCoreTests
                           "content": "{{EncodeContent(GymMaster.Content)}}"
                         }
                         """);
-                }
-
-                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(MachineMaster.Content);
-                }
-
-                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(GymMaster.Content);
                 }
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -1527,9 +1531,10 @@ public sealed class AfCoreTests
                         """);
                 }
 
-                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                if (url.Contains("/contents/data/workouts/2026-08-24.json?ref=master", StringComparison.Ordinal))
                 {
-                    return JsonResponse(Workout("workouts/2026-08-24.json", "missing-gym", "missing-machine").Content);
+                    var workout = Workout("workouts/2026-08-24.json", "missing-gym", "missing-machine").Content;
+                    return JsonResponse($$"""{ "sha": "workout-sha", "content": "{{EncodeContent(workout)}}" }""");
                 }
 
                 if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
@@ -1550,16 +1555,6 @@ public sealed class AfCoreTests
                           "content": "{{EncodeContent(GymMaster.Content)}}"
                         }
                         """);
-                }
-
-                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(MachineMaster.Content);
-                }
-
-                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(GymMaster.Content);
                 }
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -1627,9 +1622,10 @@ public sealed class AfCoreTests
                         """);
                 }
 
-                if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
+                if (url.Contains("/contents/data/workouts/2026-08-24.json?ref=master", StringComparison.Ordinal))
                 {
-                    return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
+                    var workout = Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content;
+                    return JsonResponse($$"""{ "sha": "workout-sha", "content": "{{EncodeContent(workout)}}" }""");
                 }
 
                 if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
@@ -1650,16 +1646,6 @@ public sealed class AfCoreTests
                           "content": "{{EncodeContent(GymMaster.Content)}}"
                         }
                         """);
-                }
-
-                if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(MachineMaster.Content);
-                }
-
-                if (url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
-                {
-                    return JsonResponse(GymMaster.Content);
                 }
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -2154,15 +2140,18 @@ public sealed class AfCoreTests
                 requests.Add(CloneRequest(request));
                 if (request.Method == HttpMethod.Get)
                 {
-                    if (request.RequestUri!.Host == "raw.githubusercontent.com")
+                    if (request.RequestUri!.AbsoluteUri.Contains("/contents/data/workouts/valid.json?ref=master", StringComparison.Ordinal))
                     {
-                        return new HttpResponseMessage(HttpStatusCode.OK)
-                        {
-                            Content = new StringContent("{\"schema_version\":1,\"session_id\":\"valid\",\"date\":\"2026-08-24\",\"status\":\"complete\",\"gym_id\":\"known-gym\",\"machines\":[{\"machine_id\":\"known-machine\",\"sets\":[{\"set\":1,\"weight_kg\":20,\"reps\":10}]}]}", Encoding.UTF8, "application/json")
-                        };
+                        const string workout = "{\"schema_version\":1,\"session_id\":\"valid\",\"date\":\"2026-08-24\",\"status\":\"complete\",\"gym_id\":\"known-gym\",\"machines\":[{\"machine_id\":\"known-machine\",\"sets\":[{\"set\":1,\"weight_kg\":20,\"reps\":10}]}]}";
+                        return JsonResponse($$"""
+                            {
+                              "sha": "workout-sha",
+                              "content": "{{EncodeContent(workout)}}"
+                            }
+                            """);
                     }
 
-                    if (request.RequestUri!.AbsoluteUri.Contains("/contents/data/workouts", StringComparison.Ordinal))
+                    if (request.RequestUri!.AbsoluteUri.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
                     {
                         return JsonResponse("""
                             [
