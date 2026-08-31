@@ -4,9 +4,76 @@
   "date": "2026-04-29",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
-    {"exercise_id":"chest-press","sets":[{"set":1,"weight_kg":27.5,"reps":10},{"set":2,"weight_kg":30,"reps":10},{"set":3,"weight_kg":30,"reps":10}]},
-    {"exercise_id":"leg-press","sets":[{"set":1,"weight_kg":70,"reps":10},{"set":2,"weight_kg":80,"reps":10},{"set":3,"weight_kg":92.5,"reps":10},{"set":4,"weight_kg":100,"reps":10},{"set":5,"weight_kg":125,"reps":10}]},
-    {"exercise_id":"hip-abduction","sets":[{"set":1,"weight_kg":80,"reps":10},{"set":2,"weight_kg":82.5,"reps":10},{"set":3,"weight_kg":85,"reps":10}]}
+  "machines": [
+    {
+      "machine_id": "chest-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 27.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 30,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 30,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "leg-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 70,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 80,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 92.5,
+          "reps": 10
+        },
+        {
+          "set": 4,
+          "weight_kg": 100,
+          "reps": 10
+        },
+        {
+          "set": 5,
+          "weight_kg": 125,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "hip-abduction",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 80,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 82.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 85,
+          "reps": 10
+        }
+      ]
+    }
   ]
 }

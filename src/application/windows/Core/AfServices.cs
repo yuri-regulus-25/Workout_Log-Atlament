@@ -123,7 +123,7 @@ public sealed class AfLog
 
 public sealed class ConfigurationStore
 {
-    private static readonly HashSet<string> ResourceTypes = new(StringComparer.Ordinal) { "WORKOUT", "EXERCISE_MASTER", "GYM_MASTER" };
+    private static readonly HashSet<string> ResourceTypes = new(StringComparer.Ordinal) { "WORKOUT", "MACHINE_MASTER", "GYM_MASTER" };
     private static readonly HashSet<string> ResourceKinds = new(StringComparer.Ordinal) { "file", "directory" };
     private readonly WindowsPathProvider _paths;
 
@@ -309,14 +309,14 @@ public sealed class RuntimeDataStore
         Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
     }
 
-    public IReadOnlyList<AfError> SaveCurrent(RuntimeBuildResult result)
+    public IReadOnlyList<AfError> SaveCurrent(RuntimeBuildResult result, LocalMasterDocuments? masterDocuments = null)
     {
         try
         {
             // Write through the temporary runtime area so Frontend requests never observe a
             // partially serialized runtime-data.json during sync.
             Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
-            var data = new RuntimeDataFile(1, DateTimeOffset.UtcNow, result.Sessions, result.Errors);
+            var data = new RuntimeDataFile(2, DateTimeOffset.UtcNow, result.Sessions, result.Errors, result.Warnings, masterDocuments);
             var tempPath = Path.Combine(_paths.TemporaryRuntimeRoot, "runtime-data.json");
             File.WriteAllText(tempPath, JsonSerializer.Serialize(data, AfJson.Options), Encoding.UTF8);
             Directory.CreateDirectory(_paths.CurrentRuntimeRoot);
@@ -340,7 +340,7 @@ public sealed class RuntimeDataStore
             }
 
             var data = JsonSerializer.Deserialize<RuntimeDataFile>(File.ReadAllText(_paths.RuntimeDataPath), AfJson.Options);
-            if (data is null || data.SchemaVersion != 1 || data.Sessions is null)
+            if (data is null || data.SchemaVersion is not (1 or 2) || data.Sessions is null)
             {
                 return (null, new[] { new AfError(AfErrorCodes.RuntimeDataInvalid, "Runtime Data contract is invalid.", true) });
             }
@@ -361,22 +361,23 @@ public sealed class RuntimeDataBuilder
         "chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other"
     };
 
-    public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile exercisesFile, RuntimeSourceFile gymsFile)
+    public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile machinesFile, RuntimeSourceFile gymsFile)
     {
         var errors = new List<AfError>();
-        var exercises = ParseExerciseMaster(exercisesFile, errors);
+        var warnings = new List<RuntimeWarning>();
+        var machines = ParseMachineMaster(machinesFile, errors);
         var gyms = ParseGymMaster(gymsFile, errors);
         if (errors.Any(error => error.Code == AfErrorCodes.RuntimeDataInvalid))
         {
             // Master data is structural input for every workout. Stop immediately when it is
             // malformed so downstream errors do not hide the actual contract failure.
-            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
         }
 
         if (workoutFiles.Count == 0)
         {
             errors.Add(new AfError(AfErrorCodes.RuntimeDataEmpty, "Workout resource is empty.", true));
-            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
         }
 
         var sessions = new List<WorkoutSession>();
@@ -389,69 +390,79 @@ public sealed class RuntimeDataBuilder
                 {
                     lineNo++;
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    var parsed = BuildSession(file.Path, lineNo, line, exercises, gyms, errors);
-                    if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+                    var parsed = BuildSession(file.Path, lineNo, line, machines, gyms, errors, warnings);
+                    if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
                     if (parsed.Session is not null) sessions.Add(parsed.Session);
                 }
             }
             else if (file.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {
-                var parsed = BuildSession(file.Path, null, file.Content, exercises, gyms, errors);
-                if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, true);
+                var parsed = BuildSession(file.Path, null, file.Content, machines, gyms, errors, warnings);
+                if (parsed.TechnicalInvalid) return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
                 if (parsed.Session is not null) sessions.Add(parsed.Session);
             }
         }
 
         return errors.Count > 0
-            // Master lookup misses are reported as user-actionable sync errors, but the current
-            // runtime file is left untouched so local fallback can continue serving old data.
-            ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, false)
-            : new RuntimeBuildResult(sessions, errors, false);
+            ? new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, false)
+            : new RuntimeBuildResult(sessions, errors, warnings, false);
     }
 
     public (WorkoutSession? Session, bool TechnicalInvalid) BuildSingleSessionForTest(string json, string path = "test.json")
     {
-        var exercises = new Dictionary<string, ExerciseMasterItem>
+        var machines = new Dictionary<string, MachineMasterItem>
         {
-            ["known-exercise"] = new("known-exercise", "Known Exercise", "chest")
+            ["known-machine"] = new("known-machine", "Known Machine", "chest", false)
         };
         var gyms = new Dictionary<string, GymMasterItem>
         {
-            ["known-gym"] = new("known-gym", "Known Gym", "KG")
+            ["known-gym"] = new("known-gym", "Known Gym", "KG", false)
         };
         var errors = new List<AfError>();
-        return BuildSession(path, null, json, exercises, gyms, errors);
+        var warnings = new List<RuntimeWarning>();
+        return BuildSession(path, null, json, machines, gyms, errors, warnings);
     }
 
-    private static Dictionary<string, ExerciseMasterItem> ParseExerciseMaster(RuntimeSourceFile file, List<AfError> errors)
+    private static Dictionary<string, MachineMasterItem> ParseMachineMaster(RuntimeSourceFile file, List<AfError> errors)
     {
         try
         {
             using var document = JsonDocument.Parse(file.Content);
             var root = document.RootElement;
-            if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("exercises", out var items) || items.ValueKind != JsonValueKind.Array)
+            if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("machines", out var items) || items.ValueKind != JsonValueKind.Array)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master contract is invalid.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master contract is invalid.", false));
                 return new();
             }
 
-            var result = new Dictionary<string, ExerciseMasterItem>(StringComparer.Ordinal);
+            var result = new Dictionary<string, MachineMasterItem>(StringComparer.Ordinal);
             foreach (var item in items.EnumerateArray())
             {
-                if (!TryGetString(item, "exercise_id", out var id) ||
+                if (!TryGetString(item, "machine_id", out var id) ||
                     !TryGetString(item, "name", out var name) ||
                     !TryGetString(item, "body_part", out var bodyPart) ||
                     !BodyParts.Contains(bodyPart) ||
                     !TryGetBool(item, "active", out _))
                 {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master item is invalid.", false));
+                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master item is invalid.", false));
                     return new();
                 }
 
-                if (!result.TryAdd(id, new ExerciseMasterItem(id, name, bodyPart)))
+                var deleted = TryGetOptionalBool(item, "deleted") ?? false;
+                var record = new MachineMasterItem(id, name, bodyPart, deleted);
+                if (!result.TryAdd(id, record))
                 {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate exercise_id: {id}.", false));
+                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine_id: {id}.", false));
                     return new();
+                }
+
+                foreach (var sourceId in ReadStringArray(item, "source_ids"))
+                {
+                    if (!result.TryAdd(sourceId, record))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine source_id: {sourceId}.", false));
+                        return new();
+                    }
                 }
             }
 
@@ -459,7 +470,7 @@ public sealed class RuntimeDataBuilder
         }
         catch
         {
-            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Exercise master JSON is invalid.", false));
+            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master JSON is invalid.", false));
             return new();
         }
     }
@@ -488,10 +499,21 @@ public sealed class RuntimeDataBuilder
                 }
 
                 TryGetString(item, "short_name", out var shortName);
-                if (!result.TryAdd(id, new GymMasterItem(id, name, shortName)))
+                var deleted = TryGetOptionalBool(item, "deleted") ?? false;
+                var record = new GymMasterItem(id, name, shortName, deleted);
+                if (!result.TryAdd(id, record))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym_id: {id}.", false));
                     return new();
+                }
+
+                foreach (var sourceId in ReadStringArray(item, "source_ids"))
+                {
+                    if (!result.TryAdd(sourceId, record))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym source_id: {sourceId}.", false));
+                        return new();
+                    }
                 }
             }
 
@@ -508,9 +530,10 @@ public sealed class RuntimeDataBuilder
         string filePath,
         int? line,
         string content,
-        IReadOnlyDictionary<string, ExerciseMasterItem> exercises,
+        IReadOnlyDictionary<string, MachineMasterItem> machines,
         IReadOnlyDictionary<string, GymMasterItem> gyms,
-        List<AfError> errors)
+        List<AfError> errors,
+        List<RuntimeWarning> warnings)
     {
         JsonDocument document;
         try
@@ -534,37 +557,36 @@ public sealed class RuntimeDataBuilder
                 !TryGetString(root, "status", out var status) ||
                 status is not ("complete" or "partial") ||
                 !TryGetString(root, "gym_id", out var gymId) ||
-                !root.TryGetProperty("exercises", out var exerciseItems) ||
-                exerciseItems.ValueKind != JsonValueKind.Array)
+                !root.TryGetProperty("machines", out var machineItems) ||
+                machineItems.ValueKind != JsonValueKind.Array)
             {
                 errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Workout required fields are invalid.", false));
                 return (null, true);
             }
 
-            if (status == "complete" && exerciseItems.GetArrayLength() == 0)
+            if (status == "complete" && machineItems.GetArrayLength() == 0)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires exercises.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires machines.", false));
                 return (null, true);
             }
 
-            if (!gyms.TryGetValue(gymId, out var gymMaster))
+            gyms.TryGetValue(gymId, out var gymMaster);
+            if (gymMaster is null || gymMaster.Deleted)
             {
-                errors.Add(new AfError(AfErrorCodes.MasterGymNotFound, Location(filePath, line) + $"Gym master is not found: {gymId}.", true));
-                return (null, false);
+                warnings.Add(CreateReferenceWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, sessionId, filePath, line));
             }
 
-            var workoutExercises = new List<WorkoutExercise>();
-            foreach (var exerciseItem in exerciseItems.EnumerateArray())
+            var workoutMachines = new List<WorkoutMachine>();
+            foreach (var machineItem in machineItems.EnumerateArray())
             {
-                var parsed = BuildExercise(filePath, line, exerciseItem, exercises, errors);
+                var parsed = BuildMachine(filePath, line, machineItem, machines, errors, warnings, sessionId);
                 if (parsed.TechnicalInvalid) return (null, true);
-                if (parsed.MasterResolveFailure) return (null, false);
-                if (parsed.Exercise is not null) workoutExercises.Add(parsed.Exercise);
+                if (parsed.Machine is not null) workoutMachines.Add(parsed.Machine);
             }
 
-            if (status == "complete" && workoutExercises.Count == 0)
+            if (status == "complete" && workoutMachines.Count == 0)
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires valid exercises.", false));
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Complete workout session requires valid machines.", false));
                 return (null, true);
             }
 
@@ -573,38 +595,44 @@ public sealed class RuntimeDataBuilder
                 sessionId,
                 date,
                 status,
-                new Gym(gymMaster.Id, gymMaster.Name, gymMaster.ShortName),
+                new Gym(
+                    gymMaster?.Id ?? gymId,
+                    gymMaster is not null && !gymMaster.Deleted ? gymMaster.Name : null,
+                    gymMaster is not null && !gymMaster.Deleted ? gymMaster.ShortName : null,
+                    ResolveMasterReference(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false)),
                 ReadCondition(root),
-                workoutExercises,
+                workoutMachines,
                 ReadStringArray(root, "notes"));
             return (session, false);
         }
     }
 
-    private static (WorkoutExercise? Exercise, bool TechnicalInvalid, bool MasterResolveFailure) BuildExercise(
+    private static (WorkoutMachine? Machine, bool TechnicalInvalid) BuildMachine(
         string filePath,
         int? line,
         JsonElement item,
-        IReadOnlyDictionary<string, ExerciseMasterItem> masters,
-        List<AfError> errors)
+        IReadOnlyDictionary<string, MachineMasterItem> masters,
+        List<AfError> errors,
+        List<RuntimeWarning> warnings,
+        string sessionId)
     {
         if (item.ValueKind != JsonValueKind.Object ||
-            !TryGetString(item, "exercise_id", out var exerciseId) ||
+            !TryGetString(item, "machine_id", out var machineId) ||
             !item.TryGetProperty("sets", out var setItems) ||
             setItems.ValueKind != JsonValueKind.Array ||
             setItems.GetArrayLength() == 0)
         {
-            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Exercise required fields are invalid.", false));
-            return (null, true, false);
+            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + "Machine required fields are invalid.", false));
+            return (null, true);
         }
 
-        if (!masters.TryGetValue(exerciseId, out var master))
+        masters.TryGetValue(machineId, out var master);
+        if (master is null || master.Deleted)
         {
-            errors.Add(new AfError(AfErrorCodes.MasterExerciseNotFound, Location(filePath, line) + $"Exercise master is not found: {exerciseId}.", true));
-            return (null, false, true);
+            warnings.Add(CreateReferenceWarning("machine", machineId, master?.Id, master?.Deleted ?? false, sessionId, filePath, line));
         }
 
-        var sets = new List<ExerciseSet>();
+        var sets = new List<MachineSet>();
         foreach (var setItem in setItems.EnumerateArray())
         {
             if (setItem.ValueKind != JsonValueKind.Object ||
@@ -612,11 +640,11 @@ public sealed class RuntimeDataBuilder
                 !TryGetDecimal(setItem, "weight_kg", out var weightKg) ||
                 !TryGetInt(setItem, "reps", out var reps))
             {
-                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + $"Set in exercise {exerciseId} is invalid.", false));
-                return (null, true, false);
+                errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, Location(filePath, line) + $"Set in machine {machineId} is invalid.", false));
+                return (null, true);
             }
 
-            sets.Add(new ExerciseSet(
+            sets.Add(new MachineSet(
                 setNumber,
                 weightKg,
                 reps,
@@ -626,7 +654,13 @@ public sealed class RuntimeDataBuilder
                 TryGetOptionalString(setItem, "note")));
         }
 
-        return (new WorkoutExercise(exerciseId, master.Name, master.BodyPart, sets, ReadStringArray(item, "notes")), false, false);
+        return (new WorkoutMachine(
+            master?.Id ?? machineId,
+            master is not null && !master.Deleted ? master.Name : null,
+            master is not null && !master.Deleted ? master.BodyPart : null,
+            ResolveMasterReference(machineId, master?.Id, master?.Deleted ?? false),
+            sets,
+            ReadStringArray(item, "notes")), false);
     }
 
     private static SessionCondition? ReadCondition(JsonElement root)
@@ -646,6 +680,40 @@ public sealed class RuntimeDataBuilder
     }
 
     private static string Location(string filePath, int? line) => line is null ? $"{filePath}: " : $"{filePath}:{line}: ";
+
+    private static MasterReferenceResolution ResolveMasterReference(string originalId, string? resolvedId, bool deleted)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedId))
+        {
+            return new MasterReferenceResolution("missing", originalId, null);
+        }
+
+        return new MasterReferenceResolution(deleted ? "deleted" : "resolved", originalId, resolvedId);
+    }
+
+    private static RuntimeWarning CreateReferenceWarning(
+        string referenceKind,
+        string originalId,
+        string? resolvedId,
+        bool deleted,
+        string sessionId,
+        string filePath,
+        int? line)
+    {
+        var resolutionState = deleted ? "deleted" : "missing";
+        var subject = referenceKind == "gym" ? "ジム" : "マシン";
+        var stateText = deleted ? "削除されています" : "存在しません";
+        return new RuntimeWarning(
+            deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
+            referenceKind,
+            resolutionState,
+            originalId,
+            resolvedId,
+            sessionId,
+            filePath,
+            line,
+            $"特定の{subject}が{stateText}: {originalId}");
+    }
 
     private static bool TryGetString(JsonElement element, string name, out string value)
     {
@@ -674,6 +742,12 @@ public sealed class RuntimeDataBuilder
         return element.TryGetProperty(name, out var property) && (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False) && (value = property.GetBoolean()) == value;
     }
 
+    private static bool? TryGetOptionalBool(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var property)) return null;
+        return property.ValueKind is JsonValueKind.True or JsonValueKind.False ? property.GetBoolean() : null;
+    }
+
     private static decimal? TryGetNullableDecimal(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var property) || property.ValueKind == JsonValueKind.Null) return null;
@@ -700,12 +774,197 @@ public sealed class RuntimeDataBuilder
             .ToArray();
     }
 
-    private sealed record ExerciseMasterItem(string Id, string Name, string BodyPart);
-    private sealed record GymMasterItem(string Id, string Name, string? ShortName);
+    private sealed record MachineMasterItem(string Id, string Name, string BodyPart, bool Deleted);
+    private sealed record GymMasterItem(string Id, string Name, string? ShortName, bool Deleted);
+}
+
+public static class MasterWriteValidator
+{
+    private static readonly HashSet<string> BodyParts = new(StringComparer.Ordinal)
+    {
+        "chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other"
+    };
+
+    public static IReadOnlyList<AfError> ValidateWholeMaster(string machineMasterContent, string gymMasterContent)
+    {
+        var errors = new List<AfError>();
+        ValidateMachineMaster(machineMasterContent, errors);
+        ValidateGymMaster(gymMasterContent, errors);
+        return errors;
+    }
+
+    private static void ValidateMachineMaster(string content, List<AfError> errors)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            if (!TryGetInt(root, "schema_version", out var schemaVersion) || schemaVersion != 1 ||
+                !root.TryGetProperty("machines", out var machines) || machines.ValueKind != JsonValueKind.Array)
+            {
+                errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Machine master contract is invalid.", true));
+                return;
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var machine in machines.EnumerateArray())
+            {
+                if (!TryGetString(machine, "machine_id", out var id) ||
+                    !TryGetString(machine, "name", out _) ||
+                    !TryGetString(machine, "body_part", out var bodyPart) ||
+                    !BodyParts.Contains(bodyPart) ||
+                    !TryGetBool(machine, "active", out _) ||
+                    !TryGetBool(machine, "deleted", out _) ||
+                    !machine.TryGetProperty("aliases", out var aliases) ||
+                    aliases.ValueKind != JsonValueKind.Array)
+                {
+                    errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Machine master item is invalid.", true));
+                    return;
+                }
+
+                if (!ids.Add(id))
+                {
+                    errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate machine_id: {id}.", true));
+                    return;
+                }
+
+                foreach (var sourceId in ReadStringArray(machine, "source_ids"))
+                {
+                    if (!ids.Add(sourceId))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate machine source_id: {sourceId}.", true));
+                        return;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Machine master JSON is invalid.", true));
+        }
+    }
+
+    private static void ValidateGymMaster(string content, List<AfError> errors)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            if (!TryGetInt(root, "schema_version", out var schemaVersion) || schemaVersion != 1 ||
+                !root.TryGetProperty("gyms", out var gyms) || gyms.ValueKind != JsonValueKind.Array)
+            {
+                errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Gym master contract is invalid.", true));
+                return;
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var mainGymCount = 0;
+            foreach (var gym in gyms.EnumerateArray())
+            {
+                if (!TryGetString(gym, "gym_id", out var id) ||
+                    !TryGetString(gym, "name", out _) ||
+                    !TryGetBool(gym, "active", out var active) ||
+                    !TryGetBool(gym, "deleted", out var deleted) ||
+                    !TryGetBool(gym, "main", out var main))
+                {
+                    errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Gym master item is invalid.", true));
+                    return;
+                }
+
+                if (!ids.Add(id))
+                {
+                    errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate gym_id: {id}.", true));
+                    return;
+                }
+
+                foreach (var sourceId in ReadStringArray(gym, "source_ids"))
+                {
+                    if (!ids.Add(sourceId))
+                    {
+                        errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, $"Duplicate gym source_id: {sourceId}.", true));
+                        return;
+                    }
+                }
+
+                if (!main)
+                {
+                    continue;
+                }
+
+                mainGymCount++;
+                if (!active || deleted)
+                {
+                    errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Main gym must be active and not logically deleted.", true));
+                    return;
+                }
+            }
+
+            if (mainGymCount > 1)
+            {
+                errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Gym master must have at most one main gym.", true));
+            }
+        }
+        catch (JsonException)
+        {
+            errors.Add(new AfError(AfErrorCodes.MasterWriteInvalid, "Gym master JSON is invalid.", true));
+        }
+    }
+
+    private static bool TryGetString(JsonElement element, string property, out string value)
+    {
+        value = "";
+        if (!element.TryGetProperty(property, out var child) || child.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        value = child.GetString()?.Trim() ?? "";
+        return value.Length > 0;
+    }
+
+    private static bool TryGetInt(JsonElement element, string property, out int value)
+    {
+        value = 0;
+        return element.TryGetProperty(property, out var child) && child.ValueKind == JsonValueKind.Number && child.TryGetInt32(out value);
+    }
+
+    private static bool TryGetBool(JsonElement element, string property, out bool value)
+    {
+        value = false;
+        if (!element.TryGetProperty(property, out var child) ||
+            (child.ValueKind != JsonValueKind.True && child.ValueKind != JsonValueKind.False))
+        {
+            return false;
+        }
+
+        value = child.GetBoolean();
+        return true;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var child) || child.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return child.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString()?.Trim() ?? "")
+            .Where(value => value.Length > 0)
+            .ToArray();
+    }
 }
 
 public sealed class GithubAccessService
 {
+    private static readonly IReadOnlyDictionary<string, string> MasterWriteTargets =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MACHINE_MASTER"] = "master/machines.json",
+            ["GYM_MASTER"] = "master/gyms.json"
+        };
+
     private readonly HttpClient _httpClient;
 
     public GithubAccessService()
@@ -778,6 +1037,273 @@ public sealed class GithubAccessService
     {
         var (_, errors) = await FetchAsync(configuration, token, cancellationToken);
         return errors;
+    }
+
+    public async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchWorkoutFilesAsync(
+        AfConfiguration configuration,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var files = new List<RuntimeSourceFile>();
+            var errors = new List<AfError>();
+            foreach (var resource in configuration.Resources.Where(resource => resource.Type == "WORKOUT"))
+            {
+                var fetched = resource.ResourceKind == "directory"
+                    ? await FetchDirectoryAsync(configuration, resource, token, timeoutCts.Token)
+                    : await FetchFileAsync(configuration, resource.Path, token, timeoutCts.Token);
+                if (fetched.Errors.Count > 0)
+                {
+                    errors.AddRange(fetched.Errors);
+                    if (resource.Required) return (Array.Empty<RuntimeSourceFile>(), errors);
+                }
+                files.AddRange(fetched.Files);
+            }
+
+            return errors.Count == 0 ? (files, errors) : (Array.Empty<RuntimeSourceFile>(), errors);
+        }
+        catch (OperationCanceledException)
+        {
+            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(MasterDocumentSnapshot? Document, IReadOnlyList<AfError> Errors)> ReadMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            var content = DecodeGithubContent(remote.Content!);
+            if (content is null)
+            {
+                return (null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
+            }
+
+            return (new MasterDocumentSnapshot(type, target, remote.Revision!, content), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(string? Revision, IReadOnlyList<AfError> Errors)> ReadMasterDocumentRevisionAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            return remote.Errors.Count > 0 ? (null, remote.Errors) : (remote.Revision, Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(MasterDocumentWriteResult? Result, IReadOnlyList<AfError> Errors)> SaveMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        string expectedRevision,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRevision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true) });
+        }
+
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            if (!string.Equals(remote.Revision, expectedRevision, StringComparison.Ordinal))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true) });
+            }
+
+            var lifecycleErrors = ValidateMasterLifecycleTransition(type, remote.Content!, content);
+            if (lifecycleErrors.Count > 0)
+            {
+                return (null, lifecycleErrors);
+            }
+
+            var other = await ReadOtherMasterDocumentAsync(configuration, token, type, timeoutCts.Token);
+            if (other.Errors.Count > 0)
+            {
+                return (null, other.Errors);
+            }
+
+            var validationErrors = type == "MACHINE_MASTER"
+                ? MasterWriteValidator.ValidateWholeMaster(content, other.Content!)
+                : MasterWriteValidator.ValidateWholeMaster(other.Content!, content);
+            if (validationErrors.Count > 0)
+            {
+                return (null, validationErrors);
+            }
+
+            var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}";
+            using var request = CreateRequest(contentsUrl, token, HttpMethod.Put);
+            var payload = new
+            {
+                message = BuildMasterCommitMessage(type, target),
+                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                sha = remote.Revision,
+                branch = configuration.Repository.Ref
+            };
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, AfJson.Options), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, new[] { response.StatusCode == HttpStatusCode.Conflict
+                    ? new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)
+                    : MapGithubError(response.StatusCode, fullPath) });
+            }
+
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeoutCts.Token));
+            var savedRevision = json?["content"]?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(savedRevision))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterWriteFailed, "GitHub write result is ambiguous.", true) });
+            }
+
+            return (new MasterDocumentWriteResult(type, target, savedRevision), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(MasterDocumentWriteResult? Result, IReadOnlyList<AfError> Errors)> PushMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        string expectedRevision,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRevision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true) });
+        }
+
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            if (!string.Equals(remote.Revision, expectedRevision, StringComparison.Ordinal))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true) });
+            }
+
+            var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}";
+            using var request = CreateRequest(contentsUrl, token, HttpMethod.Put);
+            var payload = new
+            {
+                message = BuildMasterCommitMessage(type, target),
+                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                sha = remote.Revision,
+                branch = configuration.Repository.Ref
+            };
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, AfJson.Options), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, new[] { response.StatusCode == HttpStatusCode.Conflict
+                    ? new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)
+                    : MapGithubError(response.StatusCode, fullPath) });
+            }
+
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeoutCts.Token));
+            var savedRevision = json?["content"]?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(savedRevision))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterWriteFailed, "GitHub write result is ambiguous.", true) });
+            }
+
+            return (new MasterDocumentWriteResult(type, target, savedRevision), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
     }
 
     private async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchDirectoryAsync(
@@ -882,9 +1408,120 @@ public sealed class GithubAccessService
         return (new RuntimeSourceFile(path, await response.Content.ReadAsStringAsync(cancellationToken)), null);
     }
 
-    private static HttpRequestMessage CreateRequest(string url, string? token)
+    private async Task<(string? Revision, string? Content, IReadOnlyList<AfError> Errors)> ReadGithubContentAsync(
+        AfConfiguration configuration,
+        string fullPath,
+        string? token,
+        CancellationToken cancellationToken)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}?ref={Uri.EscapeDataString(configuration.Repository.Ref)}";
+        using var request = CreateRequest(contentsUrl, token);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, null, new[] { MapGithubError(response.StatusCode, fullPath) });
+        }
+
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var revision = json?["sha"]?.GetValue<string>();
+        var content = json?["content"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(revision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
+        }
+
+        return (revision, content, Array.Empty<AfError>());
+    }
+
+    private async Task<(string? Content, IReadOnlyList<AfError> Errors)> ReadOtherMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        var other = MasterWriteTargets.First(target => target.Key != type);
+        var fullPath = CombineRemote(configuration.Repository.RootPath, other.Value);
+        var remote = await ReadGithubContentAsync(configuration, fullPath, token, cancellationToken);
+        if (remote.Errors.Count > 0)
+        {
+            return (null, remote.Errors);
+        }
+
+        var content = DecodeGithubContent(remote.Content!);
+        return content is null
+            ? (null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) })
+            : (content, Array.Empty<AfError>());
+    }
+
+    private static bool TryGetMasterWriteTarget(string type, out string target)
+    {
+        if (MasterWriteTargets.TryGetValue(type, out var value))
+        {
+            target = value;
+            return true;
+        }
+
+        target = "";
+        return false;
+    }
+
+    private static string BuildMasterCommitMessage(string type, string path)
+    {
+        var subject = type == "MACHINE_MASTER" ? "machine" : "gym";
+        var fileName = Path.GetFileName(path.Replace('/', Path.DirectorySeparatorChar));
+        return $"Update {subject} master: {fileName}";
+    }
+
+    private static IReadOnlyList<AfError> ValidateMasterLifecycleTransition(string type, string currentEncodedContent, string nextContent)
+    {
+        if (type != "GYM_MASTER")
+        {
+            return Array.Empty<AfError>();
+        }
+
+        try
+        {
+            var currentContent = DecodeGithubContent(currentEncodedContent);
+            if (currentContent is null)
+            {
+                return new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) };
+            }
+
+            var currentConfigured = HasMainGym(currentContent);
+            var nextConfigured = HasMainGym(nextContent);
+            return currentConfigured && !nextConfigured
+                ? new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Configured Main Gym cannot be cleared.", true) }
+                : Array.Empty<AfError>();
+        }
+        catch
+        {
+            return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document lifecycle transition is invalid.", true) };
+        }
+    }
+
+    private static bool HasMainGym(string content)
+    {
+        var document = JsonNode.Parse(content)?.AsObject();
+        return document?["gyms"]?.AsArray()
+            .OfType<JsonObject>()
+            .Any(gym => gym["main"]?.GetValue<bool>() == true) == true;
+    }
+
+    private static string? DecodeGithubContent(string content)
+    {
+        try
+        {
+            return Encoding.UTF8.GetString(Convert.FromBase64String(content.Replace("\n", "").Replace("\r", "")));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static HttpRequestMessage CreateRequest(string url, string? token, HttpMethod? method = null)
+    {
+        var request = new HttpRequestMessage(method ?? HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd("Atlament-Windows-AF");
         if (!string.IsNullOrWhiteSpace(token))
         {
@@ -936,9 +1573,10 @@ public sealed class HostingStatusService
         ["portal"] = "portal",
         ["dashboard"] = "dashboard",
         ["workouts"] = "workouts",
-        ["exercises"] = "exercises",
+        ["machines"] = "machines",
         ["analytics"] = "analytics",
-        ["settings"] = "settings"
+        ["settings"] = "settings",
+        ["maintenance"] = "maintenance"
     };
 
     public HostingStatusService(WindowsPathProvider paths)
@@ -955,16 +1593,17 @@ public sealed class HostingStatusService
         Status("portal"),
         Status("dashboard"),
         Status("workouts"),
-        Status("exercises"),
+        Status("machines"),
         Status("analytics"),
-        Status("settings"));
+        Status("settings"),
+        Status("maintenance"));
 
     public FrontendArtifactFile? TryResolveFile(string requestPath, out bool artifactUnavailable)
     {
         artifactUnavailable = false;
         var normalized = requestPath.Trim('/');
         var app = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "portal";
-        if (app is "dashboard" or "workouts" or "exercises" or "analytics" or "settings")
+        if (app is "dashboard" or "workouts" or "machines" or "analytics" or "settings" or "maintenance")
         {
             var relative = normalized.Length == app.Length ? "index.html" : normalized[(app.Length + 1)..];
             return Resolve(app, relative, out artifactUnavailable);
@@ -1032,7 +1671,7 @@ public sealed class HostingStatusService
         return app switch
         {
             "workouts" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^\d{4}-\d{2}-\d{2}$"),
-            "exercises" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^[A-Za-z0-9][A-Za-z0-9_-]*$"),
+            "machines" => System.Text.RegularExpressions.Regex.IsMatch(route, @"^[A-Za-z0-9][A-Za-z0-9_-]*$"),
             _ => false
         };
     }
@@ -1124,6 +1763,12 @@ public sealed class OperationGate
 
 public sealed class AtlamentApplication
 {
+    private static readonly IReadOnlyList<MasterWriteTarget> MasterWriteTargets = new[]
+    {
+        new MasterWriteTarget("MACHINE_MASTER", "master/machines.json", "file", true),
+        new MasterWriteTarget("GYM_MASTER", "master/gyms.json", "file", true)
+    };
+
     private static readonly string ApplicationFrameworkVersion =
         typeof(AtlamentApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(AtlamentApplication).Assembly.GetName().Version?.ToString()
@@ -1145,6 +1790,8 @@ public sealed class AtlamentApplication
     private ComponentStatus _githubStatus = ComponentStatus.unknown;
     private ComponentStatus _runtimeStatus = ComponentStatus.unknown;
     private ApplicationStatus _applicationStatus = ApplicationStatus.starting;
+    private string _latestRemoteRetrieval = "unknown";
+    private string _latestValidation = "unknown";
     private readonly List<string> _requiredActions = new();
 
     public AtlamentApplication(
@@ -1191,8 +1838,9 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        ApplicationFrameworkVersion,
-        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion()),
+        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions()),
+        DetermineReadiness(),
+        DetermineRuntimeDataStatus(),
         new ApplicationState(_applicationStatus.ToString(), _applicationStatus == ApplicationStatus.degraded, _applicationStatus is not ApplicationStatus.stopping and not ApplicationStatus.failed),
         _operations.Snapshot(),
         new ComponentStateSnapshot(
@@ -1203,20 +1851,118 @@ public sealed class AtlamentApplication
             _hosting.GetStatus()),
         _requiredActions.ToArray()));
 
+    private RuntimeDataStatusFacts DetermineRuntimeDataStatus()
+    {
+        var (data, _) = _runtimeDataStore.LoadCurrent();
+        var currentAvailable = data is not null && _runtimeStatus == ComponentStatus.available;
+        return new RuntimeDataStatusFacts(
+            currentAvailable,
+            data?.GeneratedAt,
+            _latestRemoteRetrieval,
+            _latestValidation,
+            (_latestRemoteRetrieval == "failed" || _latestValidation == "failed") && currentAvailable);
+    }
+
+    private ApplicationReadiness DetermineReadiness()
+    {
+        var requiredActions = _requiredActions.Distinct(StringComparer.Ordinal).OrderBy(action => action, StringComparer.Ordinal).ToArray();
+        if (requiredActions.Contains("CONFIGURATION_REQUIRED", StringComparer.Ordinal) ||
+            requiredActions.Contains("CREDENTIAL_REQUIRED", StringComparer.Ordinal))
+        {
+            return new ApplicationReadiness(
+                "unconfigured",
+                requiredActions,
+                UnavailableComponents(),
+                DegradedComponents());
+        }
+
+        if (_applicationStatus is ApplicationStatus.failed or ApplicationStatus.stopping ||
+            _runtimeStatus == ComponentStatus.unavailable)
+        {
+            return new ApplicationReadiness(
+                "unavailable",
+                requiredActions,
+                UnavailableComponents(),
+                DegradedComponents());
+        }
+
+        var unavailable = UnavailableComponents();
+        var degraded = DegradedComponents();
+        if (_applicationStatus == ApplicationStatus.degraded || degraded.Count > 0 || unavailable.Count > 0 || requiredActions.Length > 0)
+        {
+            return new ApplicationReadiness(
+                "degraded",
+                requiredActions,
+                unavailable,
+                degraded);
+        }
+
+        return new ApplicationReadiness("ready", requiredActions, Array.Empty<string>(), Array.Empty<string>());
+    }
+
+    private IReadOnlyList<string> UnavailableComponents()
+    {
+        var components = new List<string>();
+        if (_configurationStatus == ComponentStatus.unavailable) components.Add("configuration");
+        if (_credentialComponentStatus == ComponentStatus.unavailable) components.Add("credential");
+        if (_runtimeStatus == ComponentStatus.unavailable) components.Add("runtimeData");
+        return components;
+    }
+
+    private IReadOnlyList<string> DegradedComponents()
+    {
+        var components = new List<string>();
+        if (_githubStatus == ComponentStatus.degraded) components.Add("github");
+        if (_runtimeStatus == ComponentStatus.degraded) components.Add("runtimeData");
+        return components;
+    }
+
     private string GetFrontendFrameworkVersion()
+    {
+        var version = ReadVersionJson();
+        return version?["frontend"]?.GetValue<string>() ?? "unknown";
+    }
+
+    private NativePackageVersions GetNativePackageVersions()
+    {
+        var version = ReadVersionJson();
+        return new NativePackageVersions(
+            new WindowsPackageVersion(version?["windows"]?.GetValue<string>() ?? ApplicationFrameworkVersion),
+            new AndroidPackageVersion(
+                version?["android"]?["versionName"]?.GetValue<string>() ?? "unknown",
+                version?["android"]?["versionCode"]?.GetValue<int>() ?? 0));
+    }
+
+    private JsonNode? ReadVersionJson()
     {
         try
         {
             var versionFile = _hosting.TryResolveFile("/version.json", out _);
-            if (versionFile is null) return "unknown";
+            if (versionFile is null) return null;
             using var stream = _hosting.OpenRead(versionFile);
-            var document = JsonNode.Parse(stream);
-            return document?["frontend"]?.GetValue<string>() ?? "unknown";
+            return JsonNode.Parse(stream);
         }
         catch
         {
-            return "unknown";
+            return null;
         }
+    }
+
+    private static int MapMasterWriteStatusCode(IReadOnlyList<AfError> errors)
+    {
+        var code = errors.FirstOrDefault()?.Code;
+        return code switch
+        {
+            AfErrorCodes.MasterWriteConflict => 409,
+            AfErrorCodes.MasterSyncRequired => 409,
+            AfErrorCodes.MasterWriteInvalid => 400,
+            AfErrorCodes.CredentialRequired or AfErrorCodes.GithubUnauthorized => 401,
+            AfErrorCodes.GithubForbidden => 403,
+            AfErrorCodes.GithubResourceNotFound => 404,
+            AfErrorCodes.GithubRateLimit => 429,
+            AfErrorCodes.GithubTimeout or AfErrorCodes.GithubConnectionFailed => 503,
+            _ => 500
+        };
     }
 
     public AfResponse<RuntimeWorkoutData> GetRuntimeWorkouts()
@@ -1227,7 +1973,7 @@ public sealed class AtlamentApplication
             return AfResponses.Fail<RuntimeWorkoutData>(errors.First());
         }
 
-        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions), data.Errors);
+        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions, data.MasterDocuments), data.Errors, data.Warnings ?? Array.Empty<RuntimeWarning>());
     }
 
     public AfResponse<AfConfiguration> GetConfiguration() => AfResponses.Ok(_configuration);
@@ -1262,7 +2008,7 @@ public sealed class AtlamentApplication
 
             _applicationStatus = DetermineApplicationStatus();
             _operations.Complete("configurationUpdate", true);
-            return (200, AfResponses.Ok(new ConfigurationUpdateResult(true, remoteChanged), responseErrors));
+            return (200, AfResponses.Ok(new ConfigurationUpdateResult(remoteChanged), responseErrors));
         }
         catch
         {
@@ -1272,6 +2018,246 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<CredentialStatus> GetCredentialStatus() => AfResponses.Ok(_credentialStatus);
+
+    public AfResponse<MasterWriteBoundary> GetMasterWriteBoundary()
+    {
+        var repositoryConfigured =
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Owner) &&
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Repository) &&
+            !string.IsNullOrWhiteSpace(_configuration.Repository.Ref);
+        var configuredTargetKeys = _configuration.Resources
+            .Where(resource => resource.ResourceKind == "file")
+            .Select(resource => $"{resource.Type}:{resource.Path}")
+            .ToHashSet(StringComparer.Ordinal);
+        var allTargetsConfigured = MasterWriteTargets.All(target => configuredTargetKeys.Contains($"{target.Type}:{target.Path}"));
+        var writeEnabled =
+            _configurationStatus == ComponentStatus.available &&
+            _credentialStatus.Configured &&
+            _credentialStatus.State == CredentialState.available.ToString() &&
+            repositoryConfigured &&
+            allTargetsConfigured;
+
+        return AfResponses.Ok(new MasterWriteBoundary(
+            _configuration.Repository,
+            MasterWriteTargets,
+            new MasterWriteSecurity(
+                _configurationStatus == ComponentStatus.available,
+                _credentialStatus.Configured,
+                _credentialStatus.State,
+                repositoryConfigured,
+                writeEnabled,
+                false,
+                false,
+                false)));
+    }
+
+    public Task<(int StatusCode, AfResponse<MasterDocumentSnapshot> Response)> ReadMasterDocumentAsync(string type, CancellationToken cancellationToken)
+    {
+        var local = LoadLocalMasterDocuments();
+        if (local.Documents is null)
+        {
+            return Task.FromResult((409, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true))));
+        }
+
+        var document = SelectLocalMasterDocument(local.Documents, type);
+        var result = document is null
+            ? (400, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true)))
+            : (200, AfResponses.Ok(document));
+        return Task.FromResult(result);
+    }
+
+    private (RuntimeDataFile? Runtime, LocalMasterDocuments? Documents) LoadLocalMasterDocuments()
+    {
+        var (data, _) = _runtimeDataStore.LoadCurrent();
+        return (data, data?.MasterDocuments);
+    }
+
+    private static MasterDocumentSnapshot? SelectLocalMasterDocument(LocalMasterDocuments documents, string type) => type switch
+    {
+        "MACHINE_MASTER" => documents.Machine,
+        "GYM_MASTER" => documents.Gym,
+        _ => null
+    };
+
+    private static LocalMasterDocuments ReplaceLocalMasterDocument(LocalMasterDocuments documents, string type, string content, string revision) => type switch
+    {
+        "MACHINE_MASTER" => documents with { Machine = new MasterDocumentSnapshot("MACHINE_MASTER", "master/machines.json", revision, content) },
+        "GYM_MASTER" => documents with { Gym = new MasterDocumentSnapshot("GYM_MASTER", "master/gyms.json", revision, content) },
+        _ => documents
+    };
+
+    private static RuntimeSourceFile ToRuntimeSource(MasterDocumentSnapshot document) => new(document.Path, document.Content);
+
+    private static IReadOnlyList<AfError> ValidateLocalMasterLifecycleTransition(string type, string currentContent, string nextContent)
+    {
+        if (type != "GYM_MASTER")
+        {
+            return Array.Empty<AfError>();
+        }
+
+        try
+        {
+            var currentConfigured = HasMainGym(currentContent);
+            var nextConfigured = HasMainGym(nextContent);
+            return currentConfigured && !nextConfigured
+                ? new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Configured Main Gym cannot be cleared.", true) }
+                : Array.Empty<AfError>();
+        }
+        catch
+        {
+            return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document lifecycle transition is invalid.", true) };
+        }
+    }
+
+    private static bool HasMainGym(string content)
+    {
+        var document = JsonNode.Parse(content)?.AsObject();
+        return document?["gyms"]?.AsArray()
+            .OfType<JsonObject>()
+            .Any(gym => gym["main"]?.GetValue<bool>() == true) == true;
+    }
+
+    public Task<(int StatusCode, AfResponse<IReadOnlyList<UnresolvedMasterReference>> Response)> GetUnresolvedMasterReferencesAsync(CancellationToken cancellationToken)
+    {
+        var (data, errors) = _runtimeDataStore.LoadCurrent();
+        if (data is null)
+        {
+            return Task.FromResult((409, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true))));
+        }
+
+        return Task.FromResult((200, AfResponses.Ok(BuildUnresolvedMasterReferences(data.Warnings ?? Array.Empty<RuntimeWarning>()))));
+    }
+
+    public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
+        string type,
+        MasterDocumentWriteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_configurationStatus != ComponentStatus.available)
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+        }
+
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            return (401, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
+        }
+
+        var local = LoadLocalMasterDocuments();
+        if (local.Documents is null)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true)));
+        }
+
+        var current = SelectLocalMasterDocument(local.Documents, type);
+        if (current is null)
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true)));
+        }
+
+        if (!string.Equals(current.Revision, request.ExpectedRevision ?? "", StringComparison.Ordinal))
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)));
+        }
+
+        var candidateContent = request.Content ?? "";
+        if (string.IsNullOrWhiteSpace(candidateContent))
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true)));
+        }
+
+        var candidateDocuments = ReplaceLocalMasterDocument(local.Documents, type, candidateContent, current.Revision);
+        var lifecycleErrors = ValidateLocalMasterLifecycleTransition(type, current.Content, candidateContent);
+        if (lifecycleErrors.Count > 0)
+        {
+            return (400, new AfResponse<MasterDocumentWriteResult>(false, lifecycleErrors, null));
+        }
+
+        var validationErrors = MasterWriteValidator.ValidateWholeMaster(candidateDocuments.Machine.Content, candidateDocuments.Gym.Content);
+        if (validationErrors.Count > 0)
+        {
+            return (400, new AfResponse<MasterDocumentWriteResult>(false, validationErrors, null));
+        }
+
+        var push = await _github.PushMasterDocumentAsync(
+            _configuration,
+            _token,
+            type,
+            current.Revision,
+            candidateContent,
+            cancellationToken);
+        if (push.Result is null)
+        {
+            return (MapMasterWriteStatusCode(push.Errors), new AfResponse<MasterDocumentWriteResult>(false, push.Errors, null));
+        }
+
+        var confirmedDocuments = ReplaceLocalMasterDocument(local.Documents, type, candidateContent, push.Result.Revision);
+        var workouts = await _github.FetchWorkoutFilesAsync(_configuration, _token, cancellationToken);
+        if (workouts.Errors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        var build = _runtimeDataBuilder.Build(workouts.Files, ToRuntimeSource(confirmedDocuments.Machine), ToRuntimeSource(confirmedDocuments.Gym));
+        if (build.TechnicalInvalid || build.Errors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        var saveErrors = _runtimeDataStore.SaveCurrent(build, confirmedDocuments);
+        if (saveErrors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        _runtimeStatus = ComponentStatus.available;
+        _latestValidation = "succeeded";
+        _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
+        _applicationStatus = DetermineApplicationStatus();
+        return (200, AfResponses.Ok(push.Result));
+    }
+
+    private static IReadOnlyList<UnresolvedMasterReference> BuildUnresolvedMasterReferences(IReadOnlyList<RuntimeWarning> warnings)
+    {
+        var groups = new Dictionary<(string Type, string ReferenceId), List<UnresolvedAffectedWorkout>>();
+        foreach (var warning in warnings.Where(warning => warning.Code is "MASTER_REFERENCE_MISSING" or "MASTER_REFERENCE_DELETED"))
+        {
+            var referenceId = warning.OriginalId.Trim();
+            if (referenceId.Length == 0)
+            {
+                continue;
+            }
+
+            var key = (warning.ReferenceKind == "machine" ? "MACHINE_MASTER" : "GYM_MASTER", referenceId);
+            if (!groups.TryGetValue(key, out var affected))
+            {
+                affected = new List<UnresolvedAffectedWorkout>();
+                groups[key] = affected;
+            }
+
+            affected.Add(new UnresolvedAffectedWorkout(warning.FilePath ?? "", warning.Line, warning.Message));
+        }
+
+        return groups
+            .OrderBy(group => group.Key.Type, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.ReferenceId, StringComparer.Ordinal)
+            .Select(group => new UnresolvedMasterReference(group.Key.Type, group.Key.ReferenceId, group.Value))
+            .ToArray();
+    }
+
+    private static (string FilePath, int? Line) ParseErrorLocation(string message)
+    {
+        var separator = message.IndexOf(": ", StringComparison.Ordinal);
+        var location = separator < 0 ? message : message[..separator];
+        var lineMarker = ": line ";
+        var lineIndex = location.LastIndexOf(lineMarker, StringComparison.Ordinal);
+        if (lineIndex >= 0 && int.TryParse(location[(lineIndex + lineMarker.Length)..], out var line))
+        {
+            return (location[..lineIndex], line);
+        }
+
+        return (location, null);
+    }
 
     public (int StatusCode, AfResponse<CredentialUpdateResult> Response) UpdateCredential(CredentialUpdate update)
     {
@@ -1357,35 +2343,49 @@ public sealed class AtlamentApplication
         var remote = await _github.FetchAsync(_configuration, _token, cancellationToken);
         if (remote.Errors.Count > 0)
         {
+            _latestRemoteRetrieval = "failed";
+            _latestValidation = "skipped";
             _githubStatus = ComponentStatus.degraded;
             ValidateLocalRuntime();
             if (_runtimeStatus == ComponentStatus.available)
             {
                 // Remote failure is degraded, not fatal, when a previously built runtime file can
                 // still satisfy Frontend data requests.
-                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult("local", false, true)));
+                return (200, new AfResponse<SyncResult>(false, remote.Errors, new SyncResult(true)));
             }
 
             return (503, new AfResponse<SyncResult>(false, remote.Errors, null));
         }
 
+        _latestRemoteRetrieval = "succeeded";
         _githubStatus = ComponentStatus.available;
-        var exerciseMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/exercises.json", StringComparison.OrdinalIgnoreCase));
-        var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
-        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (exerciseMaster is null || gymMaster is null)
+        var machineSnapshot = await _github.ReadMasterDocumentAsync(_configuration, _token, "MACHINE_MASTER", cancellationToken);
+        if (machineSnapshot.Document is null)
         {
-            var error = new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true);
-            return RuntimeBuildFailure(new[] { error });
+            _latestValidation = "failed";
+            return RuntimeBuildFailure(machineSnapshot.Errors);
         }
 
-        var build = _runtimeDataBuilder.Build(workoutFiles, exerciseMaster, gymMaster);
+        var gymSnapshot = await _github.ReadMasterDocumentAsync(_configuration, _token, "GYM_MASTER", cancellationToken);
+        if (gymSnapshot.Document is null)
+        {
+            _latestValidation = "failed";
+            return RuntimeBuildFailure(gymSnapshot.Errors);
+        }
+
+        var machineMaster = ToRuntimeSource(machineSnapshot.Document);
+        var gymMaster = ToRuntimeSource(gymSnapshot.Document);
+        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
         if (build.TechnicalInvalid || build.Errors.Count > 0)
         {
+            _latestValidation = "failed";
             return RuntimeBuildFailure(build.Errors);
         }
 
-        var saveErrors = _runtimeDataStore.SaveCurrent(build);
+        var masterDocuments = new LocalMasterDocuments(machineSnapshot.Document, gymSnapshot.Document);
+        var saveErrors = _runtimeDataStore.SaveCurrent(build, masterDocuments);
         if (saveErrors.Count > 0)
         {
             _runtimeStatus = ComponentStatus.unavailable;
@@ -1393,9 +2393,10 @@ public sealed class AtlamentApplication
         }
 
         _runtimeStatus = ComponentStatus.available;
+        _latestValidation = "succeeded";
         _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
         _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
-        return (200, AfResponses.Ok(new SyncResult("remote", true, build.Errors.Count > 0), build.Errors));
+        return (200, AfResponses.Ok(new SyncResult(build.Errors.Count > 0), build.Errors, build.Warnings));
     }
 
     private (int StatusCode, AfResponse<SyncResult> Response) RuntimeBuildFailure(IReadOnlyList<AfError> errors)
@@ -1405,7 +2406,7 @@ public sealed class AtlamentApplication
         _applicationStatus = DetermineApplicationStatus();
         if (_runtimeStatus == ComponentStatus.available)
         {
-            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult("local", false, true)));
+            return (200, new AfResponse<SyncResult>(false, errors, new SyncResult(true)));
         }
 
         return (503, new AfResponse<SyncResult>(false, errors, null));

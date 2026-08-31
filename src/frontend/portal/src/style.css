@@ -186,14 +186,6 @@ p {
 }
 
 .app-card:nth-child(1) {
-  grid-column: 2 / span 2;
-}
-
-.app-card:nth-child(2) {
-  grid-column: 4 / span 2;
-}
-
-.app-card:nth-child(n + 3) {
   grid-column: span 2;
 }
 
@@ -253,6 +245,12 @@ p {
   line-height: 1;
 }
 
+.framework-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
 .framework-icon {
   display: block;
   width: 22px;
@@ -272,9 +270,6 @@ p {
     grid-column: auto;
   }
 
-  .app-card:last-child {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 640px) {

@@ -1,4 +1,4 @@
-export type ExerciseSet = {
+export type MachineSet = {
   set: number
   weight_kg: number
   reps: number
@@ -19,9 +19,31 @@ export type BodyPart =
   | 'cardio'
   | 'other'
 
-export type RawWorkoutExercise = {
-  exercise_id: string
-  sets: ExerciseSet[]
+export type MasterReferenceResolutionState = 'resolved' | 'missing' | 'deleted'
+
+export type MasterReferenceKind = 'gym' | 'machine'
+
+export type MasterReferenceResolution = {
+  state: MasterReferenceResolutionState
+  originalId: string
+  resolvedId: string | null
+}
+
+export type RuntimeWarning = {
+  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED'
+  referenceKind: MasterReferenceKind
+  resolutionState: Exclude<MasterReferenceResolutionState, 'resolved'>
+  originalId: string
+  resolvedId: string | null
+  sessionId: string
+  filePath?: string
+  line?: number | null
+  message: string
+}
+
+export type RawWorkoutMachine = {
+  machine_id: string
+  sets: MachineSet[]
   notes?: string[]
 }
 
@@ -32,15 +54,16 @@ export type RawWorkoutSession = {
   status: WorkoutStatus
   gym_id: string
   condition?: SessionCondition
-  exercises: RawWorkoutExercise[]
+  machines: RawWorkoutMachine[]
   notes?: string[]
 }
 
-export type WorkoutExercise = {
-  exercise_id: string
-  name: string
-  body_part: BodyPart
-  sets: ExerciseSet[]
+export type WorkoutMachine = {
+  machine_id: string
+  name?: string
+  body_part?: BodyPart
+  resolution?: MasterReferenceResolution
+  sets: MachineSet[]
   notes?: string[]
 }
 
@@ -55,30 +78,36 @@ export type SessionCondition = {
 
 export type Gym = {
   id: string
-  name: string
+  name?: string
   short_name?: string
+  resolution?: MasterReferenceResolution
 }
 
 export type WorkoutStatus = 'complete' | 'partial'
 
-export type ExerciseMasterItem = {
-  exercise_id: string
+export type MachineMasterItem = {
+  machine_id: string
+  source_ids?: string[]
   name: string
   body_part: BodyPart
   aliases?: string[]
   active: boolean
+  deleted: boolean
 }
 
-export type ExerciseMaster = {
+export type MachineMaster = {
   schema_version: number
-  exercises: ExerciseMasterItem[]
+  machines: MachineMasterItem[]
 }
 
 export type GymMasterItem = {
   gym_id: string
+  source_ids?: string[]
   name: string
   short_name?: string
   active: boolean
+  deleted: boolean
+  main: boolean
 }
 
 export type GymMaster = {
@@ -87,7 +116,7 @@ export type GymMaster = {
 }
 
 export type WorkoutMasterData = {
-  exercises: ExerciseMaster
+  machines: MachineMaster
   gyms: GymMaster
 }
 
@@ -98,7 +127,7 @@ export type WorkoutSession = {
   status: WorkoutStatus
   gym: Gym
   condition?: SessionCondition
-  exercises: WorkoutExercise[]
+  machines: WorkoutMachine[]
   notes?: string[]
 }
 
@@ -106,18 +135,18 @@ export type WorkoutRow = {
   sessionId: string
   date: string
   gym: string
-  exerciseCount: number
+  machineCount: number
   totalSets: number
   totalVolume: number
-  exercises: string
+  machines: string
   status: string
 }
 
-export type ExerciseHistoryRow = {
+export type MachineHistoryRow = {
   date: string
   gym: string
-  exerciseId: string
-  exerciseName: string
+  machineId: string
+  machineName: string
   bodyPart: string
   sets: number
   bestWeight: number
@@ -132,8 +161,8 @@ export type BodyPartSummary = {
 }
 
 export type PersonalRecord = {
-  exerciseId: string
-  exerciseName: string
+  machineId: string
+  machineName: string
   date: string
   type: 'weight' | 'reps' | 'estimated_1rm'
   value: number
@@ -148,4 +177,6 @@ export type WorkoutParseIssue = {
 export type WorkoutLoadResult = {
   sessions: WorkoutSession[]
   issues: WorkoutParseIssue[]
+  warnings?: RuntimeWarning[]
+  masterData?: WorkoutMasterData
 }

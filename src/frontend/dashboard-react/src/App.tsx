@@ -12,17 +12,27 @@ import {
   formatDisplayDate,
   getCurrentLocalYearMonth,
   getBodyPartSummary,
+  getMainGymMonthlyVolumeMetric,
+  getMainGymVolumeTrendMetric,
+  getGymDisplayName,
+  getNumericDelta,
   getMonthlySessions,
-  getMonthlyVolume,
   getRecentSessions,
+  resolveMainGymContext,
+  resolvePreviousMonthRange,
+  filterSessionsByDateRange,
   getTotalSets,
   getTotalVolume,
   toWorkoutRows,
 } from '@workout-lab/workout-core'
+import { getUniqueWorkoutDateRoute,  getWorkoutListRoute } from './dashboard-navigation'
 import './App.css'
 
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
+  const [mainGymContext, setMainGymContext] = useState<ReturnType<typeof resolveMainGymContext>>({
+    state: 'unconfigured',
+  })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [, setThemeRevision] = useState(0)
   const shellRef = useRef<HTMLElement | null>(null)
@@ -55,6 +65,7 @@ function App() {
         }
 
         setSessions(result.sessions)
+        setMainGymContext(result.masterData ? resolveMainGymContext(result.masterData.gyms) : { state: 'unconfigured' })
         setLoadError(result.issues.length > 0 ? result.issues.map((issue) => issue.message).join(' / ') : null)
       })
       .catch((error) => {
@@ -74,10 +85,19 @@ function App() {
   const monthlySessions = getMonthlySessions(sessions, currentMonth.year, currentMonth.month)
   const latestWorkout = sessions.at(-1)
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
-  const monthlyVolume = getMonthlyVolume(sessions, currentMonth.year, currentMonth.month)
+  const monthlyVolume = getMainGymMonthlyVolumeMetric(mainGymContext, sessions, currentMonth.year, currentMonth.month)
+  const previousMonthRange = resolvePreviousMonthRange(currentMonth.year, currentMonth.month)
+  const previousMonthSessions = filterSessionsByDateRange(sessions, previousMonthRange)
+  const monthlyWorkoutDelta = getNumericDelta(monthlySessions.length, previousMonthSessions.length)
+  const monthlySetDelta = getNumericDelta(
+    totalSets,
+    previousMonthSessions.reduce((total, session) => total + getTotalSets(session), 0),
+  )
   const recentRows = toWorkoutRows(sessions).slice(-5).reverse()
   const bodyBalanceRows = getDashboardBodyBalanceRows(monthlySessions)
   const recent28Sessions = getRecentSessions(sessions, 28)
+  const mainGymVolumeTrend = getMainGymVolumeTrendMetric(mainGymContext, recent28Sessions)
+  const mainGymVolumeTrendPoints = mainGymVolumeTrend.state === 'available' ? mainGymVolumeTrend.value : []
   const chartTheme = getChartTheme()
 
   const volumeChartOptions: ApexOptions = {
@@ -102,7 +122,7 @@ function App() {
     stroke: { curve: 'smooth', width: 3 },
     theme: { mode: chartTheme.mode },
     xaxis: {
-      categories: recent28Sessions.map((session) => formatDisplayDate(session.date)),
+      categories: mainGymVolumeTrendPoints.map((point) => formatDisplayDate(point.date)),
       axisBorder: { color: chartTheme.border },
       axisTicks: { color: chartTheme.border },
       labels: { show: false, style: { colors: chartTheme.textMuted } },
@@ -123,15 +143,32 @@ function App() {
 
   const volumeChartSeries = [
     {
-      name: 'Total Weight',
-      data: recent28Sessions.map((session) => getTotalVolume(session)),
+      name: 'Main Gym Total Weight',
+      data: mainGymVolumeTrendPoints.map((point) => point.volume),
     },
   ]
-  const volumeChartKey = recent28Sessions.map((session) => session.session_id).join('|')
+  const volumeChartKey = mainGymVolumeTrendPoints.map((point) => point.sessionId).join('|')
 
   const frequencyChartOptions: ApexOptions = {
-    chart: { background: 'transparent', foreColor: chartTheme.textMuted, toolbar: { show: false } },
-    colors: [chartTheme.secondary],
+    chart: {
+      background: 'transparent',
+      events: {
+        dataPointSelection: (_event, _chartContext, config) => {
+          const dataPointIndex = config?.dataPointIndex
+          if (typeof dataPointIndex !== 'number') {
+            return
+          }
+
+          const route = getUniqueWorkoutDateRoute(sessions, dataPointIndex)
+          if (route) {
+            window.location.assign(route)
+          }
+        },
+      },
+      foreColor: chartTheme.textMuted,
+      toolbar: { show: false },
+    },
+    colors: [chartTheme.accent],
     dataLabels: { enabled: false },
     grid: { borderColor: chartTheme.grid },
     plotOptions: {
@@ -223,22 +260,29 @@ function App() {
         <h1>Dashboard</h1>
         <p className="lead">
           今のトレーニングを知る<br />
-          現在の状態を把握することは、己を知ることになる
+          現在のトレーニング状況を確認します
         </p>
       </header>
 
       <section className="metric-grid" aria-label="Monthly summary">
         <MetricCard label="Monthly workouts" value={`${monthlySessions.length} Sessions`} />
         <MetricCard label="Monthly sets" value={`${totalSets} Sets`} />
-        <MetricCard label="Monthly volume" value={`${monthlyVolume.toLocaleString()} kg`} />
+        <MetricCard label="Main Gym volume" value={formatMainGymMetric(monthlyVolume)} />
         <MetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
+      </section>
+
+      <section className="metric-grid" aria-label="Previous month comparison">
+        <MetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
+        <MetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
+        <MetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
+        <MetricCard label="Previous month period" value={previousMonthRange.startDate.slice(0, 7).replace('-', '/')} />
       </section>
 
       {loadError ? (
         <section className="panel">
           <p className="eyebrow">Data Load Warning</p>
-          <h2>データが正常ではありません。</h2>
-          <p className="muted">{loadError}</p>
+          <h2>データ取得異常</h2>
+          <p className="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
         </section>
       ) : null}
 
@@ -248,12 +292,12 @@ function App() {
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-chart-areaspline" aria-hidden="true"></i></div>
               <div className="card-heading__text">
-                <p className="eyebrow">Volume Trends</p>
-                <h2>ボリューム推移</h2>
+                <p className="eyebrow">Volume Trends - Main Gym</p>
+                <h2>ボリューム推移 - メインジム</h2>
               </div>
             </div>
           </div>
-          {recent28Sessions.length > 0 ? (
+          {mainGymVolumeTrend.state === 'available' && mainGymVolumeTrendPoints.length > 0 ? (
             <ReactApexChart
               key={volumeChartKey}
               type="area"
@@ -262,11 +306,12 @@ function App() {
               series={volumeChartSeries}
             />
           ) : (
-            <p className="muted">No workout data loaded.</p>
+            <p className="muted">データがありません</p>
           )}
         </article>
 
-        <article className="panel">
+        {latestWorkout ? (
+        <article className="panel latest-workout-empty">
           <div className="panel-header">
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
@@ -276,19 +321,29 @@ function App() {
               </div>
             </div>
           </div>
-          {latestWorkout ? (
-            <>
+          <>
               <p className="large-number">{getTotalVolume(latestWorkout).toLocaleString()} kg</p>
               <p className="muted">
-                {latestWorkout.gym.name}<br />
+                {getGymDisplayName(latestWorkout.gym)}<br />
                 {getTotalSets(latestWorkout)} sets<br />
-                {latestWorkout.exercises.length} machines
+                {latestWorkout.machines.length} machines
               </p>
-            </>
-          ) : (
-            <p className="muted">No workout data loaded.</p>
-          )}
+          </>
         </article>
+        ) : (
+        <article className="panel latest-workout-empty">
+          <div className="panel-header">
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Latest Workout</p>
+                <h2>No workout</h2>
+              </div>
+            </div>
+          </div>
+          <p className="muted">データがありません</p>
+        </article>
+        )}
       </section>
 
       <section className="dashboard-grid">
@@ -338,6 +393,9 @@ function App() {
               <h2>最近のワークアウト</h2>
             </div>
           </div>
+          <a className="text-action" href={getWorkoutListRoute()}>
+            <i className="mdi mdi-view-list-outline" aria-hidden="true"></i>Workout List
+          </a>
         </div>
         <div className="recent-table dashboard-recent-table">
           <div className="recent-row header">
@@ -351,7 +409,7 @@ function App() {
             <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
               <span className="date-cell">{formatDisplayDate(row.date)}</span>
               <span className="gym-cell">{row.gym}</span>
-              <span className="machines-cell">{row.exerciseCount}</span>
+              <span className="machines-cell">{row.machineCount}</span>
               <span className="sets-cell">{row.totalSets}</span>
               <span className="volume-cell">{row.totalVolume.toLocaleString()} kg</span>
             </a>
@@ -369,6 +427,27 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </article>
   )
+}
+
+function formatDelta(value: number, unit: string): string {
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toLocaleString()} ${unit}`
+}
+
+function formatMainGymMetric(metric: ReturnType<typeof getMainGymMonthlyVolumeMetric>): string {
+  return metric.state === 'available' ? `${metric.value.toLocaleString()} kg` : formatMainGymMetricState(metric)
+}
+
+function formatMainGymMetricState(metric: { state: string }): string {
+  if (metric.state === 'unconfigured') {
+    return 'Not Set'
+  }
+
+  if (metric.state === 'invalid') {
+    return 'Unavailable'
+  }
+
+  return 'No Data'
 }
 
 const dashboardBodyPartOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs']

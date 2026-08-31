@@ -87,7 +87,7 @@ src/frontend/
 ├─ portal/
 ├─ dashboard-react/
 ├─ workouts-vue/
-├─ exercises-angular/
+├─ machines-angular/
 ├─ analytics-svelte/
 ├─ settings-solid/
 └─ errors/
@@ -312,7 +312,7 @@ npm run watch
 127.0.0.1:5174  Portal dev server
 127.0.0.1:5175  Dashboard / React
 127.0.0.1:5176  Workouts / Vue
-127.0.0.1:5177  Exercises / Angular
+127.0.0.1:5177  Machines / Angular
 127.0.0.1:5178  Analytics / Svelte
 127.0.0.1:5179  Settings / Solid
 127.0.0.1:5180  Development Runtime API
@@ -442,9 +442,10 @@ Windows AFのUnit Testを実行します。
 
 - [BUILD_COMMAND_LINE.md](BUILD_COMMAND_LINE.md): Build / CLIの詳細Reference
 - [docs/README.md](docs/README.md): docs配下の案内
-- [docs/design/07_af_detailed_design.md](docs/design/07_af_detailed_design.md): Windows AF詳細設計
-- [docs/design/09_frontend_settings_detailed_design.md](docs/design/09_frontend_settings_detailed_design.md): Frontend Settings詳細設計
-- [docs/design/10_repository_build_runtime_design.md](docs/design/10_repository_build_runtime_design.md): Repository / Build / Runtime設計
+- [docs/design/README.md](docs/design/README.md): 現行As-Is設計書Index
+- [docs/design/02_detailed-design/application-framework/windows/current-spec.md](docs/design/02_detailed-design/application-framework/windows/current-spec.md): Windows AF詳細設計
+- [docs/design/02_detailed-design/frontend-framework/application-settings.md](docs/design/02_detailed-design/frontend-framework/application-settings.md): Frontend Settings詳細設計
+- [docs/design/02_detailed-design/repository/build-runtime.md](docs/design/02_detailed-design/repository/build-runtime.md): Repository / Build / Runtime設計
 - [src/frontend/README.md](src/frontend/README.md): Frontend構成
 - [src/application/windows/README.md](src/application/windows/README.md): Windows AF
 - [src/application/android/README.md](src/application/android/README.md): Android AF

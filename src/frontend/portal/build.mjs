@@ -18,6 +18,11 @@ await mkdir(join(distRoot, 'frontend-common'), { recursive: true })
 await cp(join(sharedFrontendCommonRoot, 'af-client.js'), join(distRoot, 'frontend-common/af-client.js'))
 await cp(join(sharedFrontendCommonRoot, 'branding'), join(distRoot, 'frontend-common/branding'), { recursive: true })
 await cp(join(sharedFrontendCommonRoot, 'easter-egg'), join(distRoot, 'frontend-common/easter-egg'), { recursive: true })
+await mkdir(join(distRoot, 'frontend-common/navigation'), { recursive: true })
+await cp(
+  join(sharedFrontendCommonRoot, 'navigation/application-registry.js'),
+  join(distRoot, 'frontend-common/navigation/application-registry.js'),
+)
 await cp(join(sharedFrontendCommonRoot, 'theme'), join(distRoot, 'frontend-common/theme'), { recursive: true })
 await mkdir(join(distRoot, 'mdi'), { recursive: true })
 await cp(join(mdiFontRoot, 'css'), join(distRoot, 'mdi/css'), { recursive: true })

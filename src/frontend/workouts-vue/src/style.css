@@ -14,12 +14,115 @@
   letter-spacing: 0;
 }
 
+.field input,
 .field select {
   min-width: 220px;
 }
 
+.workout-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--wl-text-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.filter-actions button {
+  border: 1px solid var(--wl-primary-soft);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-primary-strong);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.empty-result {
+  display: grid;
+  gap: 6px;
+  padding: 24px 12px 4px;
+}
+
+.workout-calendar-panel {
+  margin-bottom: 16px;
+}
+
+.workout-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.calendar-day {
+  display: grid;
+  min-height: 52px;
+  align-content: space-between;
+  border: 1px solid var(--wl-border);
+  border-radius: var(--wl-radius-inner);
+  background: var(--wl-surface-muted);
+  color: var(--wl-text-muted);
+  padding: 8px;
+}
+
+.calendar-day span,
+.calendar-day strong {
+  line-height: 1;
+}
+
+.calendar-day strong {
+  justify-self: end;
+  color: var(--wl-primary-strong);
+  font-size: 0.8rem;
+}
+
+.calendar-day--trained {
+  border-color: var(--wl-primary-soft);
+  background: var(--wl-success-bg);
+  color: var(--wl-text-strong);
+}
+
 .session-meta {
   margin-top: 6px;
+}
+
+.detail-summary-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.detail-summary-heading h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.detail-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compare-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .back-link {
@@ -39,35 +142,94 @@
   max-width: 760px;
 }
 
-.exercise-list {
+.machine-list {
   display: grid;
   gap: 14px;
 }
 
-.exercise-card {
+.machine-card {
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-inner);
   padding: 14px;
 }
 
-.exercise-header {
+.machine-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.exercise-header p {
+.machine-header p {
   margin-top: 2px;
   color: var(--wl-text-muted);
   font-size: 0.85rem;
 }
 
-.exercise-card ul {
+.machine-card ul {
   display: grid;
   gap: 6px;
   margin: 12px 0 0;
   padding-left: 20px;
   color: var(--wl-chart-axis);
+}
+
+.machine-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.machine-actions .text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.machine-actions button.text-action {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.set-table-wrap {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.set-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.9rem;
+}
+
+.set-table th,
+.set-table td {
+  border-top: 1px solid var(--wl-border);
+  padding: 9px 8px;
+  text-align: left;
+}
+
+.set-table th {
+  color: var(--wl-text-muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.set-table .supporting-cell {
+  color: var(--wl-text-muted);
+  width: 72px;
+}
+
+.machine-notes {
+  display: grid;
+  gap: 4px;
 }
 
 .workout-table-wrap {
@@ -210,8 +372,18 @@
 
 @media (max-width: 900px) {
   .field,
+  .field input,
   .field select {
     width: 100%;
+  }
+
+  .workout-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compare-grid,
+  .compare-lists {
+    grid-template-columns: 1fr;
   }
 
   .workout-table {
@@ -225,6 +397,16 @@
   .pagination-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@container (max-width: 720px) {
+  .workout-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    align-items: center;
   }
 }
 

@@ -10,8 +10,9 @@
 
 ## 参照
 
-- `work/00_overview.md` ～ `work/09_frontend_settings_detailed_design.md`
-- `work/10_repository_build_runtime_design.md`
+- `docs/design/README.md`
+- `docs/design/02_detailed-design/repository/structure.md`
+- `docs/design/02_detailed-design/repository/build-runtime.md`
 
 ## 実施内容
 
@@ -38,7 +39,7 @@ tools/
 | --- | --- | --- |
 | `apps/dashboard-react/` | `src/frontend/dashboard-react/` | MOVE |
 | `apps/workouts-vue/` | `src/frontend/workouts-vue/` | MOVE |
-| `apps/exercises-angular/` | `src/frontend/exercises-angular/` | MOVE |
+| `apps/machines-angular/` | `src/frontend/machines-angular/` | MOVE |
 | `apps/analytics-svelte/` | `src/frontend/analytics-svelte/` | MOVE |
 | `packages/workout-types/` | `src/shared/workout-types/` | MOVE |
 | `packages/workout-core/` | `src/shared/workout-core/` | MOVE |
@@ -47,7 +48,7 @@ tools/
 | `packages/shared-styles/` | `src/shared/shared-styles/` | MOVE |
 | `workouts/` | `data/workouts/` | MOVE |
 | `master/` | `data/master/` | MOVE |
-| `work/00_...` ～ `work/10_...` | `docs/design/` | MOVE |
+| 旧 `work/` 設計メモ | `docs/design/` | MOVE |
 | `work/instructions/` | `docs/instructions/` | MOVE |
 | `scripts/build-mpa.mjs` | `tools/build/build-mpa.mjs` | MOVE |
 | `scripts/check-mpa.mjs` | `tools/validation/check-mpa.mjs` | MOVE |

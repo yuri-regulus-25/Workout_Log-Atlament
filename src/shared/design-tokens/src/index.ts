@@ -16,6 +16,7 @@ export type ThemeName = 'light' | 'dark'
 export type ChartTheme = {
   mode: ThemeName
   primary: string
+  accent: string
   secondary: string
   text: string
   textMuted: string
@@ -46,6 +47,7 @@ export function getChartTheme(element: Element = document.documentElement): Char
   return {
     mode: getThemeName(element),
     primary: getThemeToken('--wl-primary', colors.primary, element),
+    accent: getThemeToken('--wl-accent', getThemeToken('--wl-primary', colors.primary, element), element),
     secondary: getThemeToken('--wl-secondary', colors.secondary, element),
     text: getThemeToken('--wl-text', colors.text, element),
     textMuted: getThemeToken('--wl-text-muted', colors.textMuted, element),

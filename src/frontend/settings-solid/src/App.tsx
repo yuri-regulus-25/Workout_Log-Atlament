@@ -18,8 +18,21 @@ import {
 } from '@workout-lab/frontend-common'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
+import {
+  credentialExpiryPresets,
+  describeCredentialExpiry,
+  formatCredentialDisplayDate,
+  inferCredentialExpiryPreset,
+  resolveCredentialLimitDate,
+  type CredentialExpiryPreset,
+} from './credential-expiry'
+import {
+  buildSetupSteps,
+  isSetupReady,
+  type SetupStep,
+} from './setup-assistant'
 
-const resourceTypes = ['WORKOUT', 'EXERCISE_MASTER', 'GYM_MASTER'] as const
+const resourceTypes = ['WORKOUT', 'MACHINE_MASTER', 'GYM_MASTER'] as const
 const resourceKinds = ['file', 'directory'] as const
 const statusLabels: Record<string, string> = {
   available: '利用可能',
@@ -35,12 +48,13 @@ const statusLabels: Record<string, string> = {
   running: '実行中',
   starting: '起動中',
   stopping: '終了中',
+  unconfigured: '初期設定未完了',
   unavailable: '利用不可',
   unknown: '不明',
 }
 const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   WORKOUT: 'WORKOUT / ワークアウト情報',
-  EXERCISE_MASTER: 'EXERCISE_MASTER / 種目マスター',
+  MACHINE_MASTER: 'MACHINE_MASTER / 種目マスター',
   GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
 type Message = {
@@ -66,6 +80,7 @@ function App() {
   })
   const [token, setToken] = createSignal('')
   const [limitDate, setLimitDate] = createSignal('')
+  const [expiryPreset, setExpiryPreset] = createSignal<CredentialExpiryPreset>('30')
   const [loading, setLoading] = createSignal(true)
   const [busy, setBusy] = createSignal<string | null>(null)
   const [message, setMessage] = createSignal<Message | null>(null)
@@ -73,6 +88,13 @@ function App() {
   let characterTriggerElement: HTMLParagraphElement | undefined
 
   const canOperate = createMemo(() => !loading() && busy() === null)
+  const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
+  const setupSteps = createMemo(() => buildSetupSteps({
+    status: status(),
+    credential: credential(),
+    repository: repository(),
+    resources: resources(),
+  }))
 
   onMount(() => {
     const navigation = initializeAppNavigation({
@@ -165,7 +187,7 @@ function App() {
       const nextLimitDate = limitDate().trim()
       const result = await updateCredential({
         token: nextToken.length > 0 ? nextToken : null,
-        limitDate: nextLimitDate.length > 0 ? nextLimitDate : null,
+        limitDate: nextLimitDate.length > 0 ? nextLimitDate : resolveCredentialLimitDate(expiryPreset(), limitDate()),
       })
 
       setToken('')
@@ -222,6 +244,14 @@ function App() {
   function applyCredential(next: CredentialStatus) {
     setCredential(next)
     setLimitDate(next.limitDate ?? '')
+    setExpiryPreset(inferCredentialExpiryPreset(next.limitDate))
+  }
+
+  function updateExpiryPreset(value: CredentialExpiryPreset) {
+    setExpiryPreset(value)
+    if (value !== 'custom') {
+      setLimitDate(resolveCredentialLimitDate(value, limitDate()))
+    }
   }
 
   function updateResource(index: number, patch: Partial<ResourceConfiguration>) {
@@ -264,7 +294,7 @@ function App() {
           </div>
         </div>
         <h1>Application Settings</h1>
-        <p class="lead">外の世界との繋がりを定める<br />この世界も、様々な世界と繋がっている</p>
+        <p class="lead">アプリケーションを設定する<br />接続先や同期など、アプリケーションの動作を設定します</p>
       </header>
 
       <Show when={message()}>
@@ -272,9 +302,14 @@ function App() {
       </Show>
 
       <section class="settings-grid">
+        <SetupAssistant
+          status={status()}
+          steps={setupSteps()}
+        />
+
         <StatusSection status={status()} credential={credential()} />
 
-        <section class="panel">
+        <section class="panel repository-panel">
           <div class="panel-header">
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-source-repository" aria-hidden="true" /></div>
@@ -386,13 +421,27 @@ function App() {
             <strong>{credential()?.configured ? '設定済み' : '未設定'}</strong>
             <span>登録された情報は、システム内に保存されます。</span>
           </div>
+          <div class={`credential-expiry ${expiryDescription().state}`}>
+            <span>{expiryDescription().label}</span>
+            <strong>{formatCredentialDisplayDate(credential()?.limitDate)}</strong>
+            <p>{expiryDescription().detail}</p>
+          </div>
           <div class="form-grid">
             <Field label="GitHub Token">
               <input type="password" autocomplete="new-password" value={token()} onInput={(event) => setToken(event.currentTarget.value)} />
             </Field>
-            <Field label="Token Limit Date">
-              <input type="date" value={limitDate()} onInput={(event) => setLimitDate(event.currentTarget.value)} />
+            <Field label="Token Limit">
+              <select value={expiryPreset()} onChange={(event) => updateExpiryPreset(event.currentTarget.value as CredentialExpiryPreset)}>
+                <For each={credentialExpiryPresets}>
+                  {(preset) => <option value={preset.value}>{preset.label}</option>}
+                </For>
+              </select>
             </Field>
+            <Show when={expiryPreset() === 'custom'}>
+              <Field label="Custom Limit Date">
+                <input type="date" value={limitDate()} onInput={(event) => setLimitDate(event.currentTarget.value)} />
+              </Field>
+            </Show>
           </div>
           <button class="primary-action" type="button" disabled={!canOperate()} onClick={saveCredential}>Update</button>
         </section>
@@ -417,6 +466,53 @@ function App() {
   )
 }
 
+function SetupAssistant(props: {
+  status: AfStatus | null
+  steps: SetupStep[]
+}) {
+  const ready = createMemo(() => isSetupReady(props.status))
+  const readiness = createMemo(() => props.status?.readiness)
+
+  return (
+    <section class={`panel wide-panel setup-panel ${ready() ? 'ready' : 'active'}`}>
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-progress-check" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Initial Setup</p>
+            <h2>セットアップ</h2>
+          </div>
+        </div>
+        <span class={`status-pill ${readiness()?.state ?? 'unknown'}`}>{displayStatus(readiness()?.state)}</span>
+      </div>
+      <div class="setup-summary">
+        <strong>Status: {ready() ? 'Finish' : 'Not Finish'}</strong>
+      </div>
+      <div class="setup-steps">
+        <For each={props.steps}>
+          {(step) => (
+            <article class={`setup-step ${step.state}`}>
+              <div class="setup-step__status" aria-hidden="true">
+                <i class={`mdi ${step.state === 'complete' ? 'mdi-check' : step.state === 'current' ? 'mdi-arrow-right' : 'mdi-lock-outline'}`} />
+              </div>
+              <div class="setup-step__body">
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+            </article>
+          )}
+        </For>
+      </div>
+      <Show when={(readiness()?.requiredActions.length ?? 0) > 0}>
+        <div class="required-actions">
+          <p class="eyebrow">Required Actions</p>
+          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{requiredActionLabel(action)}</span>}</For>
+        </div>
+      </Show>
+    </section>
+  )
+}
+
 function StatusSection(props: { status: AfStatus | null; credential: CredentialStatus | null }) {
   const githubStatus = createMemo(() => resolveGithubStatus(props.status, props.credential))
 
@@ -432,8 +528,10 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
         </div>
       </div>
       <div class="status-grid">
-        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? props.status?.version ?? '-'} />
+        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
         <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
+        <StatusItem label="Application State" value={displayStatus(props.status?.readiness?.state)} />
+        <StatusItem label="Synced Data" value={runtimeDataSummary(props.status)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>
@@ -473,15 +571,129 @@ function NumberField(props: { label: string; description: string; min: number; m
 }
 
 function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): Message {
+  const userFacingErrors = uniqueMessages(errors.map(toUserFacingAfError))
   return {
     tone,
-    text: errors.length > 0 ? `${fallback} ${errors.map((error) => `${error.code}: ${error.message}`).join(' / ')}` : fallback,
+    text: userFacingErrors.length === 0
+      ? fallback
+      : tone === 'warning'
+        ? `${fallback} ${userFacingErrors.join(' / ')}`
+        : userFacingErrors.join(' / '),
   }
+}
+
+function uniqueMessages(messages: string[]): string[] {
+  return Array.from(new Set(messages))
+}
+
+function toUserFacingAfError(error: AfError): string {
+  if (error.code === 'CONFIG_SAVE_FAILED') {
+    return '設定情報を保存できませんでした。再度操作してください。'
+  }
+  if (error.code === 'CONFIG_REQUIRED') {
+    return error.message === 'Repository configuration is required.'
+      ? 'リポジトリ設定が完了していません。設定内容を確認してください。'
+      : '必要な設定を行ってから、再度操作してください。'
+  }
+  if (error.code === 'CONFIG_INVALID') {
+    if (error.message === 'Repository configuration is invalid.') {
+      return 'リポジトリ設定に問題があります。入力内容を確認してください。'
+    }
+    if (error.message === 'Resource configuration is invalid.') {
+      return 'リソース設定に問題があります。入力内容を確認してください。'
+    }
+    if (error.message === 'Resource configuration is required.') {
+      return 'リソース設定が完了していません。設定内容を確認してください。'
+    }
+    if (error.message === 'Timeout configuration is required.') {
+      return 'タイムアウト設定が完了していません。設定内容を確認してください。'
+    }
+    if (error.message.endsWith(' is out of range.')) {
+      return 'タイムアウト設定の値が設定可能な範囲外です。入力内容を確認してください。'
+    }
+    return '設定情報が利用できない形式です。仕様を確認し、登録されている情報を見直してください。'
+  }
+  if (error.code === 'CREDENTIAL_REQUIRED') {
+    return 'GitHub Tokenを登録してから、再度操作してください。'
+  }
+  if (error.code === 'CREDENTIAL_INVALID') {
+    return 'GitHub Tokenが正しくありません。入力内容を確認してください。'
+  }
+  if (error.code === 'CREDENTIAL_SAVE_FAILED') {
+    return 'GitHub Tokenを保存できませんでした。再度操作してください。'
+  }
+  if (error.code === 'OPERATION_ALREADY_RUNNING') {
+    if (error.message === 'Sync is already running.') {
+      return '同期処理を実行中です。完了してから再度操作してください。'
+    }
+    if (error.message === 'Credential update is already running.') {
+      return 'GitHub Tokenの更新処理を実行中です。完了してから再度操作してください。'
+    }
+    return '設定情報の更新処理を実行中です。完了してから再度操作してください。'
+  }
+  if (error.code === 'COMMON_INTERNAL_ERROR') {
+    return error.message === 'Sync failed.'
+      ? '同期に失敗しました。再度操作してください。'
+      : '設定情報を更新できませんでした。再度操作してください。'
+  }
+  if (error.code === 'RUNTIME_DATA_UPDATE_FAILED' || error.code === 'RUNTIME_DATA_SAVE_FAILED') {
+    return '同期したデータを更新できませんでした。再度同期してください。'
+  }
+  if (error.code === 'RUNTIME_DATA_EMPTY') {
+    return 'ワークアウトデータがありません。'
+  }
+  if (error.code === 'RUNTIME_DATA_INVALID') {
+    return '同期対象のデータに問題があるため、同期できませんでした。'
+  }
+  if (error.code === 'RUNTIME_DATA_UNAVAILABLE') {
+    return '同期済みデータがありません。同期してください。'
+  }
+  if (error.code === 'GITHUB_UNAUTHORIZED') {
+    return 'GitHubの認証に失敗しました。GitHub Tokenを確認してください。'
+  }
+  if (error.code === 'GITHUB_FORBIDDEN') {
+    return 'GitHubへのアクセスが許可されていません。リポジトリの権限とGitHub Tokenを確認してください。'
+  }
+  if (error.code === 'GITHUB_RESOURCE_NOT_FOUND') {
+    return '同期対象のGitHubリソースが見つかりません。設定情報と同期対象を確認してください。'
+  }
+  if (error.code === 'GITHUB_RATE_LIMIT') {
+    return 'GitHubの利用制限に達しました。時間をおいて再度操作してください。'
+  }
+  if (error.code === 'GITHUB_TIMEOUT') {
+    return 'GitHubへの接続がタイムアウトしました。再度操作してください。タイムアウト秒数の再設定を検討してください。'
+  }
+  if (error.code === 'GITHUB_CONNECTION_FAILED') {
+    return error.message.startsWith('GitHub server error:')
+      ? 'GitHubでエラーが発生しました。時間をおいて再度操作してください。'
+      : 'GitHubに接続できませんでした。ネットワーク接続を確認してください。'
+  }
+  if (error.code === 'GITHUB_SERVER_ERROR') {
+    return 'GitHubでエラーが発生しました。時間をおいて再度操作してください。'
+  }
+  return fallbackAfErrorMessage(error)
+}
+
+function fallbackAfErrorMessage(error: AfError): string {
+  if (error.recoverable) return '操作に失敗しました。再度操作してください。'
+  return '同期対象のデータに問題があります。'
 }
 
 function displayStatus(value?: string) {
   if (!value) return '-'
   return statusLabels[value] ?? value
+}
+
+function requiredActionLabel(action: string) {
+  if (action === 'CONFIGURATION_REQUIRED') return '設定情報の登録が必要です'
+  if (action === 'CREDENTIAL_REQUIRED') return 'GitHub Tokenの登録が必要です'
+  if (action === 'RUNTIME_DATA_REQUIRED') return 'データ同期が必要です'
+  return action
+}
+
+function runtimeDataSummary(status: AfStatus | null) {
+  if (!status) return '-'
+  return status.runtimeData.currentAvailable ? '利用可能' : '利用不可'
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

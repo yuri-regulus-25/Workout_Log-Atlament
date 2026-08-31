@@ -1,14 +1,14 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
+import { hostedApplications, portalApplication } from '../application-registry.mjs'
 
 const requiredPorts = [
   { name: 'Development Gateway', port: 5173 },
-  { name: 'Portal', port: 5174 },
-  { name: 'Dashboard', port: 5175 },
-  { name: 'Workouts', port: 5176 },
-  { name: 'Exercises', port: 5177 },
-  { name: 'Analytics', port: 5178 },
-  { name: 'Settings', port: 5179 },
+  { name: portalApplication.displayName, port: portalApplication.devPort },
+  ...hostedApplications.map((application) => ({
+    name: application.displayName,
+    port: application.devPort,
+  })),
   { name: 'Node Development Runtime', port: 5180 },
 ]
 
@@ -21,9 +21,10 @@ const processes = [
   start('development-runtime', process.execPath, ['tools/dev-runtime/development-runtime.mjs']),
   startNpm('dashboard', ['run', 'watch:dashboard']),
   startNpm('workouts', ['run', 'watch:workouts']),
-  startNpm('exercises', ['run', 'watch:exercises']),
+  startNpm('machines', ['run', 'watch:machines']),
   startNpm('analytics', ['run', 'watch:analytics']),
   startNpm('settings', ['run', 'watch:settings']),
+  startNpm('maintenance', ['run', 'watch:maintenance']),
   start('gateway', process.execPath, ['tools/dev-runtime/development-gateway.mjs']),
 ]
 

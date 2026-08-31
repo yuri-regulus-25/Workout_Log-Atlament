@@ -19,6 +19,7 @@
   - `/api/v1/common/status`
   - `/api/v1/common/configuration`
   - `/api/v1/common/credential/status`
+  - `/api/v1/common/master-write/boundary`
   - `/api/v1/common/credential`
   - `/api/v1/common/sync`
   - `/api/v1/common/runtime/workouts`
@@ -31,7 +32,7 @@
   - 起動時にConfiguration / Credentialが利用可能な場合、GitHub同期をバックグラウンドで実行する。
   - Startup Sync中はStatus APIの `operations.startup` が `running` になる。
 - Local Fallbackの最小実装。
-  - Remote同期に失敗しても保存済みRuntime Dataがある場合は `source: local` として継続する。
+  - Remote同期に失敗しても保存済みRuntime Dataがある場合は degraded sync result として継続する。
   - PortalではGitHub degraded + Runtime Data available時にLocal Fallback警告を表示する。
 - Android Application-owned SQLite Logの最小実装。
   - `filesDir/log/atlament-log.sqlite` にAF operation logを保存する。
@@ -140,10 +141,11 @@ Settings画面では次を確認する。
 - Repository設定を保存できる。
 - GitHub tokenを保存できる。
 - `Sync immediately` でRuntime Dataを取得できる。
+- Master Reference が missing/deleted の Workout は warning 付き Runtime Data として保持される。
 - Remote同期失敗時、保存済みRuntime DataがあればLocal Fallbackで継続する。
 - 再起動後、Startup Syncが実行される。
 - status上でConfiguration / Credential / Runtime Dataが利用可能になる。
-- status上でPortal / Dashboard / Workouts / Exercises / Analytics / SettingsのHostingが利用可能になる。
+- status上でPortal / Dashboard / Workouts / Machines / Analytics / Settings / MaintenanceのHostingが利用可能になる。
 
 ## 未完了事項
 

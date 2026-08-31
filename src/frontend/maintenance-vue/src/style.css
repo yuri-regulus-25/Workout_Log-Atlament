@@ -1,0 +1,147 @@
+@import "@workout-lab/shared-styles/css";
+@import "@workout-lab/frontend-common/page-transition.css";
+@import "@workout-lab/frontend-common/branding.css";
+@import "@workout-lab/frontend-common/easter-egg.css";
+
+#app {
+  min-height: 100vh;
+}
+
+.v-application {
+  background: var(--wl-bg) !important;
+  color: var(--wl-text) !important;
+}
+
+.v-application .v-application__wrap {
+  background: var(--wl-bg);
+}
+
+.maintenance-shell {
+  --maintenance-accent-action-bg: var(--wl-accent);
+  --maintenance-accent-selection-bg: var(--wl-primary-soft);
+  --maintenance-accent-selection-fg: var(--wl-primary-strong);
+  display: block;
+}
+
+:root[data-theme="dark"] .maintenance-shell,
+.atl-theme-dark .maintenance-shell {
+  --maintenance-accent-action-bg: color-mix(in srgb, var(--wl-primary) 68%, black);
+  --maintenance-accent-selection-bg: color-mix(in srgb, var(--wl-primary) 68%, black);
+  --maintenance-accent-selection-fg: var(--wl-text-strong);
+}
+
+.status-alert {
+  margin: 0;
+}
+
+.maintenance-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.maintenance-description {
+  color: var(--wl-text-muted);
+  margin: 0;
+  line-height: 1.7;
+}
+
+.maintenance-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.maintenance-toolbar .v-btn-toggle {
+  background: var(--wl-surface);
+  border: 1px solid var(--wl-border);
+  color: var(--wl-text);
+}
+
+.maintenance-toolbar .v-btn {
+  color: var(--wl-text) !important;
+}
+
+.maintenance-toolbar .v-btn--active {
+  background: var(--maintenance-accent-selection-bg) !important;
+  color: var(--maintenance-accent-selection-fg) !important;
+}
+
+.accent-create-button {
+  background: var(--maintenance-accent-action-bg) !important;
+  color: #ffffff !important;
+}
+
+.accent-create-button :is(.v-btn__content, .v-icon) {
+  color: #ffffff !important;
+}
+
+.maintenance-table {
+  background: var(--wl-surface) !important;
+  border-radius: 8px;
+  color: var(--wl-text) !important;
+  overflow: hidden;
+}
+
+.maintenance-table :is(.v-table, .v-table__wrapper, table, thead, tbody, tr, th, td) {
+  background: var(--wl-surface) !important;
+  color: var(--wl-text) !important;
+}
+
+.maintenance-table th {
+  color: var(--wl-text-muted) !important;
+}
+
+.master-table .v-table__wrapper {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.master-table table {
+  table-layout: fixed;
+}
+
+.machine-master-table table {
+  min-width: 764px;
+}
+
+.gym-master-table table {
+  min-width: 1024px;
+}
+
+.master-table :is(th, td) {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.affected-message {
+  display: grid;
+  gap: 2px;
+  line-height: 1.5;
+}
+
+.affected-message span + span {
+  color: var(--wl-text-muted);
+}
+
+.v-card {
+  background: var(--wl-surface) !important;
+  color: var(--wl-text) !important;
+}
+
+.v-overlay {
+  color: var(--wl-text);
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 88px;
+}
+
+.record-form {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
