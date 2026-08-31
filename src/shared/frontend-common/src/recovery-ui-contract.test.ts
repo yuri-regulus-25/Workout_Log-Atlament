@@ -43,6 +43,10 @@ describe('Maintenance Recovery UI contract', () => {
     const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
 
     expect(recovery).toContain('expectedDraftRevision: draft.draftRevision')
+    expect(recovery).toContain('autosaveInFlight')
+    expect(recovery).toContain('autosavePending')
+    expect(recovery).toContain('cloneRecoveryFields(draft.fields)')
+    expect(recovery).toContain('const draft = activeDraft.value')
     expect(recovery).toContain('validationInvalidated.value = validation.value !== null')
     expect(recovery).toContain('RECOVERY_DRAFT_CONFLICT')
     expect(recovery).toContain('元データが更新されています')

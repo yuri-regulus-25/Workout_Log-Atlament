@@ -276,6 +276,8 @@ const discardDialogOpen = ref(false)
 const confirmCommitOpen = ref(false)
 const autosaveState = ref<AutosaveState>('idle')
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+let autosaveInFlight = false
+let autosavePending = false
 
 const activeDraft = computed(() => draftSnapshot.value?.state === 'active' ? draftSnapshot.value.draft : null)
 const canEditDraft = computed(() => draftSnapshot.value?.state === 'active')
@@ -305,7 +307,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', restoreFromLocation)
-  if (autosaveTimer) clearTimeout(autosaveTimer)
+  resetAutosaveQueue()
 })
 
 watch(selectedResourceKey, (value) => {
@@ -332,6 +334,7 @@ function selectResource(resource: BrokenResourceSummary) {
 }
 
 function returnToList() {
+  resetAutosaveQueue()
   selectedResourceKey.value = ''
   detail.value = null
   draftSnapshot.value = null
@@ -349,6 +352,7 @@ function restoreFromLocation() {
 
 async function reloadDetail() {
   if (!selectedResourceKey.value) return
+  resetAutosaveQueue()
   detailLoading.value = true
   errorText.value = ''
   sourceView.value = null
@@ -369,6 +373,7 @@ async function reloadDetail() {
 
 async function createDraft() {
   if (!selectedResourceKey.value) return
+  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await createRecoveryDraft(selectedResourceKey.value)
@@ -389,39 +394,76 @@ function updateField(fieldPath: string, change: FieldChange) {
     ? { fieldPath, state: 'confirmed', source: 'user', value: change.value }
     : field)
   validationInvalidated.value = validation.value !== null
-  scheduleAutosave(draft)
+  scheduleAutosave()
 }
 
 function applySuggestion(fieldPath: string, value: unknown) {
   updateField(fieldPath, { value })
 }
 
-function scheduleAutosave(draft: RecoveryDraft) {
+function scheduleAutosave() {
+  if (autosaveInFlight) {
+    autosavePending = true
+    return
+  }
   if (autosaveTimer) clearTimeout(autosaveTimer)
   autosaveTimer = setTimeout(() => {
-    void saveDraft(draft)
+    void saveDraft()
   }, 450)
 }
 
-async function saveDraft(draft: RecoveryDraft) {
+async function saveDraft() {
   if (!selectedResourceKey.value) return
+  if (autosaveInFlight) {
+    autosavePending = true
+    return
+  }
+  const draft = activeDraft.value
+  if (!draft) return
+  const fields = cloneRecoveryFields(draft.fields)
+  autosaveInFlight = true
   autosaveState.value = 'saving'
   try {
     const result = await updateRecoveryDraft(selectedResourceKey.value, {
       expectedDraftRevision: draft.draftRevision,
-      fields: draft.fields,
+      fields,
     })
     if (!result.success || !result.data) throw result
-    draftSnapshot.value = result.data
+    draftSnapshot.value = autosavePending && activeDraft.value
+      ? {
+          ...result.data,
+          draft: result.data.draft
+            ? { ...result.data.draft, fields: activeDraft.value.fields }
+            : result.data.draft,
+        }
+      : result.data
     autosaveState.value = 'saved'
   } catch (error) {
     autosaveState.value = firstAfErrorCode(error) === 'RECOVERY_DRAFT_CONFLICT' ? 'conflict' : 'failed'
     if (autosaveState.value === 'conflict') void reloadDetail()
+  } finally {
+    autosaveInFlight = false
+    if (autosavePending && autosaveState.value === 'saved') {
+      autosavePending = false
+      void saveDraft()
+    }
   }
+}
+
+function cloneRecoveryFields(fields: RecoveryField[]): RecoveryField[] {
+  return JSON.parse(JSON.stringify(fields)) as RecoveryField[]
+}
+
+function resetAutosaveQueue() {
+  if (autosaveTimer) clearTimeout(autosaveTimer)
+  autosaveTimer = null
+  autosaveInFlight = false
+  autosavePending = false
 }
 
 async function discardDraft() {
   if (!selectedResourceKey.value) return
+  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await deleteRecoveryDraft(selectedResourceKey.value)

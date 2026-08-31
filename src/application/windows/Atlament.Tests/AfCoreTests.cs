@@ -274,6 +274,42 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void RecoveryDraftUpdatePropagatesRevisionForConsecutiveAutosaves()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new RecoveryService(new RecoveryDraftStore(new WindowsPathProvider(root)));
+            var configuration = Configuration("data");
+            var source = new RuntimeSourceFile("workouts/broken.json", "{\"session_id\":\"broken\"}", "source-revision-a");
+            _ = service.CreateWorkoutDraft(configuration, source, broken: true);
+
+            var first = service.UpdateDraft(
+                configuration,
+                "WORKOUT",
+                source.Path,
+                source.Revision!,
+                new RecoveryDraftUpdate(1, new[] { ConfirmedField("/date", JsonValue.Create("2026-08-22")) }));
+            var second = service.UpdateDraft(
+                configuration,
+                "WORKOUT",
+                source.Path,
+                source.Revision!,
+                new RecoveryDraftUpdate(first.Snapshot.Draft!.DraftRevision, new[] { ConfirmedField("/date", JsonValue.Create("2026-08-23")) }));
+
+            Assert.Empty(first.Errors);
+            Assert.Equal(2, first.Snapshot.Draft!.DraftRevision);
+            Assert.Empty(second.Errors);
+            Assert.Equal(3, second.Snapshot.Draft!.DraftRevision);
+            Assert.Equal("2026-08-23", second.Snapshot.Draft.Fields.Single()["value"]?.GetValue<string>());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void RecoveryDraftRestoreStaleAndCorruptedStatesDoNotTouchRuntime()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
