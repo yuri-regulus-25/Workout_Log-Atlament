@@ -420,6 +420,26 @@ public sealed class AfCoreTests
                     return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
                 }
 
+                if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "machine-sha",
+                          "content": "{{EncodeContent(MachineMaster.Content)}}"
+                        }
+                        """);
+                }
+
+                if (url.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "gym-sha",
+                          "content": "{{EncodeContent(GymMaster.Content)}}"
+                        }
+                        """);
+                }
+
                 if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(MachineMaster.Content);
@@ -522,6 +542,26 @@ public sealed class AfCoreTests
                     return JsonResponse(Workout("workouts/2026-08-24.json", "missing-gym", "missing-machine").Content);
                 }
 
+                if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "machine-sha",
+                          "content": "{{EncodeContent(MachineMaster.Content)}}"
+                        }
+                        """);
+                }
+
+                if (url.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "gym-sha",
+                          "content": "{{EncodeContent(GymMaster.Content)}}"
+                        }
+                        """);
+                }
+
                 if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(MachineMaster.Content);
@@ -556,6 +596,9 @@ public sealed class AfCoreTests
             Assert.True(runtime.Success);
             Assert.Empty(runtime.Errors);
             Assert.NotEmpty(runtime.Warnings);
+            Assert.NotNull(runtime.Data?.MasterDocuments);
+            Assert.Equal(MachineMaster.Content, runtime.Data!.MasterDocuments!.Machine.Content);
+            Assert.Equal(GymMaster.Content, runtime.Data.MasterDocuments.Gym.Content);
             Assert.Equal("ready", status.Readiness.State);
             Assert.False(status.Application.Degraded);
             Assert.False(status.RuntimeData.FallbackActive);
@@ -597,6 +640,26 @@ public sealed class AfCoreTests
                 if (url.Contains("/data/workouts/2026-08-24.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(Workout("workouts/2026-08-24.json", "known-gym", "known-machine").Content);
+                }
+
+                if (url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "machine-sha",
+                          "content": "{{EncodeContent(MachineMaster.Content)}}"
+                        }
+                        """);
+                }
+
+                if (url.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""
+                        {
+                          "sha": "gym-sha",
+                          "content": "{{EncodeContent(GymMaster.Content)}}"
+                        }
+                        """);
                 }
 
                 if (url.Contains("/data/master/machines.json", StringComparison.Ordinal))
@@ -820,7 +883,7 @@ public sealed class AfCoreTests
 
             var body = request.Content is null ? "{}" : await request.Content.ReadAsStringAsync();
             var payload = JsonNode.Parse(body)!;
-            Assert.Equal("Update machine master", payload["message"]!.GetValue<string>());
+            Assert.Equal("Update machine master: machines.json", payload["message"]!.GetValue<string>());
             Assert.Equal("current-sha", payload["sha"]!.GetValue<string>());
             Assert.Equal("master", payload["branch"]!.GetValue<string>());
             Assert.Equal(
@@ -882,7 +945,7 @@ public sealed class AfCoreTests
             CancellationToken.None);
 
         Assert.Null(result.Result);
-        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterWriteConflict);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.MasterSyncRequired);
         Assert.Equal(new[] { HttpMethod.Get }, methods);
     }
 
@@ -1088,7 +1151,12 @@ public sealed class AfCoreTests
                     new WorkoutMachine("known-machine", "Known Machine", "chest", new MasterReferenceResolution("resolved", "known-machine", "known-machine"), new[] { new MachineSet(1, 20, 10, null, null, null, null) }, Array.Empty<string>())
                 },
                 Array.Empty<string>());
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
+            var machineMaster = "{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}";
+            var gymMaster = "{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"known-gym\",\"name\":\"Known Gym\",\"active\":true,\"deleted\":false,\"main\":true}]}";
+            var localMasters = new LocalMasterDocuments(
+                new MasterDocumentSnapshot("MACHINE_MASTER", "master/machines.json", "current-sha", machineMaster),
+                new MasterDocumentSnapshot("GYM_MASTER", "master/gyms.json", "gym-sha", gymMaster));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false), localMasters));
 
             var requests = new List<HttpRequestMessage>();
             var http = new RecordingAsyncHttpMessageHandler(async request =>
@@ -1096,12 +1164,32 @@ public sealed class AfCoreTests
                 requests.Add(CloneRequest(request));
                 if (request.Method == HttpMethod.Get)
                 {
+                    if (request.RequestUri!.Host == "raw.githubusercontent.com")
+                    {
+                        return new HttpResponseMessage(HttpStatusCode.OK)
+                        {
+                            Content = new StringContent("{\"schema_version\":1,\"session_id\":\"valid\",\"date\":\"2026-08-24\",\"status\":\"complete\",\"gym_id\":\"known-gym\",\"machines\":[{\"machine_id\":\"known-machine\",\"sets\":[{\"set\":1,\"weight_kg\":20,\"reps\":10}]}]}", Encoding.UTF8, "application/json")
+                        };
+                    }
+
+                    if (request.RequestUri!.AbsoluteUri.Contains("/contents/data/workouts", StringComparison.Ordinal))
+                    {
+                        return JsonResponse("""
+                            [
+                              {
+                                "type": "file",
+                                "path": "data/workouts/valid.json"
+                              }
+                            ]
+                            """);
+                    }
+
                     if (request.RequestUri!.AbsoluteUri.Contains("/data/master/gyms.json", StringComparison.Ordinal))
                     {
                         return JsonResponse($$"""
                             {
                               "sha": "gym-sha",
-                              "content": "{{EncodeContent("{\"schema_version\":1,\"gyms\":[{\"gym_id\":\"known-gym\",\"name\":\"Known Gym\",\"active\":true,\"deleted\":false,\"main\":true}]}")}}"
+                              "content": "{{EncodeContent(gymMaster)}}"
                             }
                             """);
                     }
@@ -1109,7 +1197,7 @@ public sealed class AfCoreTests
                     return JsonResponse($$"""
                         {
                           "sha": "current-sha",
-                          "content": "{{EncodeContent("{\"schema_version\":1,\"machines\":[{\"machine_id\":\"known-machine\",\"name\":\"Known Machine\",\"body_part\":\"chest\",\"aliases\":[],\"active\":true,\"deleted\":false}]}")}}"
+                          "content": "{{EncodeContent(machineMaster)}}"
                         }
                         """);
                 }
@@ -1134,7 +1222,7 @@ public sealed class AfCoreTests
 
             await application.StartAsync(CancellationToken.None);
             await WaitForStartupAsync(application);
-            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false)));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(new[] { session }, Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false), localMasters));
             requests.Clear();
 
             var result = await application.WriteMasterDocumentAsync(
@@ -1147,8 +1235,126 @@ public sealed class AfCoreTests
             Assert.Equal(200, result.StatusCode);
             Assert.True(result.Response.Success);
             Assert.Equal("saved-sha", result.Response.Data!.Revision);
-            Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Get, HttpMethod.Put }, requests.Select(request => request.Method));
+            Assert.Equal(new[] { HttpMethod.Get, HttpMethod.Put, HttpMethod.Get, HttpMethod.Get }, requests.Select(request => request.Method));
             Assert.Contains(requests, request => request.Method == HttpMethod.Put && request.RequestUri!.AbsoluteUri.Contains("/contents/data/master/machines.json", StringComparison.Ordinal));
+            Assert.DoesNotContain(requests, request => request.Method == HttpMethod.Get && request.RequestUri!.AbsoluteUri.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterDocumentReadUsesLocalMasterWithoutRemoteFetch()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var runtimeStore = new RuntimeDataStore(paths);
+            var localMasters = new LocalMasterDocuments(
+                new MasterDocumentSnapshot("MACHINE_MASTER", "master/machines.json", "local-machine-sha", "{\"schema_version\":1,\"machines\":[]}"),
+                new MasterDocumentSnapshot("GYM_MASTER", "master/gyms.json", "local-gym-sha", "{\"schema_version\":1,\"gyms\":[]}"));
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(Array.Empty<WorkoutSession>(), Array.Empty<AfError>(), Array.Empty<RuntimeWarning>(), false), localMasters));
+
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                runtimeStore,
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => throw new InvalidOperationException("GitHub must not be read for Maintenance display.")))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            var result = await application.ReadMasterDocumentAsync("MACHINE_MASTER", CancellationToken.None);
+
+            Assert.Equal(200, result.StatusCode);
+            Assert.Equal("local-machine-sha", result.Response.Data!.Revision);
+            Assert.Equal("{\"schema_version\":1,\"machines\":[]}", result.Response.Data.Content);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MasterDocumentReadRequiresSyncWhenLocalMasterIsMissing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => throw new InvalidOperationException("GitHub must not be used as a Maintenance fallback.")))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            var result = await application.ReadMasterDocumentAsync("GYM_MASTER", CancellationToken.None);
+
+            Assert.Equal(409, result.StatusCode);
+            Assert.False(result.Response.Success);
+            Assert.Contains(result.Response.Errors, error => error.Code == AfErrorCodes.MasterSyncRequired);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UnresolvedMasterReferencesUseCurrentRuntimeWarningsWithoutRemoteFetch()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var runtimeStore = new RuntimeDataStore(paths);
+            var warning = new RuntimeWarning(
+                "MASTER_REFERENCE_MISSING",
+                "machine",
+                "missing",
+                "unknown-machine",
+                null,
+                "session-1",
+                "workouts/2026-08-24.json",
+                null,
+                "特定のマシンが存在しません: unknown-machine");
+            Assert.Empty(runtimeStore.SaveCurrent(new RuntimeBuildResult(Array.Empty<WorkoutSession>(), Array.Empty<AfError>(), new[] { warning }, false)));
+
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                runtimeStore,
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => throw new InvalidOperationException("GitHub must not be read for unresolved Maintenance data.")))),
+                new HostingStatusService(paths),
+                new AfLog(paths));
+
+            var result = await application.GetUnresolvedMasterReferencesAsync(CancellationToken.None);
+
+            Assert.Equal(200, result.StatusCode);
+            var unresolved = Assert.Single(result.Response.Data!);
+            Assert.Equal("MACHINE_MASTER", unresolved.Type);
+            Assert.Equal("unknown-machine", unresolved.ReferenceId);
+            Assert.Single(unresolved.AffectedWorkouts);
         }
         finally
         {

@@ -8,7 +8,6 @@ export type WorkoutListFilters = {
   selectedGym: string
   dateFrom: string
   dateTo: string
-  sortDirection: 'desc' | 'asc'
 }
 
 export const defaultWorkoutListFilters: WorkoutListFilters = {
@@ -18,7 +17,6 @@ export const defaultWorkoutListFilters: WorkoutListFilters = {
   selectedGym: 'all',
   dateFrom: '',
   dateTo: '',
-  sortDirection: 'desc',
 }
 
 export function filterWorkoutSessions(
@@ -53,9 +51,4 @@ export function filterWorkoutSessions(
 
       return matchesSearch && matchesMachine && matchesBodyPart && matchesGym && matchesFrom && matchesTo
     })
-    .sort((a, b) => (
-      filters.sortDirection === 'asc'
-        ? a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id)
-        : b.date.localeCompare(a.date) || b.session_id.localeCompare(a.session_id)
-    ))
 }

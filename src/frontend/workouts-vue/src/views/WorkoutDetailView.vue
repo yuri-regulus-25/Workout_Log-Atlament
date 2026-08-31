@@ -12,7 +12,7 @@ import {
   getMachineDisplayName,
   resolveWorkoutNeighborsByDate,
 } from '@workout-lab/workout-core'
-import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
+import { formatCountLabel, getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
 
 const props = defineProps<{
   date: string
@@ -58,8 +58,8 @@ function toggleMachine(session: WorkoutSession, machineId: string) {
   collapsedMachines.value = next
 }
 
-function formatSigned(value: number): string {
-  return `${value > 0 ? '+' : ''}${value.toLocaleString()}`
+function formatSignedCount(value: number, singular: string, plural: string): string {
+  return `${value > 0 ? '+' : ''}${formatCountLabel(value, singular, plural)}`
 }
 
 function machineNames(machines: Array<{ machineName: string }>): string {
@@ -71,8 +71,8 @@ function machineNames(machines: Array<{ machineName: string }>): string {
 <template>
   <section v-if="loadError" class="panel" style="margin-bottom: 16px">
     <p class="eyebrow">Data Load Warning</p>
-    <h2>データが正常ではありません。</h2>
-    <p class="muted">{{ loadError }}</p>
+    <h2>データ取得異常</h2>
+    <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
   </section>
 
   <section v-if="sessions.length > 0" class="view-stack">
@@ -104,15 +104,15 @@ function machineNames(machines: Array<{ machineName: string }>): string {
     <section class="summary-grid">
       <article class="metric-card">
         <span>Machines</span>
-        <strong>{{ daySummary.totalMachines }} {{ daySummary.totalMachines === 1 ? "Machine": "Machines" }}</strong>
+        <strong>{{ formatCountLabel(daySummary.totalMachines, "Machine", "Machines") }}</strong>
       </article>
       <article class="metric-card">
         <span>Sets</span>
-        <strong>{{ daySummary.totalSets }} {{ daySummary.totalSets === 1 ? "Set": "Sets" }}</strong>
+        <strong>{{ formatCountLabel(daySummary.totalSets, "Set", "Sets") }}</strong>
       </article>
       <article class="metric-card">
         <span>Total Reps</span>
-        <strong>{{ daySummary.totalReps.toLocaleString() }} reps</strong>
+        <strong>{{ formatCountLabel(daySummary.totalReps, "Rep", "Reps") }}</strong>
       </article>
       <article class="metric-card">
         <span>Volume</span>
@@ -137,15 +137,15 @@ function machineNames(machines: Array<{ machineName: string }>): string {
       <div class="compare-grid">
         <article class="metric-card">
           <span>Machines</span>
-          <strong>{{ formatSigned(sessionComparison.machineCountDelta.absolute) }}</strong>
+          <strong>{{ formatSignedCount(sessionComparison.machineCountDelta.absolute, "Machine", "Machines") }}</strong>
         </article>
         <article class="metric-card">
           <span>Sets</span>
-          <strong>{{ formatSigned(sessionComparison.setCountDelta.absolute) }}</strong>
+          <strong>{{ formatSignedCount(sessionComparison.setCountDelta.absolute, "Set", "Sets") }}</strong>
         </article>
         <article class="metric-card">
           <span>Total Reps</span>
-          <strong>{{ formatSigned(sessionComparison.totalRepsDelta.absolute) }}</strong>
+          <strong>{{ formatSignedCount(sessionComparison.totalRepsDelta.absolute, "Rep", "Reps") }}</strong>
         </article>
       </div>
       <div class="compare-lists">
@@ -178,23 +178,23 @@ function machineNames(machines: Array<{ machineName: string }>): string {
               <h3>{{ getMachineDisplayName(machine) }}</h3>
               <p>
                 {{ getMachineBodyPartDisplay(machine) }} ·
-                {{ machine.sets.length }} {{ machine.sets.length === 1 ? "set" : "sets" }} ·
-                {{ getMachineReps(machine).toLocaleString() }} reps ·
+                {{ formatCountLabel(machine.sets.length, "set", "sets") }} ·
+                {{ formatCountLabel(getMachineReps(machine), "rep", "reps") }} ·
                 {{ formatTotalWeight(getMachinePresentation(machine).volume) }}
               </p>
             </div>
             <div class="machine-actions">
-              <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">
-                <i class="mdi mdi-chart-line" aria-hidden="true" />Performance
-              </a>
               <button
                 type="button"
                 class="text-action"
                 :aria-expanded="!isMachineCollapsed(session, machine.machine_id)"
                 @click="toggleMachine(session, machine.machine_id)"
               >
-                {{ isMachineCollapsed(session, machine.machine_id) ? "Expand" : "Collapse" }}
+              <i :class="isMachineCollapsed(session, machine.machine_id) ? 'mdi mdi-unfold-more-horizontal' : 'mdi mdi-unfold-less-horizontal'" />
               </button>
+              <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">
+                <i class="mdi mdi-chart-line" aria-hidden="true" />Performance
+              </a>
             </div>
           </div>
           <div v-if="!isMachineCollapsed(session, machine.machine_id)" class="set-table-wrap">
@@ -234,7 +234,7 @@ function machineNames(machines: Array<{ machineName: string }>): string {
   </section>
 
   <section v-else class="view-stack">
-    <p>記録されていない日を見ようとしたみたい。戻ろう。</p>
+    <p>指定された日付のデータがありませんでした。サボりですか？サボりました？</p>
     <a class="text-action" :href="applicationRoutes.workouts"><i class="mdi mdi-chevron-double-left" />Back to Workout Domain</a>
   </section>
 </template>

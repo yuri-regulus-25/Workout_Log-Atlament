@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeCredentialExpiry,
+  formatCredentialDisplayDate,
   inferCredentialExpiryPreset,
   resolveCredentialLimitDate,
   type CredentialExpiryPreset,
@@ -30,8 +31,19 @@ describe('credential expiry helpers', () => {
 
   it('describes missing, expired, valid, and unknown credential states', () => {
     expect(describeCredentialExpiry(null, '2026-08-28').state).toBe('missing')
-    expect(describeCredentialExpiry({ configured: true, state: 'expired', limitDate: '2026-08-27' }, '2026-08-28').state).toBe('expired')
-    expect(describeCredentialExpiry({ configured: true, state: 'available', limitDate: '2026-08-28' }, '2026-08-28').state).toBe('valid')
+    expect(describeCredentialExpiry({ configured: true, state: 'expired', limitDate: '2026-08-27' }, '2026-08-28')).toMatchObject({
+      state: 'expired',
+      detail: '2026/08/27 に期限切れです。',
+    })
+    expect(describeCredentialExpiry({ configured: true, state: 'available', limitDate: '2026-08-28' }, '2026-08-28')).toMatchObject({
+      state: 'valid',
+      detail: '2026/08/28 まで有効です。',
+    })
     expect(describeCredentialExpiry({ configured: true, state: 'available', limitDate: null }, '2026-08-28').state).toBe('unknown')
+  })
+
+  it('formats credential dates for display without changing stored values', () => {
+    expect(formatCredentialDisplayDate('2026-09-27')).toBe('2026/09/27')
+    expect(formatCredentialDisplayDate(null)).toBe('-')
   })
 })

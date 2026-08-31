@@ -21,6 +21,17 @@ describe('App', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Performance Detail');
   });
 
+  it('uses the shared Search Target reset presentation', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const actions = compiled.querySelector('.filter-actions');
+
+    expect(actions?.textContent).toContain('Reset');
+    expect(actions?.textContent).not.toContain('Clear');
+    expect(actions?.textContent).not.toMatch(/\d+\s*\/\s*\d+/);
+  });
+
   it('filters machines by name and body part while preserving selection semantics', () => {
     window.history.replaceState(null, '', '/machines/');
     const fixture = TestBed.createComponent(App);

@@ -31,7 +31,7 @@ export function describeCredentialExpiry(
     return {
       state: 'missing',
       label: '期限未設定',
-      detail: 'Token登録後、選択した期限日を保存します。',
+      detail: '',
     }
   }
 
@@ -47,15 +47,19 @@ export function describeCredentialExpiry(
     return {
       state: 'expired',
       label: '期限切れ',
-      detail: `${credential.limitDate} に期限切れです。`,
+      detail: `${formatCredentialDisplayDate(credential.limitDate)} に期限切れです。`,
     }
   }
 
   return {
     state: 'valid',
     label: '有効期限内',
-    detail: `${credential.limitDate} まで有効です。`,
+    detail: `${formatCredentialDisplayDate(credential.limitDate)} まで有効です。`,
   }
+}
+
+export function formatCredentialDisplayDate(limitDate: string | null | undefined): string {
+  return limitDate ? limitDate.replaceAll('-', '/') : '-'
 }
 
 export function inferCredentialExpiryPreset(limitDate: string | null, today = currentDateString()): CredentialExpiryPreset {

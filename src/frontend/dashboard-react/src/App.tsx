@@ -25,7 +25,7 @@ import {
   getTotalVolume,
   toWorkoutRows,
 } from '@workout-lab/workout-core'
-import { getUniqueWorkoutDateRoute, getWorkoutDetailRoute, getWorkoutListRoute } from './dashboard-navigation'
+import { getUniqueWorkoutDateRoute,  getWorkoutListRoute } from './dashboard-navigation'
 import './App.css'
 
 function App() {
@@ -84,7 +84,6 @@ function App() {
   const currentMonth = getCurrentLocalYearMonth()
   const monthlySessions = getMonthlySessions(sessions, currentMonth.year, currentMonth.month)
   const latestWorkout = sessions.at(-1)
-  const latestWorkoutRoute = latestWorkout ? getWorkoutDetailRoute(latestWorkout.date) : getWorkoutListRoute()
   const totalSets = monthlySessions.reduce((total, session) => total + getTotalSets(session), 0)
   const monthlyVolume = getMainGymMonthlyVolumeMetric(mainGymContext, sessions, currentMonth.year, currentMonth.month)
   const previousMonthRange = resolvePreviousMonthRange(currentMonth.year, currentMonth.month)
@@ -169,7 +168,7 @@ function App() {
       foreColor: chartTheme.textMuted,
       toolbar: { show: false },
     },
-    colors: [chartTheme.secondary],
+    colors: [chartTheme.accent],
     dataLabels: { enabled: false },
     grid: { borderColor: chartTheme.grid },
     plotOptions: {
@@ -261,7 +260,7 @@ function App() {
         <h1>Dashboard</h1>
         <p className="lead">
           今のトレーニングを知る<br />
-          現在の状態を把握することは、己を知ることになる
+          現在のトレーニング状況を確認します
         </p>
       </header>
 
@@ -276,14 +275,14 @@ function App() {
         <MetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
         <MetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
         <MetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
-        <MetricCard label="Previous month period" value={`${formatDisplayDate(previousMonthRange.startDate)} - ${formatDisplayDate(previousMonthRange.endDate)}`} />
+        <MetricCard label="Previous month period" value={previousMonthRange.startDate.slice(0, 7).replace('-', '/')} />
       </section>
 
       {loadError ? (
         <section className="panel">
           <p className="eyebrow">Data Load Warning</p>
-          <h2>データが正常ではありません。</h2>
-          <p className="muted">{loadError}</p>
+          <h2>データ取得異常</h2>
+          <p className="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
         </section>
       ) : null}
 
@@ -293,8 +292,8 @@ function App() {
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-chart-areaspline" aria-hidden="true"></i></div>
               <div className="card-heading__text">
-                <p className="eyebrow">Main Gym Volume Trends</p>
-                <h2>ボリューム推移</h2>
+                <p className="eyebrow">Volume Trends - Main Gym</p>
+                <h2>ボリューム推移 - メインジム</h2>
               </div>
             </div>
           </div>
@@ -307,11 +306,12 @@ function App() {
               series={volumeChartSeries}
             />
           ) : (
-            <p className="muted">{formatMainGymMetricState(mainGymVolumeTrend)}</p>
+            <p className="muted">データがありません</p>
           )}
         </article>
 
-        <a className="panel latest-workout-panel" href={latestWorkoutRoute} aria-label="Open latest workout detail">
+        {latestWorkout ? (
+        <article className="panel latest-workout-empty">
           <div className="panel-header">
             <div className="card-heading">
               <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
@@ -321,19 +321,29 @@ function App() {
               </div>
             </div>
           </div>
-          {latestWorkout ? (
-            <>
+          <>
               <p className="large-number">{getTotalVolume(latestWorkout).toLocaleString()} kg</p>
               <p className="muted">
                 {getGymDisplayName(latestWorkout.gym)}<br />
                 {getTotalSets(latestWorkout)} sets<br />
                 {latestWorkout.machines.length} machines
               </p>
-            </>
-          ) : (
-            <p className="muted">No workout data loaded.</p>
-          )}
-        </a>
+          </>
+        </article>
+        ) : (
+        <article className="panel latest-workout-empty">
+          <div className="panel-header">
+            <div className="card-heading">
+              <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
+              <div className="card-heading__text">
+                <p className="eyebrow">Latest Workout</p>
+                <h2>No workout</h2>
+              </div>
+            </div>
+          </div>
+          <p className="muted">データがありません</p>
+        </article>
+        )}
       </section>
 
       <section className="dashboard-grid">
@@ -430,14 +440,14 @@ function formatMainGymMetric(metric: ReturnType<typeof getMainGymMonthlyVolumeMe
 
 function formatMainGymMetricState(metric: { state: string }): string {
   if (metric.state === 'unconfigured') {
-    return 'Not configured'
+    return 'Not Set'
   }
 
   if (metric.state === 'invalid') {
     return 'Unavailable'
   }
 
-  return 'No workout data loaded.'
+  return 'No Data'
 }
 
 const dashboardBodyPartOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs']

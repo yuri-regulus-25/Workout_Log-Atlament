@@ -62,7 +62,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   protected readonly hasInvalidMachineIdParameter = signal(false);
   protected readonly invalidMachineId = signal(this.pathMachineId ?? '');
-  protected readonly selectedMachineId = signal<string>('abdominal');
+  protected readonly selectedMachineId = signal<string>('');
   protected readonly bodyPartOptions = computed(() =>
     Array.from(new Set(
       this.machineOptions()
@@ -126,6 +126,9 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly selectedMachine = computed(() =>
     this.machineOptions().find((machine) => machine.machine_id === this.selectedMachineId()),
   );
+  protected readonly hasActiveMachineSelection = computed(() =>
+    this.filteredMachineOptions().some((machine) => machine.machine_id === this.selectedMachineId()),
+  );
   protected readonly selectedMachineName = computed(() =>
     formatMachineTitleFromId(this.selectedMachineId()),
   );
@@ -135,12 +138,12 @@ export class App implements AfterViewInit, OnDestroy {
   protected readonly selectedMachineJapaneseName = computed(
     () => {
       const machine = this.selectedMachine();
-      return machine ? getMachineDisplayName(machine) : this.selectedMachineTitle();
+      return this.hasActiveMachineSelection() && machine ? getMachineDisplayName(machine) : '—';
     },
   );
   protected readonly selectedBodyPart = computed(() => {
     const machine = this.selectedMachine();
-    return machine ? getMachineBodyPartDisplay(machine) : '—';
+    return this.hasActiveMachineSelection() && machine ? getMachineBodyPartDisplay(machine) : '—';
   });
 
   protected readonly mainGymSessions = computed(() =>
@@ -225,7 +228,7 @@ export class App implements AfterViewInit, OnDestroy {
         toolbar: { show: false },
         zoom: { enabled: false },
       },
-      colors: [chartTheme.secondary],
+      colors: [chartTheme.accent],
       dataLabels: { enabled: false },
       grid: { borderColor: chartTheme.grid },
       legend: { show: false },
@@ -250,14 +253,14 @@ export class App implements AfterViewInit, OnDestroy {
 
   protected formatMainGymMetricState(metric: { state: string }): string {
     if (metric.state === 'unconfigured') {
-      return 'Not configured';
+      return 'Not Set';
     }
 
     if (metric.state === 'invalid') {
       return 'Unavailable';
     }
 
-    return 'No workout data loaded.';
+    return 'No Data';
   }
 
   protected selectMachine(machineId: string) {
@@ -300,7 +303,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   private selectMachineIdFromPath() {
     const pathMachineId = this.getPathMachineId();
-    const fallbackMachineId = this.machineOptions()[0]?.machine_id ?? 'abdominal';
+    const fallbackMachineId = this.machineOptions()[0]?.machine_id ?? '';
     const hasValidPathMachineId =
       pathMachineId !== undefined &&
       this.machineOptions().some((machine) => machine.machine_id === pathMachineId);
@@ -310,7 +313,7 @@ export class App implements AfterViewInit, OnDestroy {
     this.invalidMachineId.set(pathMachineId ?? '');
     this.selectedMachineId.set(nextMachineId);
 
-    if (window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
+    if (nextMachineId && window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
       window.history.replaceState(null, '', `${applicationRoutes.machines}${nextMachineId}/`);
     }
   }

@@ -1,5 +1,6 @@
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
 import { extname, join, relative } from 'node:path'
 import {
   loadMasterDataFromDirectory,
@@ -210,7 +211,14 @@ async function respondMasterDocument(request, response, path) {
   const payload = JSON.parse(await readRequestBody(request))
   const currentRevision = await localRevision(documentPath)
   if (payload.expectedRevision !== currentRevision) {
-    writeJson(response, 409, fail('MASTER_WRITE_CONFLICT', 'Master document revision has changed.', true))
+    writeJson(response, 409, fail('MASTER_SYNC_REQUIRED', 'Master document must be synchronized before saving.', true))
+    return
+  }
+
+  const currentContent = await readFile(documentPath, 'utf8')
+  const validationErrors = await validateCandidateMasterWrite(type, currentContent, payload.content)
+  if (validationErrors.length > 0) {
+    writeJson(response, 400, failMany(validationErrors))
     return
   }
 
@@ -220,6 +228,53 @@ async function respondMasterDocument(request, response, path) {
     path: type === 'MACHINE_MASTER' ? 'master/machines.json' : 'master/gyms.json',
     revision: await localRevision(documentPath),
   }))
+}
+
+async function validateCandidateMasterWrite(type, currentContent, nextContent) {
+  if (typeof nextContent !== 'string' || nextContent.trim() === '') {
+    return [toError('MASTER_WRITE_INVALID', new Error('Master document write request is invalid.'), 'Master document write request is invalid.')]
+  }
+
+  if (type === 'GYM_MASTER' && hasMainGym(currentContent) && !hasMainGym(nextContent)) {
+    return [toError('MASTER_WRITE_INVALID', new Error('Configured Main Gym cannot be cleared.'), 'Configured Main Gym cannot be cleared.')]
+  }
+
+  const tempRoot = await mkdtemp(join(tmpdir(), 'atlament-dev-master-'))
+  try {
+    const tempMaster = join(tempRoot, 'master')
+    await mkdir(tempMaster, { recursive: true })
+    const machinesContent = type === 'MACHINE_MASTER'
+      ? nextContent
+      : await readFile(join(masterDirectory, 'machines.json'), 'utf8')
+    const gymsContent = type === 'GYM_MASTER'
+      ? nextContent
+      : await readFile(join(masterDirectory, 'gyms.json'), 'utf8')
+    await writeFile(join(tempMaster, 'machines.json'), machinesContent, 'utf8')
+    await writeFile(join(tempMaster, 'gyms.json'), gymsContent, 'utf8')
+
+    const masterResult = await loadMasterDataFromDirectory(tempMaster)
+    if (!masterResult.masterData || masterResult.issues.length > 0) {
+      return masterResult.issues.map((issue) => ({
+        code: 'MASTER_WRITE_INVALID',
+        message: issue.message,
+        recoverable: false,
+      }))
+    }
+
+    const workoutResult = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
+    return workoutResult.issues.map(toAfError)
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+}
+
+function hasMainGym(content) {
+  try {
+    const gyms = JSON.parse(content).gyms ?? []
+    return gyms.some((gym) => gym?.main === true)
+  } catch {
+    return false
+  }
 }
 
 async function localRevision(path) {

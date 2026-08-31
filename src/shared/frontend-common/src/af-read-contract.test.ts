@@ -11,19 +11,20 @@ function readSource(relativePath: string): string {
 
 describe('AF read contract refinement', () => {
   it('uses versions.applicationFramework as the single status AF version field', () => {
-    const statusSources = [
+    const contractSources = [
       'src/shared/frontend-common/src/index.ts',
-      'src/frontend/settings-solid/src/App.tsx',
       'src/application/windows/Core/AfModels.cs',
       'src/application/windows/Core/AfServices.cs',
       'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
       'tools/dev-runtime/development-runtime.mjs',
     ] as const
 
-    for (const sourcePath of statusSources) {
+    for (const sourcePath of contractSources) {
       expect(readSource(sourcePath), sourcePath).toMatch(/applicationFramework|ApplicationFramework/)
       expect(readSource(sourcePath), sourcePath).toMatch(/nativePackages|NativePackage/)
     }
+    expect(readSource('src/frontend/settings-solid/src/App.tsx')).toMatch(/applicationFramework|ApplicationFramework/)
+    expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/nativePackages|NativePackage/)
 
     expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/AfStatus = \{\s*version:/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/status\?\.version(?!s)/)

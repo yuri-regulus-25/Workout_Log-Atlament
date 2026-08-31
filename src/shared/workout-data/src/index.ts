@@ -51,6 +51,17 @@ type RuntimeWorkoutApiResponse = {
   warnings?: RuntimeWarning[]
   data?: {
     sessions?: WorkoutSession[]
+    masterDocuments?: RuntimeMasterDocuments | null
+  } | null
+  masterDocuments?: RuntimeMasterDocuments | null
+}
+
+type RuntimeMasterDocuments = {
+  machine?: {
+    content?: string
+  } | null
+  gym?: {
+    content?: string
   } | null
 }
 
@@ -206,12 +217,17 @@ async function fetchRuntimeWorkoutData({
       const payload = (await response.json()) as RuntimeWorkoutFileResponse
 
       if (isRuntimeWorkoutApiResponse(payload)) {
+        const masterDataResult = parseRuntimeMasterDocuments(payload.data.masterDocuments ?? payload.masterDocuments)
         return {
           sessions: payload.data.sessions,
-          issues: (payload.errors ?? []).map((error) => ({
-            filePath: '<af-runtime>',
-            message: `${error.code}: ${error.message}`,
-          })),
+          masterData: masterDataResult.masterData,
+          issues: [
+            ...(payload.errors ?? []).map((error) => ({
+              filePath: '<af-runtime>',
+              message: `${error.code}: ${error.message}`,
+            })),
+            ...masterDataResult.issues,
+          ],
           warnings: payload.warnings ?? [],
         }
       }
@@ -576,7 +592,8 @@ function createReferenceWarning({
   line?: number
 }): RuntimeWarning {
   const resolutionState = deleted ? 'deleted' : 'missing'
-  const subject = referenceKind === 'gym' ? 'Gym' : 'Machine'
+  const subject = referenceKind === 'gym' ? 'ジム' : 'マシン'
+  const stateText = deleted ? '削除されています' : '存在しません'
   return {
     code: deleted ? 'MASTER_REFERENCE_DELETED' : 'MASTER_REFERENCE_MISSING',
     referenceKind,
@@ -586,7 +603,7 @@ function createReferenceWarning({
     sessionId,
     filePath,
     line: line ?? null,
-    message: `${subject} master reference is ${resolutionState}: ${originalId}.`,
+    message: `特定の${subject}が${stateText}: ${originalId}`,
   }
 }
 
@@ -970,6 +987,27 @@ function isRuntimeWorkoutApiResponse(value: unknown): value is RuntimeWorkoutApi
     isRecord(data) &&
     Array.isArray(data['sessions'])
   )
+}
+
+function parseRuntimeMasterDocuments(masterDocuments: RuntimeWorkoutApiResponse['masterDocuments']): {
+  masterData?: WorkoutMasterData
+  issues: WorkoutParseIssue[]
+} {
+  const machineContent = masterDocuments?.machine?.content
+  const gymContent = masterDocuments?.gym?.content
+  if (typeof machineContent !== 'string' || typeof gymContent !== 'string') {
+    return { issues: [] }
+  }
+
+  const machineResult = parseMachineMaster('<af-runtime:machine-master>', machineContent)
+  const gymResult = parseGymMaster('<af-runtime:gym-master>', gymContent)
+
+  return {
+    masterData: machineResult.master && gymResult.master
+      ? { machines: machineResult.master, gyms: gymResult.master }
+      : undefined,
+    issues: [...machineResult.issues, ...gymResult.issues],
+  }
 }
 
 function withCacheBuster(endpoint: string): string {

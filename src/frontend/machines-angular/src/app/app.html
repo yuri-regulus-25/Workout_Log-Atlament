@@ -5,16 +5,24 @@
         <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
       </div>
     </div>
-    <div class="hero-grid">
-      <div>
-        <h1>Performance Detail</h1>
-        <p class="lead">
-          種目ごとの変化を追う<br />
-          変化を追うことで、未来を変えられる
-        </p>
-      </div>
+    <h1>Performance Detail</h1>
+    <p class="lead">
+      種目ごとの変化を追う<br />
+      種目ごとの記録と推移を確認します
+    </p>
+  </header>
 
-      <div class="selector-panel" aria-label="Machine selector filters">
+  <section class="panel search-panel">
+    <div class="panel-header">
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-magnify" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Search Target</p>
+          <h2>検索対象</h2>
+        </div>
+      </div>
+    </div>
+    <div class="selector-panel" aria-label="Machine selector filters">
         <label class="field">
           <span>Machine Search</span>
           <input
@@ -28,7 +36,7 @@
         <label class="field">
           <span>Body Part</span>
           <select [value]="bodyPartFilter()" (change)="updateBodyPartFilter($any($event.target).value)">
-            <option value="">All body parts</option>
+            <option value="">-</option>
             @for (bodyPart of bodyPartOptions(); track bodyPart) {
               <option [value]="bodyPart">{{ formatBodyPartLabel(bodyPart) }}</option>
             }
@@ -53,27 +61,25 @@
           </select>
         </label>
 
-        <div class="selector-status" aria-live="polite">
-          <span>{{ filteredMachineOptions().length }} / {{ machineOptions().length }}</span>
-          <button type="button" class="text-action" (click)="clearMachineFilters()">Clear</button>
+        <div class="filter-actions" aria-live="polite">
+          <button type="button" (click)="clearMachineFilters()">Reset</button>
         </div>
-      </div>
     </div>
-  </header>
+  </section>
 
   @if (filteredMachineOptions().length === 0) {
     <section class="panel" role="status" aria-live="polite">
       <p class="eyebrow">No Results</p>
       <h2>条件に一致するマシンがありません。</h2>
-      <p class="muted">検索条件または Body Part を変更してください。</p>
+      <p class="muted">検索対象を確認してください</p>
     </section>
   }
 
   @if (loadError()) {
     <section class="panel" role="alert" aria-live="polite">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>データが正常ではありません。</h2>
-      <p class="muted">{{ loadError() }}</p>
+      <h2>データ取得異常</h2>
+      <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
     </section>
   }
 
@@ -93,6 +99,7 @@
     </section>
   }
 
+  @if (hasActiveMachineSelection()) {
   <section class="metric-grid" aria-label="Machine summary">
     <article class="metric-card">
       <span>Latest</span>
@@ -122,8 +129,8 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-chart-line" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">{{ selectedMachineTitle() }} progress - Main Gym Best Weight</p>
-            <h2>{{ selectedMachineJapaneseName() }} 進捗 - 最大荷重</h2>
+            <p class="eyebrow">{{ selectedMachineTitle() }} Best Weight Progress - Main Gym</p>
+            <h2>{{ selectedMachineJapaneseName() }} 進捗最大荷重推移 - メインジム</h2>
           </div>
         </div>
       </div>
@@ -194,8 +201,9 @@
           <span class="volume-cell">{{ row.volume.toLocaleString() }} kg</span>
         </div>
       } @empty {
-        <p class="empty">No machine history found.</p>
+        <p class="empty">データがありません</p>
       }
     </div>
   </section>
+  }
 </main>

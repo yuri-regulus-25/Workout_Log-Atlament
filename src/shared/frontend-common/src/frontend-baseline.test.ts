@@ -34,8 +34,8 @@ const existingFrontendApps = [
     cssFiles: ['src/frontend/dashboard-react/src/App.css', 'src/frontend/dashboard-react/src/index.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
-      warning: /Data Load Warning/,
-      empty: /No workout data loaded\./,
+      warning: /データ取得異常/,
+      empty: /データがありません/,
       error: /catch\s*\(\(?error/,
     },
   },
@@ -50,8 +50,8 @@ const existingFrontendApps = [
     cssFiles: ['src/frontend/workouts-vue/src/style.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
-      warning: /Data Load Warning/,
-      empty: /empty-result|Select a row to inspect a workout/,
+      warning: /データ取得異常/,
+      empty: /検索条件を確認してください|Select a row to inspect a workout/,
       error: /catch\s*\(error/,
     },
   },
@@ -61,8 +61,8 @@ const existingFrontendApps = [
     cssFiles: ['src/frontend/machines-angular/src/app/app.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
-      warning: /Data Load Warning/,
-      empty: /条件に一致するマシンがありません|No machine history found/,
+      warning: /データ取得異常/,
+      empty: /検索対象を確認してください|データがありません/,
       error: /Parameter Error|catch\s*\(error/,
     },
   },
@@ -72,8 +72,8 @@ const existingFrontendApps = [
     cssFiles: ['src/frontend/analytics-svelte/src/app.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
-      warning: /Data Load Warning/,
-      empty: /直近28日間の実施マシンはありません/,
+      warning: /データ取得異常/,
+      empty: /データがありません/,
       error: /catch\s*\(error/,
     },
   },
@@ -135,6 +135,10 @@ describe('cross-frontend test baseline', () => {
     expect(baselineCss).toContain('prefers-reduced-motion: reduce')
     expect(baselineCss).toContain('animation-duration: 0.01ms')
     expect(baselineCss).toContain('scroll-behavior: auto')
+    expect(baselineCss).toContain('.atl-navigation-layout > .app-shell')
+    expect(baselineCss).toContain('grid-column: 2')
+    expect(baselineCss).toContain('.app-shell > .panel + .panel')
+    expect(baselineCss).toContain('.page-hero h1:focus')
     expect(baselineCss).toMatch(/input,\s*select,\s*textarea/)
   })
 
@@ -202,9 +206,79 @@ describe('cross-frontend test baseline', () => {
     expect(source).toContain('requestMainGym')
     expect(source).toContain('confirmOpen')
     expect(source).toContain('saveRecords')
+    expect(source).toContain('extractRowRecord')
+    expect(source).toContain('@click.stop')
+    expect(source).toContain('toUserFacingMasterWriteError')
+    expect(source).toContain('reportDiagnostic')
     expect(source).toContain('source_ids')
+    expect(source).not.toContain('currentRevisionLabel')
+    expect(source).not.toContain('aria-label="Refresh"')
     expect(source).not.toContain('v-textarea')
     expect(source).not.toMatch(/bulk/i)
     expect(source).not.toMatch(/raw json/i)
+  })
+
+  it('keeps Round 3 reviewed frontend presentation contracts', () => {
+    const dashboard = readSource('src/frontend/dashboard-react/src/App.tsx')
+    const machines = readSources([
+      'src/frontend/machines-angular/src/app/app.ts',
+      'src/frontend/machines-angular/src/app/app.html',
+    ])
+    const analytics = readSource('src/frontend/analytics-svelte/src/App.svelte')
+    const workoutFilters = readSource('src/frontend/workouts-vue/src/components/WorkoutFilters.vue')
+    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const maintenance = readSources([
+      'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/style.css',
+    ])
+
+    expect(dashboard).toContain('colors: [chartTheme.accent]')
+    expect(machines).toContain('colors: [chartTheme.accent]')
+    expect(machines).toContain('<option value="">-</option>')
+    expect(machines).toContain('class="filter-actions"')
+    expect(machines).toContain('>Reset</button>')
+    expect(machines).not.toContain('>Clear</button>')
+    expect(machines).not.toContain('filteredMachineOptions().length }} / {{ machineOptions().length')
+    expect(analytics).toContain('colors: [chartTheme.accent]')
+    expect(analytics).toContain('mainGymVolumeTrendReady')
+    expect(analytics).toContain('{#if mainGymVolumeTrendReady}')
+    expect(analytics).toContain('{#key mainGymVolumeTrendKey}')
+    expect(analytics).toContain('<p class="muted">データがありません</p>')
+    expect(analytics).not.toContain('記録期間全体での週あたり平均セッション数。')
+    expect(analytics).toContain('<h2>ジム</h2>')
+    expect(workoutFilters).not.toContain('Sort')
+    expect(workoutFilters).not.toContain('Newest')
+    expect(settings).not.toContain('{step.actionLabel}')
+    expect(settings).not.toContain('Available /')
+    expect(settings).not.toContain('Fallback /')
+    expect(settings).toContain('formatCredentialDisplayDate')
+    expect(settings).toContain("status.runtimeData.currentAvailable ? '利用可能' : '利用不可'")
+    expect(settings).toContain('onClick={saveRepository}')
+    expect(settings).toContain('onClick={saveCredential}')
+    expect(settings).toContain('onClick={saveResources}')
+    expect(settings).toContain('onClick={syncNow}')
+    expect(maintenance).toContain('initializeCharacterEasterEgg')
+    expect(maintenance).toContain('@import "@workout-lab/frontend-common/easter-egg.css"')
+    expect(maintenance).toContain('class="atl-brand-row"')
+    expect(maintenance).not.toContain('atl-logo-mark')
+    expect(maintenance).toContain('cloneRecordDraft')
+    expect(maintenance).not.toContain('structuredClone')
+    expect(maintenance).toContain('formatBodyPart(item.body_part)')
+    expect(maintenance).toContain('background: var(--wl-bg)')
+    expect(maintenance).toContain('no-data-text="データがありません"')
+    expect(maintenance).toContain('ワークアウトから参照している情報が見つからない状態です。')
+    expect(maintenance).not.toContain('label="Machine ID"')
+    expect(maintenance).not.toContain('label="Gym ID"')
+    expect(maintenance).toContain('label="ID" variant="outlined"')
+    expect(maintenance).toContain('label="有効" color="primary" inset')
+    expect(maintenance).toContain('accent-create-button')
+    expect(maintenance).toContain('--maintenance-accent-action-bg: var(--wl-accent)')
+    expect(maintenance).toContain('--maintenance-accent-selection-bg: var(--wl-primary-soft)')
+    expect(maintenance).toContain(':root[data-theme="dark"] .maintenance-shell')
+    expect(maintenance).toContain('color-mix(in srgb, var(--wl-primary) 68%, black)')
+    expect(maintenance).toContain('background: var(--maintenance-accent-action-bg)')
+    expect(maintenance).toContain('background: var(--maintenance-accent-selection-bg)')
+    expect(maintenance).not.toContain('green-darken')
+    expect(maintenance).not.toContain('purple-darken')
   })
 })

@@ -18,7 +18,7 @@ const sessions: WorkoutSession[] = [
 describe('filterWorkoutSessions', () => {
   it('filters by search text across date, gym, and machine fields', () => {
     expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, searchText: 'lat' }))).toEqual(['s2'])
-    expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, searchText: 'North' }))).toEqual(['s3', 's1'])
+    expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, searchText: 'North' }))).toEqual(['s1', 's3'])
     expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, searchText: '2026-08-10' }))).toEqual(['s1'])
   })
 
@@ -39,15 +39,13 @@ describe('filterWorkoutSessions', () => {
       ...defaultWorkoutListFilters,
       dateFrom: '2026-08-10',
       dateTo: '2026-08-12',
-      sortDirection: 'asc',
     })
 
     expect(ids(result)).toEqual(['s1', 's2', 's3'])
   })
 
-  it('sorts newest and oldest with stable same-day ordering by session id', () => {
-    expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, sortDirection: 'desc' }))).toEqual(['s3', 's2', 's1'])
-    expect(ids(filterWorkoutSessions(sessions, { ...defaultWorkoutListFilters, sortDirection: 'asc' }))).toEqual(['s1', 's2', 's3'])
+  it('preserves source ordering because table sorting owns presentation order', () => {
+    expect(ids(filterWorkoutSessions(sessions, defaultWorkoutListFilters))).toEqual(['s1', 's2', 's3'])
   })
 
   it('returns an empty result when filters do not match', () => {

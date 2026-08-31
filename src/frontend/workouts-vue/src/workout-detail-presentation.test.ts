@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BodyPart, WorkoutSession } from '@workout-lab/workout-types'
-import { getMachinePresentation, getMachineReps, getWorkoutDaySummary } from './workout-detail-presentation'
+import { formatCountLabel, getMachinePresentation, getMachineReps, getWorkoutDaySummary } from './workout-detail-presentation'
 
 describe('workout detail presentation helpers', () => {
   it('summarizes multiple sessions and gyms with total reps', () => {
@@ -33,6 +33,14 @@ describe('workout detail presentation helpers', () => {
       volume: 760,
       hasRir: true,
     })
+  })
+
+  it('formats zero and absolute one counts as singular', () => {
+    expect(formatCountLabel(0, 'Machine', 'Machines')).toBe('0 Machine')
+    expect(formatCountLabel(1, 'Set', 'Sets')).toBe('1 Set')
+    expect(formatCountLabel(2, 'Rep', 'Reps')).toBe('2 Reps')
+    expect(formatCountLabel(-1, 'Rep', 'Reps')).toBe('-1 Rep')
+    expect(formatCountLabel(-2, 'Rep', 'Reps')).toBe('-2 Reps')
   })
 })
 

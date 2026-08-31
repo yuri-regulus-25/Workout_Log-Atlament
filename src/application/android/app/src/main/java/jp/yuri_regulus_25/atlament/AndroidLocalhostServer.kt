@@ -56,7 +56,8 @@ class AndroidLocalhostServer(
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
-    private data class MasterWriteTarget(val type: String, val path: String, val commitMessage: String)
+    private data class MasterWriteTarget(val type: String, val path: String)
+    private data class MasterDocument(val type: String, val path: String, val revision: String, val content: String)
     private data class GithubContent(val revision: String, val content: String)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
     private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
@@ -445,26 +446,18 @@ class AndroidLocalhostServer(
     }
 
     private fun masterDocumentResponse(type: String): SyncResponse {
-        val target = masterWriteTarget(type)
+        masterWriteTarget(type)
             ?: return SyncResponse(400, failJson("MASTER_WRITE_INVALID", "Master write target is not allowed."), false)
-        val environment = masterWriteEnvironment()
-        if (environment.first != null) return environment.first!!
-        val configuration = environment.second!!
-        val repository = configuration.getJSONObject("repository")
-        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
-
         return try {
-            val content = readGithubContentFile(configuration, fullPath)
-            SyncResponse(200, okJson(JSONObject()
-                .put("type", target.type)
-                .put("path", target.path)
-                .put("revision", content.revision)
-                .put("content", content.content)
-                .toString(2)), true)
+            val documents = readLocalMasterDocuments()
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
+            val document = selectLocalMasterDocument(documents, type)
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
+            SyncResponse(200, okJson(masterDocumentJson(document).toString(2)), true)
         } catch (ex: AfException) {
             SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
         } catch (_: Exception) {
-            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+            SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
         }
     }
 
@@ -494,18 +487,44 @@ class AndroidLocalhostServer(
         val fullPath = combineRemote(repository.optString("rootPath"), target.path)
 
         return try {
-            val current = readGithubContentFile(configuration, fullPath)
+            val localDocuments = readLocalMasterDocuments()
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
+            val current = selectLocalMasterDocument(localDocuments, type)
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
             if (current.revision != expectedRevision) {
-                return SyncResponse(409, failJson("MASTER_WRITE_CONFLICT", "Master document revision has changed."), false)
+                return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving."), false)
             }
 
-            val other = readGithubContentFile(configuration, combineRemote(repository.optString("rootPath"), otherMasterWriteTarget(type).path))
+            val candidateDocuments = replaceLocalMasterDocument(localDocuments, type, nextContent, current.revision)
+            val other = selectLocalMasterDocument(candidateDocuments, otherMasterWriteTarget(type).type)
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
             val validationErrors = validateMasterWrite(type, current.content, nextContent, other.content)
             if (validationErrors.length() > 0) {
                 return SyncResponse(400, responseJson(false, "null", validationErrors), false)
             }
 
-            val savedRevision = writeGithubContentFile(configuration, fullPath, current.revision, nextContent, target.commitMessage)
+            val remote = readGithubContentFile(configuration, fullPath)
+            if (remote.revision != current.revision) {
+                return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving."), false)
+            }
+
+            val savedRevision = writeGithubContentFile(configuration, fullPath, current.revision, nextContent, masterCommitMessage(target))
+            val confirmedDocuments = replaceLocalMasterDocument(localDocuments, type, nextContent, savedRevision)
+            val workoutFiles = fetchConfiguredWorkoutResources(configuration)
+            val machineMaster = selectLocalMasterDocument(confirmedDocuments, "MACHINE_MASTER")
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
+            val gymMaster = selectLocalMasterDocument(confirmedDocuments, "GYM_MASTER")
+                ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
+            val build = buildRuntimeDataPayload(workoutFiles, machineMaster, gymMaster)
+            if (build.errors.length() > 0 || build.payload == null) {
+                return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
+            }
+            val saveErrors = saveRuntimeDataAtomically(build.payload)
+            if (saveErrors.length() > 0) {
+                return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
+            }
+            githubComponentStatus = "available"
+            latestValidation = "succeeded"
             SyncResponse(200, okJson(JSONObject()
                 .put("type", target.type)
                 .put("path", target.path)
@@ -525,15 +544,16 @@ class AndroidLocalhostServer(
 
     private fun unresolvedMasterReferencesResponse(): SyncResponse {
         return try {
-            val build = fetchRuntimeWorkoutData()
-            if (build.errors.length() > 0) {
-                return SyncResponse(400, responseJson(false, "null", build.errors), false)
+            if (!runtimeDataFile.exists()) {
+                return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
             }
-            SyncResponse(200, okJson(buildUnresolvedReferences(build.warnings).toString(2)), true)
+            val runtimeData = JSONObject(runtimeDataFile.readText(StandardCharsets.UTF_8))
+            val warnings = runtimeData.optJSONArray("warnings") ?: JSONArray()
+            SyncResponse(200, okJson(buildUnresolvedReferences(warnings).toString(2)), true)
         } catch (ex: AfException) {
             SyncResponse(masterWriteStatus(ex.code), failJson(ex.code, ex.message), false)
         } catch (_: Exception) {
-            SyncResponse(500, failJson("GITHUB_CONNECTION_FAILED", "GitHub connection failed."), false)
+            SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data must be synchronized before maintenance."), false)
         }
     }
 
@@ -548,13 +568,67 @@ class AndroidLocalhostServer(
     }
 
     private fun masterWriteTarget(type: String): MasterWriteTarget? = when (type) {
-        "MACHINE_MASTER" -> MasterWriteTarget("MACHINE_MASTER", "master/machines.json", "Update machine master")
-        "GYM_MASTER" -> MasterWriteTarget("GYM_MASTER", "master/gyms.json", "Update gym master")
+        "MACHINE_MASTER" -> MasterWriteTarget("MACHINE_MASTER", "master/machines.json")
+        "GYM_MASTER" -> MasterWriteTarget("GYM_MASTER", "master/gyms.json")
         else -> null
+    }
+
+    private fun masterCommitMessage(target: MasterWriteTarget): String {
+        val subject = if (target.type == "MACHINE_MASTER") "machine" else "gym"
+        val fileName = target.path.substringAfterLast('/')
+        return "Update $subject master: $fileName"
     }
 
     private fun otherMasterWriteTarget(type: String): MasterWriteTarget =
         if (type == "MACHINE_MASTER") masterWriteTarget("GYM_MASTER")!! else masterWriteTarget("MACHINE_MASTER")!!
+
+    private fun readMasterDocumentFromGithub(configuration: JSONObject, type: String): MasterDocument {
+        val target = masterWriteTarget(type)
+            ?: throw AfException("MASTER_WRITE_INVALID", "Master write target is not allowed.")
+        val repository = configuration.getJSONObject("repository")
+        val fullPath = combineRemote(repository.optString("rootPath"), target.path)
+        val content = readGithubContentFile(configuration, fullPath)
+        return MasterDocument(target.type, target.path, content.revision, content.content)
+    }
+
+    private fun readLocalMasterDocuments(): JSONObject? {
+        if (!runtimeDataFile.exists()) return null
+        val runtimeData = JSONObject(runtimeDataFile.readText(StandardCharsets.UTF_8))
+        return runtimeData.optJSONObject("masterDocuments")
+    }
+
+    private fun selectLocalMasterDocument(documents: JSONObject, type: String): MasterDocument? {
+        val key = when (type) {
+            "MACHINE_MASTER" -> "machine"
+            "GYM_MASTER" -> "gym"
+            else -> return null
+        }
+        val document = documents.optJSONObject(key) ?: return null
+        val target = masterWriteTarget(type) ?: return null
+        val revision = document.optString("revision").trim()
+        val content = document.optString("content")
+        if (revision.isBlank() || content.isBlank()) return null
+        return MasterDocument(
+            document.optString("type", target.type).ifBlank { target.type },
+            document.optString("path", target.path).ifBlank { target.path },
+            revision,
+            content
+        )
+    }
+
+    private fun replaceLocalMasterDocument(documents: JSONObject, type: String, content: String, revision: String): JSONObject {
+        val result = JSONObject(documents.toString())
+        val target = masterWriteTarget(type) ?: return result
+        val key = if (type == "MACHINE_MASTER") "machine" else "gym"
+        result.put(key, masterDocumentJson(MasterDocument(target.type, target.path, revision, content)))
+        return result
+    }
+
+    private fun masterDocumentJson(document: MasterDocument): JSONObject = JSONObject()
+        .put("type", document.type)
+        .put("path", document.path)
+        .put("revision", document.revision)
+        .put("content", document.content)
 
     private fun readGithubContentFile(configuration: JSONObject, path: String): GithubContent {
         val repository = configuration.getJSONObject("repository")
@@ -599,7 +673,7 @@ class AndroidLocalhostServer(
             connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) {
-                if (status == 409) throw AfException("MASTER_WRITE_CONFLICT", "Master document revision has changed.")
+                if (status == 409) throw AfException("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving.")
                 throw mapGithubError(status, path)
             }
             val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
@@ -750,6 +824,7 @@ class AndroidLocalhostServer(
     }
 
     private fun masterWriteStatus(code: String): Int = when (code) {
+        "MASTER_SYNC_REQUIRED" -> 409
         "MASTER_WRITE_CONFLICT" -> 409
         "GITHUB_UNAUTHORIZED" -> 401
         "GITHUB_FORBIDDEN" -> 403
@@ -1110,8 +1185,10 @@ class AndroidLocalhostServer(
             if (build.errors.length() > 0 || build.payload == null) {
                 return failedSync(build.errors)
             }
-            runtimeDataFile.parentFile?.mkdirs()
-            runtimeDataFile.writeText(build.payload, StandardCharsets.UTF_8)
+            val saveErrors = saveRuntimeDataAtomically(build.payload)
+            if (saveErrors.length() > 0) {
+                return failedSync(saveErrors)
+            }
             githubComponentStatus = "available"
             latestRemoteRetrieval = "succeeded"
             latestValidation = "succeeded"
@@ -1134,6 +1211,30 @@ class AndroidLocalhostServer(
             val message = ex.message ?: "GitHub sync failed."
             writeLog("WARN", "Remote sync failed: $message")
             failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
+        }
+    }
+
+    private fun saveRuntimeDataAtomically(payload: String): JSONArray {
+        return try {
+            runtimeDataFile.parentFile?.mkdirs()
+            val directory = runtimeDataFile.parentFile ?: throw IllegalStateException("Runtime directory is unavailable.")
+            val temporary = File(directory, runtimeDataFile.name + ".tmp")
+            val backup = File(directory, runtimeDataFile.name + ".bak")
+            temporary.writeText(payload, StandardCharsets.UTF_8)
+            if (backup.exists() && !backup.delete()) {
+                throw IllegalStateException("Existing runtime backup could not be removed.")
+            }
+            if (runtimeDataFile.exists() && !runtimeDataFile.renameTo(backup)) {
+                throw IllegalStateException("Existing runtime data could not be preserved.")
+            }
+            if (!temporary.renameTo(runtimeDataFile)) {
+                if (backup.exists()) backup.renameTo(runtimeDataFile)
+                throw IllegalStateException("Temporary runtime data could not be moved.")
+            }
+            if (backup.exists()) backup.delete()
+            JSONArray()
+        } catch (_: Exception) {
+            errorsArray("RUNTIME_DATA_SAVE_FAILED", "Runtime Data could not be saved.")
         }
     }
 
@@ -1208,19 +1309,23 @@ class AndroidLocalhostServer(
         // Android mirrors the Windows runtime builder contract in-place so packaged APKs can sync
         // without a shared .NET runtime dependency.
         val configuration = JSONObject(loadConfigurationJson())
-        val fetched = fetchConfiguredResources(configuration)
-        val workoutFiles = fetched.workoutFiles
-        val machineMaster = fetched.machineMaster
-        val gymMaster = fetched.gymMaster
+        val workoutFiles = fetchConfiguredWorkoutResources(configuration)
+        val machineMaster = readMasterDocumentFromGithub(configuration, "MACHINE_MASTER")
+        val gymMaster = readMasterDocumentFromGithub(configuration, "GYM_MASTER")
+        return buildRuntimeDataPayload(workoutFiles, machineMaster, gymMaster)
+    }
 
+    private fun buildRuntimeDataPayload(
+        workoutFiles: List<RuntimeSourceFile>,
+        machineMaster: MasterDocument,
+        gymMaster: MasterDocument
+    ): RuntimeBuildResult {
         val errors = JSONArray()
         val warnings = JSONArray()
-        val machines = machineMaster?.let { parseMachineMaster(it, errors) }
-        val gyms = gymMaster?.let { parseGymMaster(it, errors) }
-        if (machineMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required machine master resource is missing."))
-        if (gymMaster == null) errors.put(errorJson("GITHUB_RESOURCE_NOT_FOUND", "Required gym master resource is missing."))
+        val machines = parseMachineMaster(RuntimeSourceFile(machineMaster.path, machineMaster.content), errors)
+        val gyms = parseGymMaster(RuntimeSourceFile(gymMaster.path, gymMaster.content), errors)
         if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0 || machines == null || gyms == null) return RuntimeBuildResult(null, errors, warnings)
+        if (errors.length() > 0) return RuntimeBuildResult(null, errors, warnings)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
@@ -1240,8 +1345,49 @@ class AndroidLocalhostServer(
             .put("errors", JSONArray())
             .put("warnings", warnings)
             .put("data", JSONObject().put("sessions", sessions))
+            .put("masterDocuments", JSONObject()
+                .put("machine", masterDocumentJson(machineMaster))
+                .put("gym", masterDocumentJson(gymMaster)))
             .toString(2)
         return RuntimeBuildResult(payload, errors, warnings)
+    }
+
+    private fun fetchConfiguredWorkoutResources(configuration: JSONObject): List<RuntimeSourceFile> {
+        val configurationErrors = validateConfiguration(configuration)
+        if (configurationErrors.length() > 0) {
+            throw AfException("CONFIG_INVALID", configurationErrors.getJSONObject(0).optString("message", "Configuration is invalid."))
+        }
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val token = readCredentialToken()
+        val workoutFiles = mutableListOf<RuntimeSourceFile>()
+        val resources = configuration.getJSONArray("resources")
+
+        for (index in 0 until resources.length()) {
+            val resource = resources.getJSONObject(index)
+            if (resource.optString("type") != "WORKOUT") continue
+            val resourcePath = resource.optString("path")
+            val kind = resource.optString("resourceKind", "file")
+            val required = resource.optBoolean("required", true)
+            val emptyAllowed = resource.optBoolean("emptyAllowed", false)
+            val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
+            val fetched = if (kind == "directory") {
+                fetchDirectoryFiles(owner, repo, ref, fullPath, token, timeoutSec)
+            } else {
+                listOf(fetchRawRuntimeFile(owner, repo, ref, fullPath, token, timeoutSec))
+            }
+
+            if (!emptyAllowed && fetched.isEmpty()) {
+                if (required) throw IllegalStateException("$resourcePath is empty.")
+                continue
+            }
+            workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
+        }
+
+        return workoutFiles
     }
 
     private fun fetchConfiguredResources(configuration: JSONObject): RuntimeFetchedResources {
@@ -1512,7 +1658,8 @@ class AndroidLocalhostServer(
         line: Int?
     ): JSONObject {
         val resolutionState = if (deleted) "deleted" else "missing"
-        val subject = if (referenceKind == "gym") "Gym" else "Machine"
+        val subject = if (referenceKind == "gym") "ジム" else "マシン"
+        val stateText = if (deleted) "削除されています" else "存在しません"
         return JSONObject()
             .put("code", androidMasterReferenceWarningCode(deleted))
             .put("referenceKind", referenceKind)
@@ -1522,7 +1669,7 @@ class AndroidLocalhostServer(
             .put("sessionId", sessionId)
             .put("filePath", filePath)
             .put("line", line ?: JSONObject.NULL)
-            .put("message", "$subject master reference is $resolutionState: $originalId.")
+            .put("message", "特定の${subject}が${stateText}: $originalId")
     }
 
     private fun readStringArray(array: JSONArray?): JSONArray {

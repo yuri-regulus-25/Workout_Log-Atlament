@@ -1,6 +1,11 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  getMainGymSessionsMetric,
+  getMainGymTotalVolumeMetric,
+  resolveMainGymContext,
+} from '@workout-lab/workout-core'
 import { loadRuntimeWorkoutSessions } from './index'
 import { loadMasterDataFromDirectory, loadWorkoutSessionsFromDirectory } from './node'
 
@@ -18,7 +23,11 @@ describe('real workout data', () => {
     expect(masterResult.masterData?.gyms.gyms).toHaveLength(4)
     expect(masterResult.masterData?.machines.machines.every((machine) => machine.deleted === false)).toBe(true)
     expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.deleted === false)).toBe(true)
-    expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.main === false)).toBe(true)
+    expect(masterResult.masterData?.gyms.gyms.filter((gym) => gym.main === true)).toHaveLength(1)
+    expect(masterResult.masterData?.gyms.gyms.find((gym) => gym.main === true)).toMatchObject({
+      active: true,
+      deleted: false,
+    })
 
     const result = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
     const rawSessionCount = await countRawWorkoutSessions(workoutsDirectory)
@@ -88,6 +97,10 @@ describe('real workout data', () => {
 
   it('loads normalized runtime sessions from the Windows AF runtime API contract', async () => {
     const masterResult = await loadMasterDataFromDirectory(masterDirectory)
+    const [machineMasterContent, gymMasterContent] = await Promise.all([
+      readFile(join(masterDirectory, 'machines.json'), 'utf8'),
+      readFile(join(masterDirectory, 'gyms.json'), 'utf8'),
+    ])
     const files = await collectWorkoutFiles(workoutsDirectory)
     const responseFiles = await Promise.all(
       files.map(async (filePath) => ({
@@ -110,7 +123,13 @@ describe('real workout data', () => {
         new Response(JSON.stringify({
           success: true,
           errors: [],
-          data: { sessions: expected.sessions },
+          data: {
+            sessions: expected.sessions,
+            masterDocuments: {
+              machine: { content: machineMasterContent },
+              gym: { content: gymMasterContent },
+            },
+          },
         }), {
           headers: { 'Content-Type': 'application/json' },
         }),
@@ -118,6 +137,14 @@ describe('real workout data', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(expected.sessions.length)
+    expect(result.masterData?.gyms.gyms.filter((gym) => gym.main === true)).toHaveLength(1)
+    expect(result.masterData?.machines.machines).toHaveLength(masterResult.masterData?.machines.machines.length)
+    const mainGymContext = resolveMainGymContext(result.masterData!.gyms)
+    const mainGymSessions = getMainGymSessionsMetric(mainGymContext, result.sessions)
+    const mainGymVolume = getMainGymTotalVolumeMetric(mainGymContext, result.sessions)
+    expect(mainGymContext).toMatchObject({ state: 'configured' })
+    expect(mainGymSessions.state).toBe('available')
+    expect(mainGymVolume.state).toBe('available')
     expect((result.sessions[0].gym.name ?? '').length).toBeGreaterThan(0)
   })
 })

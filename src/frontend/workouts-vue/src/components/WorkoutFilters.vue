@@ -5,8 +5,6 @@ defineProps<{
   machineOptions: string[]
   bodyPartOptions: string[]
   gymOptions: string[]
-  resultCount: number
-  totalCount: number
 }>()
 
 defineEmits<{
@@ -19,14 +17,13 @@ const selectedBodyPart = defineModel<string>('selectedBodyPart', { required: tru
 const selectedGym = defineModel<string>('selectedGym', { required: true })
 const dateFrom = defineModel<string>('dateFrom', { required: true })
 const dateTo = defineModel<string>('dateTo', { required: true })
-const sortDirection = defineModel<'desc' | 'asc'>('sortDirection', { required: true })
 </script>
 
 <template>
   <div class="workout-filters">
     <label class="field">
-      <span>Search</span>
-      <input v-model="searchText" type="search" placeholder="Date, gym, machine" />
+      <span>Keyword</span>
+      <input v-model="searchText" type="search" />
     </label>
 
     <label class="field">
@@ -68,16 +65,7 @@ const sortDirection = defineModel<'desc' | 'asc'>('sortDirection', { required: t
       <input v-model="dateTo" type="date" />
     </label>
 
-    <label class="field">
-      <span>Sort</span>
-      <select v-model="sortDirection">
-        <option value="desc">Newest</option>
-        <option value="asc">Oldest</option>
-      </select>
-    </label>
-
     <div class="filter-actions" aria-live="polite">
-      <span>{{ resultCount }} / {{ totalCount }} sessions</span>
       <button type="button" @click="$emit('reset')">Reset</button>
     </div>
   </div>
