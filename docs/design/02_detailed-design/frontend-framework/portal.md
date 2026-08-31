@@ -25,7 +25,7 @@ Portal は plain HTML、CSS、JavaScript を使用する。React/Vue/Angular/Sve
 現行 page は以下を提供する。
 
 - Atlament entry header
-- Dashboard、Workout Domain、Performance Detail、Analytics、Application Settings、Master Maintenance の application card
+- Dashboard、Workout Domain、Performance Detail、Analytics、Application Settings、Resource Management の application card
 - framework label
 - branding logo behavior
 - Character Easter Egg trigger

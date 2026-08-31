@@ -176,6 +176,8 @@ GYM_MASTER
 
 Security state は credential/configuration の availability と、公開しない操作を boolean で返す。Workout Log write、Raw JSON write、Generic Git write は `false` であり、対応 endpoint も存在しない。
 
+Native AF の `GET /master-write/documents/{type}` は current Local Master snapshot を返す。Local Master snapshot は Wake Up / Settings Sync によって Runtime Data と一緒に保存される。Resource Management の read/refresh は Remote Master body を独自に取得しない。Local Master snapshot がない場合、native AF は `MASTER_SYNC_REQUIRED` を返す。
+
 `GET /master-write/documents/{type}` response data:
 
 ```json
@@ -224,11 +226,11 @@ Successful write response data:
 ]
 ```
 
-Unresolved list は current remote Workout/Master files を read して Runtime warning から生成する。Raw Workout JSON は更新しない。
+Unresolved list は current Local Runtime Data の Runtime warning から生成する。Raw Workout JSON は更新しない。Local Runtime Data がない場合、native AF は `MASTER_SYNC_REQUIRED` を返す。
 
-Write は GitHub Contents API の current SHA と `expectedRevision` を比較してから 1 回の PUT を実行する。Mismatch は `MASTER_WRITE_CONFLICT` であり、client は再取得して表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
+Write は Local Master snapshot revision と `expectedRevision` を比較し、candidate content を whole-master validation した後、GitHub Contents API で Remote revision metadata を確認してから 1 回の PUT を実行する。Local revision mismatch または Remote revision mismatch は sync-required/conflict response であり、client は再取得または Settings Sync 後に表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
 
-Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine の logical delete は許可し、参照側は次回 sync/runtime rebuild で unresolved warning として扱う。
+Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine の logical delete は許可し、参照側は次回 sync/runtime rebuild で unresolved warning として扱う。PUT 成功後は returned revision を Local Master snapshot へ反映し、Local Runtime Data を confirmed Master documents で rebuild する。
 
 Unresolved reference を既存 Master record へ resolve する場合は、Master record の optional `source_ids` に unresolved raw ID を追加する。Runtime normalization は `machine_id` / `gym_id` に加えて `source_ids` を lookup key として扱い、normalized output は canonical Master ID を返す。新規 Master record で resolve する場合は unresolved raw ID を canonical ID として通常 Create flow を通す。
 

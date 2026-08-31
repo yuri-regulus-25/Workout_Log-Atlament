@@ -39,4 +39,4 @@ Master Data の domain/reference validation は shared core contract として�
 
 Weight/Volume 系の比較 metric は Main Gym context に依存する。Main Gym が未設定または invalid の場合、Dashboard、Analytics、Machines は Main Gym dependent kg metric を unavailable state として扱う。
 
-Frontend 視点では Runtime Data と Workout Log は read-only である。Master Maintenance だけが fixed allowlist の Machine/Gym Master write を使用できる。
+Frontend 視点では Runtime Data と Workout Log は read-only である。Resource Management だけが fixed allowlist の Machine/Gym Master write を使用できる。

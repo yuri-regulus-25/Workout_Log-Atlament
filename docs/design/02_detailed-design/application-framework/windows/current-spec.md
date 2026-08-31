@@ -77,6 +77,12 @@ Remote sync は required resource missing または technical validation failure
 
 Runtime readiness、fallback、required actions、unresolved Master reference の共通意味論は [Runtime Contract Matrix](../runtime-contract-matrix.md) を正とする。
 
+## Resource Management API
+
+Windows は `/api/v1/common/master-write/*` を Resource Management 用に公開する。`/master-write/documents/{type}` の GET は `runtime/current/runtime-data.json` 内の Local Master snapshot を返し、Remote Master body を表示用に独自 read しない。Local Master snapshot がない場合は `MASTER_SYNC_REQUIRED` を返す。
+
+Write は Local Master snapshot revision と request `expectedRevision` の一致、candidate whole-master validation、Remote revision metadata の一致、GitHub Contents API PUT、Local Runtime Data rebuild を適用する。Runtime Data が参照中の Gym/Machine logical delete は許可し、Workout/raw/general Git write endpoint は公開しない。
+
 ## Configuration and Credential
 
 Configuration は JSON であり non-secret である。
