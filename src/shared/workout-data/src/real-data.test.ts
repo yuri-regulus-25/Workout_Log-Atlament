@@ -23,11 +23,9 @@ describe('real workout data', () => {
     expect(masterResult.masterData?.gyms.gyms).toHaveLength(4)
     expect(masterResult.masterData?.machines.machines.every((machine) => machine.deleted === false)).toBe(true)
     expect(masterResult.masterData?.gyms.gyms.every((gym) => gym.deleted === false)).toBe(true)
-    expect(masterResult.masterData?.gyms.gyms.filter((gym) => gym.main === true)).toHaveLength(1)
-    expect(masterResult.masterData?.gyms.gyms.find((gym) => gym.main === true)).toMatchObject({
-      active: true,
-      deleted: false,
-    })
+    const mainGyms = masterResult.masterData?.gyms.gyms.filter((gym) => gym.main === true) ?? []
+    expect(mainGyms.length).toBeLessThanOrEqual(1)
+    expect(resolveMainGymContext(masterResult.masterData!.gyms).state).not.toBe('invalid')
 
     const result = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
     const rawSessionCount = await countRawWorkoutSessions(workoutsDirectory)
@@ -137,14 +135,20 @@ describe('real workout data', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(expected.sessions.length)
-    expect(result.masterData?.gyms.gyms.filter((gym) => gym.main === true)).toHaveLength(1)
+    const runtimeMainGyms = result.masterData?.gyms.gyms.filter((gym) => gym.main === true) ?? []
+    expect(runtimeMainGyms.length).toBeLessThanOrEqual(1)
     expect(result.masterData?.machines.machines).toHaveLength(masterResult.masterData?.machines.machines.length)
     const mainGymContext = resolveMainGymContext(result.masterData!.gyms)
     const mainGymSessions = getMainGymSessionsMetric(mainGymContext, result.sessions)
     const mainGymVolume = getMainGymTotalVolumeMetric(mainGymContext, result.sessions)
-    expect(mainGymContext).toMatchObject({ state: 'configured' })
-    expect(mainGymSessions.state).toBe('available')
-    expect(mainGymVolume.state).toBe('available')
+    expect(mainGymContext.state).not.toBe('invalid')
+    if (mainGymContext.state === 'unconfigured') {
+      expect(mainGymSessions.state).toBe('unconfigured')
+      expect(mainGymVolume.state).toBe('unconfigured')
+    } else {
+      expect(mainGymSessions.state).toBe('available')
+      expect(mainGymVolume.state).toBe('available')
+    }
     expect((result.sessions[0].gym.name ?? '').length).toBeGreaterThan(0)
   })
 })

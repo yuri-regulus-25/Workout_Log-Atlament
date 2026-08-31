@@ -92,6 +92,28 @@
   color: var(--wl-text-muted) !important;
 }
 
+.master-table .v-table__wrapper {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.master-table table {
+  table-layout: fixed;
+}
+
+.machine-master-table table {
+  min-width: 764px;
+}
+
+.gym-master-table table {
+  min-width: 1024px;
+}
+
+.master-table :is(th, td) {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
 .affected-message {
   display: grid;
   gap: 2px;

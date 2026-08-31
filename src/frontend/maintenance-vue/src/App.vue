@@ -40,7 +40,7 @@
 
         <v-data-table
           v-if="viewMode === 'masters'"
-          class="maintenance-table"
+          :class="['maintenance-table', 'master-table', selectedType === 'MACHINE_MASTER' ? 'machine-master-table' : 'gym-master-table']"
           :headers="tableHeaders"
           :items="visibleRecords"
           :loading="loading"
@@ -325,19 +325,19 @@ const visibleRecords = computed(() => records.value.filter((record) => {
 
 const tableHeaders = computed(() => selectedType.value === 'MACHINE_MASTER'
   ? [
-      { title: 'ID', key: 'machine_id' },
-      { title: '名前', key: 'name' },
-      { title: '部位', key: 'body_part' },
-      { title: '状態', key: 'state', sortable: false },
-      { title: '', key: 'actions', sortable: false, width: 96 },
+      { title: 'ID', key: 'machine_id', width: 180 },
+      { title: '名前', key: 'name', width: 240 },
+      { title: '部位', key: 'body_part', width: 120 },
+      { title: '状態', key: 'state', sortable: false, width: 112 },
+      { title: '', key: 'actions', sortable: false, width: 112 },
     ]
   : [
-      { title: 'ID', key: 'gym_id' },
-      { title: '名前', key: 'name' },
-      { title: '短縮名', key: 'short_name' },
-      { title: 'メイン', key: 'main', sortable: false },
-      { title: '状態', key: 'state', sortable: false },
-      { title: '', key: 'actions', sortable: false, width: 96 },
+      { title: 'ID', key: 'gym_id', width: 180 },
+      { title: '名前', key: 'name', width: 320 },
+      { title: '短縮名', key: 'short_name', width: 160 },
+      { title: 'メイン', key: 'main', sortable: false, width: 96 },
+      { title: '状態', key: 'state', sortable: false, width: 112 },
+      { title: '', key: 'actions', sortable: false, width: 144 },
     ])
 
 const unresolvedHeaders = [
