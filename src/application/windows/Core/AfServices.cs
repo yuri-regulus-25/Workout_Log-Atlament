@@ -1035,7 +1035,7 @@ public sealed class RecoveryService
     {
         if (!source.TryGetPropertyValue(key, out var value))
         {
-            return optional ? RecoveredField(fieldPath, null) : UnresolvedField(fieldPath);
+            return optional ? RecoveredAbsentField(fieldPath) : UnresolvedField(fieldPath);
         }
 
         var actualKind = value is null ? JsonValueKind.Null : value.GetValueKind();
@@ -1050,6 +1050,14 @@ public sealed class RecoveryService
             ["state"] = "recovered",
             ["source"] = "original",
             ["value"] = value
+        };
+
+    private static JsonObject RecoveredAbsentField(string fieldPath) =>
+        new()
+        {
+            ["fieldPath"] = fieldPath,
+            ["state"] = "recovered",
+            ["source"] = "original"
         };
 
     private static JsonObject UnresolvedField(string fieldPath) =>
@@ -3471,7 +3479,7 @@ public sealed class AtlamentApplication
                 return (RecoveryStatusCode(push.Errors), new AfResponse<RecoveryCommitResult>(false, push.Errors, null));
             }
 
-            var reflection = await ReflectRecoveryCommitAsync(validation.ReplacementPath, cancellationToken).ConfigureAwait(false);
+            var reflection = await ReflectRecoveryCommitAsync(validation.ReplacementPath, push.Result.ReplacementRevision, push.Result.CommitRevision, cancellationToken).ConfigureAwait(false);
             var result = new RecoveryCommitResult(
                 true,
                 detail.Inspection.Path,
@@ -3582,18 +3590,29 @@ public sealed class AtlamentApplication
 
     private async Task<(RecoveryReflectionResult Reflection, ResourceInspection? Inspection)> ReflectRecoveryCommitAsync(
         string replacementPath,
+        string replacementRevision,
+        string commitRevision,
         CancellationToken cancellationToken)
     {
-        var sync = await SyncCoreAsync(cancellationToken).ConfigureAwait(false);
-        if (!sync.Response.Success)
+        var committedConfiguration = _configuration with
         {
-            return (new RecoveryReflectionResult(false, null, sync.Response.Errors, sync.Response.Warnings ?? Array.Empty<RuntimeWarning>()), null);
-        }
-
-        var context = await LoadRecoveryContextAsync(cancellationToken).ConfigureAwait(false);
+            Repository = _configuration.Repository with { Ref = commitRevision }
+        };
+        var context = await LoadRecoveryContextAsync(committedConfiguration, cancellationToken).ConfigureAwait(false);
         if (context.Errors.Count > 0)
         {
             return (new RecoveryReflectionResult(false, null, context.Errors, Array.Empty<RuntimeWarning>()), null);
+        }
+
+        var committed = context.WorkoutFiles!
+            .FirstOrDefault(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal));
+        if (committed is null || !string.Equals(ResolveRuntimeSourceRevision(committed), replacementRevision, StringComparison.Ordinal))
+        {
+            return (new RecoveryReflectionResult(
+                false,
+                null,
+                new[] { new AfError(AfErrorCodes.RecoveryReflectionFailed, "Recovered resource revision is not reflected at the Recovery commit.", true) },
+                Array.Empty<RuntimeWarning>()), null);
         }
 
         var inspection = _recovery!.InspectPath(_configuration, replacementPath, context.WorkoutFiles!, context.MachineMaster!, context.GymMaster!);
@@ -3603,10 +3622,74 @@ public sealed class AtlamentApplication
                 false,
                 inspection?.Health,
                 new[] { new AfError(AfErrorCodes.RecoveryReflectionFailed, "Recovered resource is not reflected as Healthy or Degraded.", true) },
-                sync.Response.Warnings ?? Array.Empty<RuntimeWarning>()), inspection);
+                Array.Empty<RuntimeWarning>()), inspection);
         }
 
-        return (new RecoveryReflectionResult(true, inspection.Health, Array.Empty<AfError>(), sync.Response.Warnings ?? Array.Empty<RuntimeWarning>()), inspection);
+        var build = _runtimeDataBuilder.Build(context.WorkoutFiles!, context.MachineMaster!, context.GymMaster!);
+        if (build.TechnicalInvalid)
+        {
+            _latestValidation = "failed";
+            return (new RecoveryReflectionResult(false, inspection.Health, build.Errors, build.Warnings), inspection);
+        }
+
+        var masterDocuments = new LocalMasterDocuments(
+            ToMasterDocumentSnapshot(context.MachineMaster!, "MACHINE_MASTER"),
+            ToMasterDocumentSnapshot(context.GymMaster!, "GYM_MASTER"));
+        var saveErrors = _runtimeDataStore.SaveCurrent(build, masterDocuments);
+        if (saveErrors.Count > 0)
+        {
+            _runtimeStatus = ComponentStatus.unavailable;
+            return (new RecoveryReflectionResult(false, inspection.Health, saveErrors, build.Warnings), inspection);
+        }
+
+        _githubStatus = ComponentStatus.available;
+        _runtimeStatus = ComponentStatus.available;
+        _latestRemoteRetrieval = "succeeded";
+        _latestValidation = "succeeded";
+        _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
+        _applicationStatus = build.Errors.Count > 0 ? ApplicationStatus.degraded : ApplicationStatus.ready;
+        return (new RecoveryReflectionResult(true, inspection.Health, Array.Empty<AfError>(), build.Warnings), inspection);
+    }
+
+    private async Task<RecoveryContext> LoadRecoveryContextAsync(AfConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var workouts = await _github.FetchWorkoutFilesAsync(configuration, _token, cancellationToken).ConfigureAwait(false);
+        if (workouts.Errors.Count > 0)
+        {
+            return new RecoveryContext(null, null, null, workouts.Errors);
+        }
+
+        var machineSnapshot = await _github.ReadMasterDocumentAsync(configuration, _token, "MACHINE_MASTER", cancellationToken).ConfigureAwait(false);
+        if (machineSnapshot.Document is null)
+        {
+            return new RecoveryContext(null, null, null, machineSnapshot.Errors);
+        }
+
+        var gymSnapshot = await _github.ReadMasterDocumentAsync(configuration, _token, "GYM_MASTER", cancellationToken).ConfigureAwait(false);
+        if (gymSnapshot.Document is null)
+        {
+            return new RecoveryContext(null, null, null, gymSnapshot.Errors);
+        }
+
+        return new RecoveryContext(
+            workouts.Files,
+            ToRuntimeSource(machineSnapshot.Document),
+            ToRuntimeSource(gymSnapshot.Document),
+            Array.Empty<AfError>());
+    }
+
+    private static MasterDocumentSnapshot ToMasterDocumentSnapshot(RuntimeSourceFile source, string type) =>
+        new(type, source.Path, ResolveRuntimeSourceRevision(source), source.Content);
+
+    private static string ResolveRuntimeSourceRevision(RuntimeSourceFile source)
+    {
+        if (!string.IsNullOrWhiteSpace(source.Revision))
+        {
+            return source.Revision;
+        }
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(source.Content));
+        return "content-sha256-" + Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     private sealed record RecoveryContext(

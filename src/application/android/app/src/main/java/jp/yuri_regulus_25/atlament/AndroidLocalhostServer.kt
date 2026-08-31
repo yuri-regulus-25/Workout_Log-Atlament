@@ -1883,7 +1883,7 @@ class AndroidLocalhostServer(
     private fun recoverableField(source: JSONObject, fieldPath: String, key: String, type: String, optional: Boolean = false): JSONObject {
         if (!source.has(key)) {
             return if (optional) {
-                JSONObject().put("fieldPath", fieldPath).put("state", "recovered").put("source", "original").put("value", JSONObject.NULL)
+                JSONObject().put("fieldPath", fieldPath).put("state", "recovered").put("source", "original")
             } else {
                 JSONObject().put("fieldPath", fieldPath).put("state", "unresolved").put("source", "original")
             }

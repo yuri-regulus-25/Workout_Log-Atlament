@@ -421,7 +421,6 @@ public sealed class AfCoreTests
                 ConfirmedField("/date", JsonValue.Create("2026-08-24")),
                 ConfirmedField("/status", JsonValue.Create("complete")),
                 ConfirmedField("/gym_id", JsonValue.Create("known-gym")),
-                ConfirmedField("/condition", null),
                 ConfirmedField("/machines", JsonNode.Parse("""[{"machine_id":"known-machine","sets":[{"set":1,"weight_kg":20,"reps":10}]}]""")),
                 ConfirmedField("/notes", JsonNode.Parse("[]"))
             };
@@ -435,8 +434,91 @@ public sealed class AfCoreTests
             Assert.True(result.CommitAllowed);
             Assert.Equal("workouts/b.json", result.ReplacementPath);
             Assert.DoesNotContain("do-not-carry", result.ReplacementContent);
+            Assert.DoesNotContain("\"condition\"", result.ReplacementContent);
             Assert.Equal("candidate", JsonNode.Parse(result.ReplacementContent!)?["session_id"]?.GetValue<string>());
             Assert.False(Directory.Exists(Path.Combine(root, ".git")));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void RecoveryReplacementPreservesOptionalAbsenceAndRecoverableWorkoutValues()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new RecoveryService(new RecoveryDraftStore(new WindowsPathProvider(root)));
+            var configuration = Configuration("data");
+            var sourcePath = "data/workouts/2026/08/2026-08-22.json";
+            var brokenSource = """
+                {
+                  "schema_version": 1,
+                  "session_id": "2026-08-22-01",
+                  "status": "complete",
+                  "gym_id": "known-gym",
+                  "machines": [
+                    {
+                      "machine_id": "known-machine",
+                      "sets": [
+                        { "set": 1, "weight_kg": 22.5, "reps": 10, "note": "first note" },
+                        { "set": 2, "weight_kg": 25, "reps": 8 }
+                      ],
+                      "notes": ["machine note"]
+                    }
+                  ],
+                  "notes": ["session note"]
+                }
+                """;
+            var files = new[] { new RuntimeSourceFile(sourcePath, brokenSource, ContentRevision(brokenSource)) };
+            var key = Assert.Single(service.ListBrokenResources(configuration, files, MachineMaster, GymMaster)).ResourceKey;
+            var draft = service.CreateDraft(configuration, key, files, MachineMaster, GymMaster).Snapshot.Draft!;
+            var fields = draft.Fields
+                .Select(field => field["fieldPath"]?.GetValue<string>() == "/date"
+                    ? ConfirmedField("/date", JsonValue.Create("2026-08-22"))
+                    : field)
+                .ToArray();
+            Assert.Empty(service.UpdateDraft(configuration, key, new RecoveryDraftUpdate(draft.DraftRevision, fields), files, MachineMaster, GymMaster).Errors);
+
+            var (result, errors) = service.ValidateDraft(configuration, key, files, MachineMaster, GymMaster);
+
+            Assert.Empty(errors);
+            Assert.NotNull(result);
+            Assert.Equal("healthy", result!.Health);
+            Assert.True(result.CommitAllowed);
+            Assert.DoesNotContain("\"condition\"", result.ReplacementContent);
+            var build = new RuntimeDataBuilder().Build(
+                new[] { new RuntimeSourceFile(result.ReplacementPath, result.ReplacementContent!) },
+                MachineMaster,
+                GymMaster);
+            Assert.Empty(build.Errors);
+            var session = Assert.Single(build.Sessions);
+            Assert.Equal("2026-08-22-01", session.SessionId);
+            Assert.Equal("2026-08-22", session.Date);
+            Assert.Equal("complete", session.Status);
+            Assert.Equal("known-gym", session.Gym.Id);
+            Assert.Null(session.Condition);
+            Assert.Equal(new[] { "session note" }, session.Notes);
+            var machine = Assert.Single(session.Machines);
+            Assert.Equal("known-machine", machine.MachineId);
+            Assert.Equal(new[] { "machine note" }, machine.Notes);
+            Assert.Collection(machine.Sets,
+                set =>
+                {
+                    Assert.Equal(1, set.Set);
+                    Assert.Equal(22.5m, set.WeightKg);
+                    Assert.Equal(10, set.Reps);
+                    Assert.Equal("first note", set.Note);
+                },
+                set =>
+                {
+                    Assert.Equal(2, set.Set);
+                    Assert.Equal(25m, set.WeightKg);
+                    Assert.Equal(8, set.Reps);
+                    Assert.Null(set.Note);
+                });
         }
         finally
         {
@@ -493,7 +575,6 @@ public sealed class AfCoreTests
                 ConfirmedField("/date", JsonValue.Create("2026-08-24")),
                 ConfirmedField("/status", JsonValue.Create("complete")),
                 ConfirmedField("/gym_id", JsonValue.Create("known-gym")),
-                ConfirmedField("/condition", null),
                 ConfirmedField("/machines", JsonNode.Parse("""[{"machine_id":"missing-machine","sets":[{"set":1,"weight_kg":20,"reps":10}]}]""")),
                 ConfirmedField("/notes", JsonNode.Parse("[]"))
             };
@@ -521,7 +602,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public async Task RecoveryCommitWritesReflectsRuntimeAndDeletesDraft()
+    public async Task RecoveryCommitReflectsCommittedRevisionWhenBranchRawIsStale()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-commit-test-" + Guid.NewGuid().ToString("N"));
         try
@@ -554,7 +635,6 @@ public sealed class AfCoreTests
                 ConfirmedField("/date", JsonValue.Create("2026-08-24")),
                 ConfirmedField("/status", JsonValue.Create("complete")),
                 ConfirmedField("/gym_id", JsonValue.Create("known-gym")),
-                ConfirmedField("/condition", null),
                 ConfirmedField("/machines", JsonNode.Parse("""[{"machine_id":"known-machine","sets":[{"set":1,"weight_kg":20,"reps":10}]}]""")),
                 ConfirmedField("/notes", JsonNode.Parse("[]"))
             };
@@ -568,12 +648,27 @@ public sealed class AfCoreTests
                     return JsonResponse($$"""[{ "path": "{{sourcePath}}", "type": "file" }]""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts?ref=recovery-commit-sha", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""[{ "path": "{{sourcePath}}", "type": "file" }]""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json?ref=master", StringComparison.Ordinal))
                 {
                     return JsonResponse($$"""{ "sha": "machine-sha", "content": "{{EncodeContent(MachineMaster.Content)}}" }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json?ref=recovery-commit-sha", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""{ "sha": "machine-sha", "content": "{{EncodeContent(MachineMaster.Content)}}" }""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/gyms.json?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""{ "sha": "gym-sha", "content": "{{EncodeContent(GymMaster.Content)}}" }""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/gyms.json?ref=recovery-commit-sha", StringComparison.Ordinal))
                 {
                     return JsonResponse($$"""{ "sha": "gym-sha", "content": "{{EncodeContent(GymMaster.Content)}}" }""");
                 }
@@ -591,17 +686,22 @@ public sealed class AfCoreTests
                     return JsonResponse("""{ "content": { "sha": "replacement-blob-sha" }, "commit": { "sha": "recovery-commit-sha" } }""");
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/master/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse(brokenSource);
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/workouts/2026/08/2026-08-24.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(remoteWorkoutContent);
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/data/master/machines.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/master/machines.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(MachineMaster.Content);
                 }
 
-                if (request.Method == HttpMethod.Get && url.Contains("/data/master/gyms.json", StringComparison.Ordinal))
+                if (request.Method == HttpMethod.Get && url.Contains("/recovery-commit-sha/data/master/gyms.json", StringComparison.Ordinal))
                 {
                     return JsonResponse(GymMaster.Content);
                 }
