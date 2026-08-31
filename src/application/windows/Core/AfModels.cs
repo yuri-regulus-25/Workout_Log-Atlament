@@ -109,6 +109,10 @@ public sealed record MasterDocumentWriteResult(
     [property: JsonPropertyName("path")] string Path,
     [property: JsonPropertyName("revision")] string Revision);
 
+public sealed record LocalMasterDocuments(
+    [property: JsonPropertyName("machine")] MasterDocumentSnapshot Machine,
+    [property: JsonPropertyName("gym")] MasterDocumentSnapshot Gym);
+
 public sealed record UnresolvedMasterReference(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("referenceId")] string ReferenceId,
@@ -127,14 +131,16 @@ public sealed record ShutdownResult(
     [property: JsonPropertyName("alreadyShuttingDown")] bool AlreadyShuttingDown);
 
 public sealed record RuntimeWorkoutData(
-    [property: JsonPropertyName("sessions")] IReadOnlyList<WorkoutSession> Sessions);
+    [property: JsonPropertyName("sessions")] IReadOnlyList<WorkoutSession> Sessions,
+    [property: JsonPropertyName("masterDocuments")] LocalMasterDocuments? MasterDocuments = null);
 
 public sealed record RuntimeDataFile(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("generatedAt")] DateTimeOffset GeneratedAt,
     [property: JsonPropertyName("sessions")] IReadOnlyList<WorkoutSession> Sessions,
     [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors,
-    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings);
+    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings,
+    [property: JsonPropertyName("masterDocuments")] LocalMasterDocuments? MasterDocuments = null);
 
 public sealed record WorkoutSession(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,

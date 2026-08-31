@@ -46,7 +46,7 @@ async function refreshStatusNotice() {
       syncWasRunning = false
       const generatedAt = status?.runtimeData?.currentGeneratedAt
       const suffix = generatedAt ? ` 最終生成: ${generatedAt}` : ''
-      showStatusNotice(`取得に失敗しました。既存Runtime Dataで継続利用中です。${suffix}`, 'warning', 'mdi-alert-circle-outline')
+      showStatusNotice(`最終同期データを利用しています${suffix}`, 'warning', 'mdi-alert-circle-outline')
     } else if (syncWasRunning && (startupFailed || manualSyncFailed)) {
       syncWasRunning = false
       showStatusNotice('同期データを取得できませんでした。', 'error', 'mdi-alert-box-outline')
@@ -164,11 +164,36 @@ function createApplicationCard(application) {
 
   const frameworkStack = document.createElement('span')
   frameworkStack.className = 'framework-stack'
-  frameworkStack.append(createFrameworkIcon(application), document.createTextNode(application.frameworkName ?? ''))
+  frameworkStack.append(...createFrameworkStackItems(application))
   frameworkBadge.append(frameworkLabel, frameworkStack)
 
   card.append(category, title, pointer, frameworkBadge)
   return card
+}
+
+function createFrameworkStackItems(application) {
+  if (Array.isArray(application.frameworkIcons) && application.frameworkIcons.length > 0) {
+    const frameworkNames = (application.frameworkName ?? '').split(/\s*\+\s*/).filter(Boolean)
+    return application.frameworkIcons.flatMap((frameworkIcon, index) => {
+      const frameworkItem = document.createElement('span')
+      frameworkItem.className = 'framework-item'
+      frameworkItem.append(
+        createFrameworkIcon({
+          frameworkIconHref: frameworkIcon.href,
+          frameworkIconClass: frameworkIcon.className,
+          iconClass: application.iconClass,
+        }),
+        document.createTextNode(frameworkNames[index] ?? ''),
+      )
+
+      return index === 0 ? [frameworkItem] : [document.createTextNode(' + '), frameworkItem]
+    })
+  }
+
+  return [
+    createFrameworkIcon(application),
+    document.createTextNode(application.frameworkName ?? ''),
+  ]
 }
 
 function createFrameworkIcon(application) {

@@ -4,10 +4,12 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-magnify" aria-hidden="true" /></div>
           <div class="card-heading__text">
-            <p class="eyebrow">Search Target Machine</p>
-            <h2>検索対象マシン</h2>
+            <p class="eyebrow">Search Target</p>
+            <h2>検索対象</h2>
           </div>
         </div>
+      </div>
+      <div class="panel-content">
         <WorkoutFilters
           v-model:search-text="searchText"
           v-model:selected-machine="selectedMachine"
@@ -15,12 +17,9 @@
           v-model:selected-gym="selectedGym"
           v-model:date-from="dateFrom"
           v-model:date-to="dateTo"
-          v-model:sort-direction="sortDirection"
           :machine-options="machineOptions"
           :body-part-options="bodyPartOptions"
           :gym-options="gymOptions"
-          :result-count="filteredSessions.length"
-          :total-count="workoutSessions.length"
           @reset="resetFilters"
         />
       </div>
@@ -28,8 +27,8 @@
 
     <section v-if="loadError" class="panel" style="margin-bottom: 16px">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>データが正常ではありません。</h2>
-      <p class="muted">{{ loadError }}</p>
+      <h2>データ取得異常</h2>
+      <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
     </section>
 
     <section class="panel workout-calendar-panel">
@@ -62,13 +61,12 @@
       </div>
       <WorkoutGrid
         :sessions="filteredSessions"
-        :date-sort-direction="sortDirection"
         @open-session="openSession"
       />
       <div v-if="filteredSessions.length === 0" class="empty-result" role="status" aria-live="polite">
         <p class="eyebrow">No Results</p>
         <h3>条件に一致するワークアウトがありません。</h3>
-        <p class="muted">検索条件、Machine、Body Part、Gym、日付範囲を変更してください。</p>
+        <p class="muted">検索条件を確認してください</p>
       </div>
     </section>
 </template>
@@ -98,7 +96,6 @@ const selectedBodyPart = ref(defaultWorkoutListFilters.selectedBodyPart)
 const selectedGym = ref(defaultWorkoutListFilters.selectedGym)
 const dateFrom = ref(defaultWorkoutListFilters.dateFrom)
 const dateTo = ref(defaultWorkoutListFilters.dateTo)
-const sortDirection = ref(defaultWorkoutListFilters.sortDirection)
 const currentCalendarMonth = computed(() => {
   const latestSession = workoutSessions.value.at(-1)
   if (!latestSession) {
@@ -171,7 +168,6 @@ const filteredSessions = computed(() => {
     selectedGym: selectedGym.value,
     dateFrom: dateFrom.value,
     dateTo: dateTo.value,
-    sortDirection: sortDirection.value,
   })
 })
 
@@ -186,6 +182,5 @@ function resetFilters() {
   selectedGym.value = defaultWorkoutListFilters.selectedGym
   dateFrom.value = defaultWorkoutListFilters.dateFrom
   dateTo.value = defaultWorkoutListFilters.dateTo
-  sortDirection.value = defaultWorkoutListFilters.sortDirection
 }
 </script>

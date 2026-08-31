@@ -3,7 +3,6 @@ import { Portal } from 'solid-js/web'
 import {
   initializeAppNavigation,
   pageTransitionClassName,
-  deriveApplicationAccessPolicy,
   getAfStatus,
   getConfiguration,
   getCredentialStatus,
@@ -13,8 +12,6 @@ import {
   type AfConfiguration,
   type AfError,
   type AfStatus,
-  type ApplicationAccessPolicy,
-  type ApplicationRecoveryAction,
   type CredentialStatus,
   type ResourceConfiguration,
   type TimeoutConfiguration,
@@ -24,6 +21,7 @@ import type { JSX } from 'solid-js'
 import {
   credentialExpiryPresets,
   describeCredentialExpiry,
+  formatCredentialDisplayDate,
   inferCredentialExpiryPreset,
   resolveCredentialLimitDate,
   type CredentialExpiryPreset,
@@ -91,10 +89,6 @@ function App() {
 
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
-  const accessPolicy = createMemo(() => {
-    const currentStatus = status()
-    return currentStatus ? deriveApplicationAccessPolicy(currentStatus.readiness, currentStatus.runtimeData) : null
-  })
   const setupSteps = createMemo(() => buildSetupSteps({
     status: status(),
     credential: credential(),
@@ -283,20 +277,6 @@ function App() {
     setResources((current) => current.filter((_, itemIndex) => itemIndex !== index))
   }
 
-  function runSetupStep(step: SetupStep) {
-    if (step.action === 'repository') return void saveRepository()
-    if (step.action === 'credential') return void saveCredential()
-    if (step.action === 'resources') return void saveResources()
-    return void syncNow()
-  }
-
-  function runRecoveryAction(action: ApplicationRecoveryAction) {
-    if (action === 'retry-sync') return void syncNow()
-    if (action === 'reload') return void refresh()
-    if (action === 'update-credential') return void saveCredential()
-    scrollToTop()
-  }
-
   return (
     <main ref={shellElement} class={`app-shell settings-shell ${pageTransitionClassName}`} aria-busy={loading() || busy() !== null}>
       <Show when={loading() || busy() !== null}>
@@ -314,7 +294,7 @@ function App() {
           </div>
         </div>
         <h1>Application Settings</h1>
-        <p class="lead">外の世界との繋がりを定める<br />この世界も、様々な世界と繋がっている</p>
+        <p class="lead">アプリケーションを設定する<br />接続先や同期など、アプリケーションの動作を設定します</p>
       </header>
 
       <Show when={message()}>
@@ -324,16 +304,12 @@ function App() {
       <section class="settings-grid">
         <SetupAssistant
           status={status()}
-          accessPolicy={accessPolicy()}
           steps={setupSteps()}
-          canOperate={canOperate()}
-          onRunStep={runSetupStep}
-          onRunRecovery={runRecoveryAction}
         />
 
         <StatusSection status={status()} credential={credential()} />
 
-        <section class="panel">
+        <section class="panel repository-panel">
           <div class="panel-header">
             <div class="card-heading">
               <div class="card-heading__icon"><i class="mdi mdi-source-repository" aria-hidden="true" /></div>
@@ -447,7 +423,7 @@ function App() {
           </div>
           <div class={`credential-expiry ${expiryDescription().state}`}>
             <span>{expiryDescription().label}</span>
-            <strong>{credential()?.limitDate ?? '-'}</strong>
+            <strong>{formatCredentialDisplayDate(credential()?.limitDate)}</strong>
             <p>{expiryDescription().detail}</p>
           </div>
           <div class="form-grid">
@@ -492,11 +468,7 @@ function App() {
 
 function SetupAssistant(props: {
   status: AfStatus | null
-  accessPolicy: ApplicationAccessPolicy | null
   steps: SetupStep[]
-  canOperate: boolean
-  onRunStep: (step: SetupStep) => void
-  onRunRecovery: (action: ApplicationRecoveryAction) => void
 }) {
   const ready = createMemo(() => isSetupReady(props.status))
   const readiness = createMemo(() => props.status?.readiness)
@@ -514,12 +486,7 @@ function SetupAssistant(props: {
         <span class={`status-pill ${readiness()?.state ?? 'unknown'}`}>{displayStatus(readiness()?.state)}</span>
       </div>
       <div class="setup-summary">
-        <strong>{ready() ? '通常利用できます。' : '通常利用に必要な設定を完了してください。'}</strong>
-        <span>
-          {ready()
-            ? 'Main Gymは任意設定のため、未設定でもセットアップ完了です。'
-            : '完了判定はApplication Readinessで行います。'}
-        </span>
+        <strong>Status: {ready() ? 'Finish' : 'Not Finish'}</strong>
       </div>
       <div class="setup-steps">
         <For each={props.steps}>
@@ -532,14 +499,6 @@ function SetupAssistant(props: {
                 <strong>{step.label}</strong>
                 <span>{step.detail}</span>
               </div>
-              <button
-                class="secondary-action"
-                type="button"
-                disabled={!props.canOperate || step.state === 'blocked'}
-                onClick={() => props.onRunStep(step)}
-              >
-                {step.actionLabel}
-              </button>
             </article>
           )}
         </For>
@@ -547,32 +506,8 @@ function SetupAssistant(props: {
       <Show when={(readiness()?.requiredActions.length ?? 0) > 0}>
         <div class="required-actions">
           <p class="eyebrow">Required Actions</p>
-          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{action}</span>}</For>
+          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{requiredActionLabel(action)}</span>}</For>
         </div>
-      </Show>
-      <Show when={props.accessPolicy && (props.accessPolicy.fallbackActive || props.accessPolicy.recoveryActions.length > 0) ? props.accessPolicy : null}>
-        {(policy) => (
-          <div class="recovery-actions">
-            <p class="eyebrow">Recovery</p>
-            <Show when={policy().fallbackActive}>
-              <span class="recovery-note">Remote取得に失敗しています。既存Runtime Dataで継続利用中です。</span>
-            </Show>
-            <div class="button-row">
-              <For each={policy().recoveryActions}>
-                {(action) => (
-                  <button
-                    class="secondary-action"
-                    type="button"
-                    disabled={!props.canOperate}
-                    onClick={() => props.onRunRecovery(action)}
-                  >
-                    {recoveryActionLabel(action)}
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        )}
       </Show>
     </section>
   )
@@ -595,17 +530,8 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
       <div class="status-grid">
         <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
         <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
-        <StatusItem label="Windows Package Version" value={props.status?.versions?.nativePackages?.windows.version ?? '-'} />
-        <StatusItem
-          label="Android Package Version"
-          value={
-            props.status?.versions?.nativePackages?.android
-              ? `${props.status.versions.nativePackages.android.versionName} (${props.status.versions.nativePackages.android.versionCode})`
-              : '-'
-          }
-        />
-        <StatusItem label="Readiness" value={displayStatus(props.status?.readiness?.state)} />
-        <StatusItem label="Runtime Data" value={runtimeDataSummary(props.status)} />
+        <StatusItem label="Application State" value={displayStatus(props.status?.readiness?.state)} />
+        <StatusItem label="Synced Data" value={runtimeDataSummary(props.status)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
       </div>
     </section>
@@ -645,10 +571,112 @@ function NumberField(props: { label: string; description: string; min: number; m
 }
 
 function toMessage(tone: Message['tone'], errors: AfError[], fallback: string): Message {
+  const userFacingErrors = uniqueMessages(errors.map(toUserFacingAfError))
   return {
     tone,
-    text: errors.length > 0 ? `${fallback} ${errors.map((error) => `${error.code}: ${error.message}`).join(' / ')}` : fallback,
+    text: userFacingErrors.length === 0
+      ? fallback
+      : tone === 'warning'
+        ? `${fallback} ${userFacingErrors.join(' / ')}`
+        : userFacingErrors.join(' / '),
   }
+}
+
+function uniqueMessages(messages: string[]): string[] {
+  return Array.from(new Set(messages))
+}
+
+function toUserFacingAfError(error: AfError): string {
+  if (error.code === 'CONFIG_SAVE_FAILED') {
+    return '設定情報を保存できませんでした。再度操作してください。'
+  }
+  if (error.code === 'CONFIG_REQUIRED') {
+    return error.message === 'Repository configuration is required.'
+      ? 'リポジトリ設定が完了していません。設定内容を確認してください。'
+      : '必要な設定を行ってから、再度操作してください。'
+  }
+  if (error.code === 'CONFIG_INVALID') {
+    if (error.message === 'Repository configuration is invalid.') {
+      return 'リポジトリ設定に問題があります。入力内容を確認してください。'
+    }
+    if (error.message === 'Resource configuration is invalid.') {
+      return 'リソース設定に問題があります。入力内容を確認してください。'
+    }
+    if (error.message === 'Resource configuration is required.') {
+      return 'リソース設定が完了していません。設定内容を確認してください。'
+    }
+    if (error.message === 'Timeout configuration is required.') {
+      return 'タイムアウト設定が完了していません。設定内容を確認してください。'
+    }
+    if (error.message.endsWith(' is out of range.')) {
+      return 'タイムアウト設定の値が設定可能な範囲外です。入力内容を確認してください。'
+    }
+    return '設定情報が利用できない形式です。仕様を確認し、登録されている情報を見直してください。'
+  }
+  if (error.code === 'CREDENTIAL_REQUIRED') {
+    return 'GitHub Tokenを登録してから、再度操作してください。'
+  }
+  if (error.code === 'CREDENTIAL_INVALID') {
+    return 'GitHub Tokenが正しくありません。入力内容を確認してください。'
+  }
+  if (error.code === 'CREDENTIAL_SAVE_FAILED') {
+    return 'GitHub Tokenを保存できませんでした。再度操作してください。'
+  }
+  if (error.code === 'OPERATION_ALREADY_RUNNING') {
+    if (error.message === 'Sync is already running.') {
+      return '同期処理を実行中です。完了してから再度操作してください。'
+    }
+    if (error.message === 'Credential update is already running.') {
+      return 'GitHub Tokenの更新処理を実行中です。完了してから再度操作してください。'
+    }
+    return '設定情報の更新処理を実行中です。完了してから再度操作してください。'
+  }
+  if (error.code === 'COMMON_INTERNAL_ERROR') {
+    return error.message === 'Sync failed.'
+      ? '同期に失敗しました。再度操作してください。'
+      : '設定情報を更新できませんでした。再度操作してください。'
+  }
+  if (error.code === 'RUNTIME_DATA_UPDATE_FAILED' || error.code === 'RUNTIME_DATA_SAVE_FAILED') {
+    return '同期したデータを更新できませんでした。再度同期してください。'
+  }
+  if (error.code === 'RUNTIME_DATA_EMPTY') {
+    return 'ワークアウトデータがありません。'
+  }
+  if (error.code === 'RUNTIME_DATA_INVALID') {
+    return '同期対象のデータに問題があるため、同期できませんでした。'
+  }
+  if (error.code === 'RUNTIME_DATA_UNAVAILABLE') {
+    return '同期済みデータがありません。同期してください。'
+  }
+  if (error.code === 'GITHUB_UNAUTHORIZED') {
+    return 'GitHubの認証に失敗しました。GitHub Tokenを確認してください。'
+  }
+  if (error.code === 'GITHUB_FORBIDDEN') {
+    return 'GitHubへのアクセスが許可されていません。リポジトリの権限とGitHub Tokenを確認してください。'
+  }
+  if (error.code === 'GITHUB_RESOURCE_NOT_FOUND') {
+    return '同期対象のGitHubリソースが見つかりません。設定情報と同期対象を確認してください。'
+  }
+  if (error.code === 'GITHUB_RATE_LIMIT') {
+    return 'GitHubの利用制限に達しました。時間をおいて再度操作してください。'
+  }
+  if (error.code === 'GITHUB_TIMEOUT') {
+    return 'GitHubへの接続がタイムアウトしました。再度操作してください。タイムアウト秒数の再設定を検討してください。'
+  }
+  if (error.code === 'GITHUB_CONNECTION_FAILED') {
+    return error.message.startsWith('GitHub server error:')
+      ? 'GitHubでエラーが発生しました。時間をおいて再度操作してください。'
+      : 'GitHubに接続できませんでした。ネットワーク接続を確認してください。'
+  }
+  if (error.code === 'GITHUB_SERVER_ERROR') {
+    return 'GitHubでエラーが発生しました。時間をおいて再度操作してください。'
+  }
+  return fallbackAfErrorMessage(error)
+}
+
+function fallbackAfErrorMessage(error: AfError): string {
+  if (error.recoverable) return '操作に失敗しました。再度操作してください。'
+  return '同期対象のデータに問題があります。'
 }
 
 function displayStatus(value?: string) {
@@ -656,19 +684,16 @@ function displayStatus(value?: string) {
   return statusLabels[value] ?? value
 }
 
-function recoveryActionLabel(action: ApplicationRecoveryAction) {
-  if (action === 'complete-setup') return 'Setup'
-  if (action === 'update-credential') return 'Credential'
-  if (action === 'retry-sync') return 'Retry Sync'
-  if (action === 'reload') return 'Reload'
-  return 'Settings'
+function requiredActionLabel(action: string) {
+  if (action === 'CONFIGURATION_REQUIRED') return '設定情報の登録が必要です'
+  if (action === 'CREDENTIAL_REQUIRED') return 'GitHub Tokenの登録が必要です'
+  if (action === 'RUNTIME_DATA_REQUIRED') return 'データ同期が必要です'
+  return action
 }
 
 function runtimeDataSummary(status: AfStatus | null) {
   if (!status) return '-'
-  if (status.runtimeData.fallbackActive) return `Fallback / ${status.runtimeData.currentGeneratedAt ?? '-'}`
-  if (status.runtimeData.currentAvailable) return `Available / ${status.runtimeData.currentGeneratedAt ?? '-'}`
-  return displayStatus(status.components.runtimeData)
+  return status.runtimeData.currentAvailable ? '利用可能' : '利用不可'
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

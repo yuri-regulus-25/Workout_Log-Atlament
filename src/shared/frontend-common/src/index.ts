@@ -319,6 +319,7 @@ export type MasterDocumentWriteRequest = {
 export type MasterWriteErrorCode =
   | 'MASTER_WRITE_INVALID'
   | 'MASTER_WRITE_CONFLICT'
+  | 'MASTER_SYNC_REQUIRED'
   | 'MASTER_WRITE_FAILED'
   | 'GITHUB_UNAUTHORIZED'
   | 'GITHUB_FORBIDDEN'

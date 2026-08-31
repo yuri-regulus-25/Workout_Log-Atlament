@@ -309,14 +309,14 @@ public sealed class RuntimeDataStore
         Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
     }
 
-    public IReadOnlyList<AfError> SaveCurrent(RuntimeBuildResult result)
+    public IReadOnlyList<AfError> SaveCurrent(RuntimeBuildResult result, LocalMasterDocuments? masterDocuments = null)
     {
         try
         {
             // Write through the temporary runtime area so Frontend requests never observe a
             // partially serialized runtime-data.json during sync.
             Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
-            var data = new RuntimeDataFile(1, DateTimeOffset.UtcNow, result.Sessions, result.Errors, result.Warnings);
+            var data = new RuntimeDataFile(2, DateTimeOffset.UtcNow, result.Sessions, result.Errors, result.Warnings, masterDocuments);
             var tempPath = Path.Combine(_paths.TemporaryRuntimeRoot, "runtime-data.json");
             File.WriteAllText(tempPath, JsonSerializer.Serialize(data, AfJson.Options), Encoding.UTF8);
             Directory.CreateDirectory(_paths.CurrentRuntimeRoot);
@@ -340,7 +340,7 @@ public sealed class RuntimeDataStore
             }
 
             var data = JsonSerializer.Deserialize<RuntimeDataFile>(File.ReadAllText(_paths.RuntimeDataPath), AfJson.Options);
-            if (data is null || data.SchemaVersion != 1 || data.Sessions is null)
+            if (data is null || data.SchemaVersion is not (1 or 2) || data.Sessions is null)
             {
                 return (null, new[] { new AfError(AfErrorCodes.RuntimeDataInvalid, "Runtime Data contract is invalid.", true) });
             }
@@ -701,7 +701,8 @@ public sealed class RuntimeDataBuilder
         int? line)
     {
         var resolutionState = deleted ? "deleted" : "missing";
-        var subject = referenceKind == "gym" ? "Gym" : "Machine";
+        var subject = referenceKind == "gym" ? "ジム" : "マシン";
+        var stateText = deleted ? "削除されています" : "存在しません";
         return new RuntimeWarning(
             deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
             referenceKind,
@@ -711,7 +712,7 @@ public sealed class RuntimeDataBuilder
             sessionId,
             filePath,
             line,
-            $"{subject} master reference is {resolutionState}: {originalId}.");
+            $"特定の{subject}が{stateText}: {originalId}");
     }
 
     private static bool TryGetString(JsonElement element, string name, out string value)
@@ -957,11 +958,11 @@ public static class MasterWriteValidator
 
 public sealed class GithubAccessService
 {
-    private static readonly IReadOnlyDictionary<string, (string Path, string CommitMessage)> MasterWriteTargets =
-        new Dictionary<string, (string Path, string CommitMessage)>(StringComparer.Ordinal)
+    private static readonly IReadOnlyDictionary<string, string> MasterWriteTargets =
+        new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["MACHINE_MASTER"] = ("master/machines.json", "Update machine master"),
-            ["GYM_MASTER"] = ("master/gyms.json", "Update gym master")
+            ["MACHINE_MASTER"] = "master/machines.json",
+            ["GYM_MASTER"] = "master/gyms.json"
         };
 
     private readonly HttpClient _httpClient;
@@ -1038,6 +1039,42 @@ public sealed class GithubAccessService
         return errors;
     }
 
+    public async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchWorkoutFilesAsync(
+        AfConfiguration configuration,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var files = new List<RuntimeSourceFile>();
+            var errors = new List<AfError>();
+            foreach (var resource in configuration.Resources.Where(resource => resource.Type == "WORKOUT"))
+            {
+                var fetched = resource.ResourceKind == "directory"
+                    ? await FetchDirectoryAsync(configuration, resource, token, timeoutCts.Token)
+                    : await FetchFileAsync(configuration, resource.Path, token, timeoutCts.Token);
+                if (fetched.Errors.Count > 0)
+                {
+                    errors.AddRange(fetched.Errors);
+                    if (resource.Required) return (Array.Empty<RuntimeSourceFile>(), errors);
+                }
+                files.AddRange(fetched.Files);
+            }
+
+            return errors.Count == 0 ? (files, errors) : (Array.Empty<RuntimeSourceFile>(), errors);
+        }
+        catch (OperationCanceledException)
+        {
+            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (Array.Empty<RuntimeSourceFile>(), new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
     public async Task<(MasterDocumentSnapshot? Document, IReadOnlyList<AfError> Errors)> ReadMasterDocumentAsync(
         AfConfiguration configuration,
         string? token,
@@ -1053,7 +1090,7 @@ public sealed class GithubAccessService
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
-            var fullPath = CombineRemote(configuration.Repository.RootPath, target.Path);
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
             var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
             if (remote.Errors.Count > 0)
             {
@@ -1066,7 +1103,36 @@ public sealed class GithubAccessService
                 return (null, new[] { new AfError(AfErrorCodes.GithubServerError, "GitHub contents response is invalid.", true) });
             }
 
-            return (new MasterDocumentSnapshot(type, target.Path, remote.Revision!, content), Array.Empty<AfError>());
+            return (new MasterDocumentSnapshot(type, target, remote.Revision!, content), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(string? Revision, IReadOnlyList<AfError> Errors)> ReadMasterDocumentRevisionAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            return remote.Errors.Count > 0 ? (null, remote.Errors) : (remote.Revision, Array.Empty<AfError>());
         }
         catch (OperationCanceledException)
         {
@@ -1100,7 +1166,7 @@ public sealed class GithubAccessService
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
-            var fullPath = CombineRemote(configuration.Repository.RootPath, target.Path);
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
             var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
             if (remote.Errors.Count > 0)
             {
@@ -1109,7 +1175,7 @@ public sealed class GithubAccessService
 
             if (!string.Equals(remote.Revision, expectedRevision, StringComparison.Ordinal))
             {
-                return (null, new[] { new AfError(AfErrorCodes.MasterWriteConflict, "Master document revision has changed.", true) });
+                return (null, new[] { new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true) });
             }
 
             var lifecycleErrors = ValidateMasterLifecycleTransition(type, remote.Content!, content);
@@ -1136,7 +1202,7 @@ public sealed class GithubAccessService
             using var request = CreateRequest(contentsUrl, token, HttpMethod.Put);
             var payload = new
             {
-                message = target.CommitMessage,
+                message = BuildMasterCommitMessage(type, target),
                 content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
                 sha = remote.Revision,
                 branch = configuration.Repository.Ref
@@ -1146,7 +1212,7 @@ public sealed class GithubAccessService
             if (!response.IsSuccessStatusCode)
             {
                 return (null, new[] { response.StatusCode == HttpStatusCode.Conflict
-                    ? new AfError(AfErrorCodes.MasterWriteConflict, "Master document revision has changed.", true)
+                    ? new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)
                     : MapGithubError(response.StatusCode, fullPath) });
             }
 
@@ -1157,7 +1223,78 @@ public sealed class GithubAccessService
                 return (null, new[] { new AfError(AfErrorCodes.MasterWriteFailed, "GitHub write result is ambiguous.", true) });
             }
 
-            return (new MasterDocumentWriteResult(type, target.Path, savedRevision), Array.Empty<AfError>());
+            return (new MasterDocumentWriteResult(type, target, savedRevision), Array.Empty<AfError>());
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubTimeout, "GitHub access timed out.", true) });
+        }
+        catch (HttpRequestException)
+        {
+            return (null, new[] { new AfError(AfErrorCodes.GithubConnectionFailed, "GitHub connection failed.", true) });
+        }
+    }
+
+    public async Task<(MasterDocumentWriteResult? Result, IReadOnlyList<AfError> Errors)> PushMasterDocumentAsync(
+        AfConfiguration configuration,
+        string? token,
+        string type,
+        string expectedRevision,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRevision) || string.IsNullOrWhiteSpace(content))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true) });
+        }
+
+        if (!TryGetMasterWriteTarget(type, out var target))
+        {
+            return (null, new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true) });
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var fullPath = CombineRemote(configuration.Repository.RootPath, target);
+            var remote = await ReadGithubContentAsync(configuration, fullPath, token, timeoutCts.Token);
+            if (remote.Errors.Count > 0)
+            {
+                return (null, remote.Errors);
+            }
+
+            if (!string.Equals(remote.Revision, expectedRevision, StringComparison.Ordinal))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true) });
+            }
+
+            var contentsUrl = $"https://api.github.com/repos/{configuration.Repository.Owner}/{configuration.Repository.Repository}/contents/{EscapeRemotePath(fullPath)}";
+            using var request = CreateRequest(contentsUrl, token, HttpMethod.Put);
+            var payload = new
+            {
+                message = BuildMasterCommitMessage(type, target),
+                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                sha = remote.Revision,
+                branch = configuration.Repository.Ref
+            };
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, AfJson.Options), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, new[] { response.StatusCode == HttpStatusCode.Conflict
+                    ? new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)
+                    : MapGithubError(response.StatusCode, fullPath) });
+            }
+
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeoutCts.Token));
+            var savedRevision = json?["content"]?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(savedRevision))
+            {
+                return (null, new[] { new AfError(AfErrorCodes.MasterWriteFailed, "GitHub write result is ambiguous.", true) });
+            }
+
+            return (new MasterDocumentWriteResult(type, target, savedRevision), Array.Empty<AfError>());
         }
         catch (OperationCanceledException)
         {
@@ -1303,7 +1440,7 @@ public sealed class GithubAccessService
         CancellationToken cancellationToken)
     {
         var other = MasterWriteTargets.First(target => target.Key != type);
-        var fullPath = CombineRemote(configuration.Repository.RootPath, other.Value.Path);
+        var fullPath = CombineRemote(configuration.Repository.RootPath, other.Value);
         var remote = await ReadGithubContentAsync(configuration, fullPath, token, cancellationToken);
         if (remote.Errors.Count > 0)
         {
@@ -1316,8 +1453,24 @@ public sealed class GithubAccessService
             : (content, Array.Empty<AfError>());
     }
 
-    private static bool TryGetMasterWriteTarget(string type, out (string Path, string CommitMessage) target) =>
-        MasterWriteTargets.TryGetValue(type, out target);
+    private static bool TryGetMasterWriteTarget(string type, out string target)
+    {
+        if (MasterWriteTargets.TryGetValue(type, out var value))
+        {
+            target = value;
+            return true;
+        }
+
+        target = "";
+        return false;
+    }
+
+    private static string BuildMasterCommitMessage(string type, string path)
+    {
+        var subject = type == "MACHINE_MASTER" ? "machine" : "gym";
+        var fileName = Path.GetFileName(path.Replace('/', Path.DirectorySeparatorChar));
+        return $"Update {subject} master: {fileName}";
+    }
 
     private static IReadOnlyList<AfError> ValidateMasterLifecycleTransition(string type, string currentEncodedContent, string nextContent)
     {
@@ -1801,6 +1954,7 @@ public sealed class AtlamentApplication
         return code switch
         {
             AfErrorCodes.MasterWriteConflict => 409,
+            AfErrorCodes.MasterSyncRequired => 409,
             AfErrorCodes.MasterWriteInvalid => 400,
             AfErrorCodes.CredentialRequired or AfErrorCodes.GithubUnauthorized => 401,
             AfErrorCodes.GithubForbidden => 403,
@@ -1819,7 +1973,7 @@ public sealed class AtlamentApplication
             return AfResponses.Fail<RuntimeWorkoutData>(errors.First());
         }
 
-        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions), data.Errors, data.Warnings ?? Array.Empty<RuntimeWarning>());
+        return AfResponses.Ok(new RuntimeWorkoutData(data.Sessions, data.MasterDocuments), data.Errors, data.Warnings ?? Array.Empty<RuntimeWarning>());
     }
 
     public AfResponse<AfConfiguration> GetConfiguration() => AfResponses.Ok(_configuration);
@@ -1897,57 +2051,81 @@ public sealed class AtlamentApplication
                 false)));
     }
 
-    public async Task<(int StatusCode, AfResponse<MasterDocumentSnapshot> Response)> ReadMasterDocumentAsync(string type, CancellationToken cancellationToken)
+    public Task<(int StatusCode, AfResponse<MasterDocumentSnapshot> Response)> ReadMasterDocumentAsync(string type, CancellationToken cancellationToken)
     {
-        if (_configurationStatus != ComponentStatus.available)
+        var local = LoadLocalMasterDocuments();
+        if (local.Documents is null)
         {
-            return (400, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+            return Task.FromResult((409, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true))));
         }
 
-        if (string.IsNullOrWhiteSpace(_token))
-        {
-            return (401, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
-        }
-
-        var result = await _github.ReadMasterDocumentAsync(_configuration, _token, type, cancellationToken);
-        return result.Document is null
-            ? (MapMasterWriteStatusCode(result.Errors), new AfResponse<MasterDocumentSnapshot>(false, result.Errors, null))
-            : (200, AfResponses.Ok(result.Document));
+        var document = SelectLocalMasterDocument(local.Documents, type);
+        var result = document is null
+            ? (400, AfResponses.Fail<MasterDocumentSnapshot>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true)))
+            : (200, AfResponses.Ok(document));
+        return Task.FromResult(result);
     }
 
-    public async Task<(int StatusCode, AfResponse<IReadOnlyList<UnresolvedMasterReference>> Response)> GetUnresolvedMasterReferencesAsync(CancellationToken cancellationToken)
+    private (RuntimeDataFile? Runtime, LocalMasterDocuments? Documents) LoadLocalMasterDocuments()
     {
-        if (_configurationStatus != ComponentStatus.available)
+        var (data, _) = _runtimeDataStore.LoadCurrent();
+        return (data, data?.MasterDocuments);
+    }
+
+    private static MasterDocumentSnapshot? SelectLocalMasterDocument(LocalMasterDocuments documents, string type) => type switch
+    {
+        "MACHINE_MASTER" => documents.Machine,
+        "GYM_MASTER" => documents.Gym,
+        _ => null
+    };
+
+    private static LocalMasterDocuments ReplaceLocalMasterDocument(LocalMasterDocuments documents, string type, string content, string revision) => type switch
+    {
+        "MACHINE_MASTER" => documents with { Machine = new MasterDocumentSnapshot("MACHINE_MASTER", "master/machines.json", revision, content) },
+        "GYM_MASTER" => documents with { Gym = new MasterDocumentSnapshot("GYM_MASTER", "master/gyms.json", revision, content) },
+        _ => documents
+    };
+
+    private static RuntimeSourceFile ToRuntimeSource(MasterDocumentSnapshot document) => new(document.Path, document.Content);
+
+    private static IReadOnlyList<AfError> ValidateLocalMasterLifecycleTransition(string type, string currentContent, string nextContent)
+    {
+        if (type != "GYM_MASTER")
         {
-            return (400, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.ConfigRequired, "Configuration is required.", true)));
+            return Array.Empty<AfError>();
         }
 
-        if (string.IsNullOrWhiteSpace(_token))
+        try
         {
-            return (401, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
+            var currentConfigured = HasMainGym(currentContent);
+            var nextConfigured = HasMainGym(nextContent);
+            return currentConfigured && !nextConfigured
+                ? new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Configured Main Gym cannot be cleared.", true) }
+                : Array.Empty<AfError>();
+        }
+        catch
+        {
+            return new[] { new AfError(AfErrorCodes.MasterWriteInvalid, "Master document lifecycle transition is invalid.", true) };
+        }
+    }
+
+    private static bool HasMainGym(string content)
+    {
+        var document = JsonNode.Parse(content)?.AsObject();
+        return document?["gyms"]?.AsArray()
+            .OfType<JsonObject>()
+            .Any(gym => gym["main"]?.GetValue<bool>() == true) == true;
+    }
+
+    public Task<(int StatusCode, AfResponse<IReadOnlyList<UnresolvedMasterReference>> Response)> GetUnresolvedMasterReferencesAsync(CancellationToken cancellationToken)
+    {
+        var (data, errors) = _runtimeDataStore.LoadCurrent();
+        if (data is null)
+        {
+            return Task.FromResult((409, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true))));
         }
 
-        var remote = await _github.FetchAsync(_configuration, _token, cancellationToken);
-        if (remote.Errors.Count > 0)
-        {
-            return (MapMasterWriteStatusCode(remote.Errors), new AfResponse<IReadOnlyList<UnresolvedMasterReference>>(false, remote.Errors, null));
-        }
-
-        var machineMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/machines.json", StringComparison.OrdinalIgnoreCase));
-        var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
-        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (machineMaster is null || gymMaster is null)
-        {
-            return (404, AfResponses.Fail<IReadOnlyList<UnresolvedMasterReference>>(new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true)));
-        }
-
-        var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
-        if (build.TechnicalInvalid || build.Errors.Count > 0)
-        {
-            return (400, new AfResponse<IReadOnlyList<UnresolvedMasterReference>>(false, build.Errors, null));
-        }
-
-        return (200, AfResponses.Ok(BuildUnresolvedMasterReferences(build.Warnings)));
+        return Task.FromResult((200, AfResponses.Ok(BuildUnresolvedMasterReferences(data.Warnings ?? Array.Empty<RuntimeWarning>()))));
     }
 
     public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
@@ -1965,16 +2143,78 @@ public sealed class AtlamentApplication
             return (401, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.CredentialRequired, "Credential is required.", true)));
         }
 
-        var result = await _github.SaveMasterDocumentAsync(
+        var local = LoadLocalMasterDocuments();
+        if (local.Documents is null)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data must be synchronized before maintenance.", true)));
+        }
+
+        var current = SelectLocalMasterDocument(local.Documents, type);
+        if (current is null)
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master write target is not allowed.", true)));
+        }
+
+        if (!string.Equals(current.Revision, request.ExpectedRevision ?? "", StringComparison.Ordinal))
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master document must be synchronized before saving.", true)));
+        }
+
+        var candidateContent = request.Content ?? "";
+        if (string.IsNullOrWhiteSpace(candidateContent))
+        {
+            return (400, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterWriteInvalid, "Master document write request is invalid.", true)));
+        }
+
+        var candidateDocuments = ReplaceLocalMasterDocument(local.Documents, type, candidateContent, current.Revision);
+        var lifecycleErrors = ValidateLocalMasterLifecycleTransition(type, current.Content, candidateContent);
+        if (lifecycleErrors.Count > 0)
+        {
+            return (400, new AfResponse<MasterDocumentWriteResult>(false, lifecycleErrors, null));
+        }
+
+        var validationErrors = MasterWriteValidator.ValidateWholeMaster(candidateDocuments.Machine.Content, candidateDocuments.Gym.Content);
+        if (validationErrors.Count > 0)
+        {
+            return (400, new AfResponse<MasterDocumentWriteResult>(false, validationErrors, null));
+        }
+
+        var push = await _github.PushMasterDocumentAsync(
             _configuration,
             _token,
             type,
-            request.ExpectedRevision ?? "",
-            request.Content ?? "",
+            current.Revision,
+            candidateContent,
             cancellationToken);
-        return result.Result is null
-            ? (MapMasterWriteStatusCode(result.Errors), new AfResponse<MasterDocumentWriteResult>(false, result.Errors, null))
-            : (200, AfResponses.Ok(result.Result));
+        if (push.Result is null)
+        {
+            return (MapMasterWriteStatusCode(push.Errors), new AfResponse<MasterDocumentWriteResult>(false, push.Errors, null));
+        }
+
+        var confirmedDocuments = ReplaceLocalMasterDocument(local.Documents, type, candidateContent, push.Result.Revision);
+        var workouts = await _github.FetchWorkoutFilesAsync(_configuration, _token, cancellationToken);
+        if (workouts.Errors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        var build = _runtimeDataBuilder.Build(workouts.Files, ToRuntimeSource(confirmedDocuments.Machine), ToRuntimeSource(confirmedDocuments.Gym));
+        if (build.TechnicalInvalid || build.Errors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        var saveErrors = _runtimeDataStore.SaveCurrent(build, confirmedDocuments);
+        if (saveErrors.Count > 0)
+        {
+            return (409, AfResponses.Fail<MasterDocumentWriteResult>(new AfError(AfErrorCodes.MasterSyncRequired, "Master data was saved remotely. Synchronize application data before continuing.", true)));
+        }
+
+        _runtimeStatus = ComponentStatus.available;
+        _latestValidation = "succeeded";
+        _requiredActions.RemoveAll(action => action == AfErrorCodes.RuntimeDataRequired);
+        _applicationStatus = DetermineApplicationStatus();
+        return (200, AfResponses.Ok(push.Result));
     }
 
     private static IReadOnlyList<UnresolvedMasterReference> BuildUnresolvedMasterReferences(IReadOnlyList<RuntimeWarning> warnings)
@@ -2119,15 +2359,23 @@ public sealed class AtlamentApplication
 
         _latestRemoteRetrieval = "succeeded";
         _githubStatus = ComponentStatus.available;
-        var machineMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/machines.json", StringComparison.OrdinalIgnoreCase));
-        var gymMaster = remote.Files.FirstOrDefault(file => file.Path.EndsWith("master/gyms.json", StringComparison.OrdinalIgnoreCase));
-        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (machineMaster is null || gymMaster is null)
+        var machineSnapshot = await _github.ReadMasterDocumentAsync(_configuration, _token, "MACHINE_MASTER", cancellationToken);
+        if (machineSnapshot.Document is null)
         {
             _latestValidation = "failed";
-            var error = new AfError(AfErrorCodes.GithubResourceNotFound, "Required master resource is missing.", true);
-            return RuntimeBuildFailure(new[] { error });
+            return RuntimeBuildFailure(machineSnapshot.Errors);
         }
+
+        var gymSnapshot = await _github.ReadMasterDocumentAsync(_configuration, _token, "GYM_MASTER", cancellationToken);
+        if (gymSnapshot.Document is null)
+        {
+            _latestValidation = "failed";
+            return RuntimeBuildFailure(gymSnapshot.Errors);
+        }
+
+        var machineMaster = ToRuntimeSource(machineSnapshot.Document);
+        var gymMaster = ToRuntimeSource(gymSnapshot.Document);
+        var workoutFiles = remote.Files.Where(file => file.Path.Contains("workouts/", StringComparison.OrdinalIgnoreCase)).ToArray();
 
         var build = _runtimeDataBuilder.Build(workoutFiles, machineMaster, gymMaster);
         if (build.TechnicalInvalid || build.Errors.Count > 0)
@@ -2136,7 +2384,8 @@ public sealed class AtlamentApplication
             return RuntimeBuildFailure(build.Errors);
         }
 
-        var saveErrors = _runtimeDataStore.SaveCurrent(build);
+        var masterDocuments = new LocalMasterDocuments(machineSnapshot.Document, gymSnapshot.Document);
+        var saveErrors = _runtimeDataStore.SaveCurrent(build, masterDocuments);
         if (saveErrors.Count > 0)
         {
             _runtimeStatus = ComponentStatus.unavailable;

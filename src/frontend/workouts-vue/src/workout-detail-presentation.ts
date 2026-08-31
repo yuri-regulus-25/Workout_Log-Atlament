@@ -35,3 +35,8 @@ export function getMachinePresentation(machine: WorkoutSession['machines'][numbe
     hasRir: machine.sets.some((set) => set.rir !== undefined && set.rir !== null),
   }
 }
+
+export function formatCountLabel(value: number, singular: string, plural: string): string {
+  const label = Math.abs(value) <= 1 ? singular : plural
+  return `${value.toLocaleString()} ${label}`
+}

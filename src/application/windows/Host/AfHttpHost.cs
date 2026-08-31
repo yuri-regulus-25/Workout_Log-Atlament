@@ -153,7 +153,7 @@ public sealed class AfHttpHost : IAsyncDisposable
             // This is distinct from a user navigating to an unknown route.
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await context.Response.WriteAsJsonAsync(AfResponses.Fail<object>(
-                new AfError(AfErrorCodes.HostingArtifactNotFound, "Frontend artifact is unavailable.", true)), AfJson.Options);
+                new AfError(AfErrorCodes.HostingArtifactNotFound, "エラーが発生しました。アプリケーションを再起動してください。", true)), AfJson.Options);
             return;
         }
 

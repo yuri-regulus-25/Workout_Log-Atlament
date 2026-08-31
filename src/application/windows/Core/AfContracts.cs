@@ -69,6 +69,7 @@ public static class AfErrorCodes
     public const string MasterWriteInvalid = "MASTER_WRITE_INVALID";
     public const string MasterWriteConflict = "MASTER_WRITE_CONFLICT";
     public const string MasterWriteFailed = "MASTER_WRITE_FAILED";
+    public const string MasterSyncRequired = "MASTER_SYNC_REQUIRED";
     public const string HostingArtifactNotFound = "HOSTING_ARTIFACT_NOT_FOUND";
     public const string HostingStartFailed = "HOSTING_START_FAILED";
     public const string HttpPortUnavailable = "HTTP_PORT_UNAVAILABLE";

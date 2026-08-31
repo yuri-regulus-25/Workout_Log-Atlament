@@ -26,6 +26,11 @@
   margin-bottom: 16px;
 }
 
+.summary-table > .muted {
+  margin: 0;
+  padding: 16px 14px;
+}
+
 .period-field {
   min-width: 180px;
 }

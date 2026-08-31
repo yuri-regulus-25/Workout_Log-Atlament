@@ -6,6 +6,7 @@
 }
 
 .atl-navigation-layout > .app-shell {
+  grid-column: 2;
   max-width: calc(100vw - 248px - 32px);
   min-width: 0;
 }
@@ -19,10 +20,13 @@
 }
 
 .atl-navigation-drawer-desktop {
-  align-self: start;
-  min-height: 100vh;
-  position: sticky;
+  height: 100dvh;
+  left: 0;
+  overflow-y: auto;
+  position: fixed;
   top: 0;
+  width: 248px;
+  z-index: 900;
 }
 
 .atl-navigation-drawer-mobile,
@@ -167,6 +171,19 @@
 
 .panel {
   padding: 22px;
+}
+
+.app-shell > .panel + .panel,
+.app-shell > .panel + .dashboard-grid,
+.app-shell > .panel + .metric-grid,
+.app-shell > .panel + .summary-grid,
+.view-stack > .panel + .panel {
+  margin-top: 16px;
+}
+
+.page-hero h1:focus,
+.page-hero h1:focus-visible {
+  outline: 0;
 }
 
 .latest-workout-panel {
@@ -394,6 +411,7 @@
   }
 
   .atl-navigation-layout > .app-shell {
+    grid-column: auto;
     max-width: none;
   }
 

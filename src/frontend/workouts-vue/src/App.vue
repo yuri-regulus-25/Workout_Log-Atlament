@@ -9,7 +9,7 @@
       <h1 ref="pageHeading" tabindex="-1">{{ pageTitle }}</h1>
       <p class="lead">
         これまでの記録を辿る<br />
-        記録を見ることで、進歩になる
+        過去のワークアウト記録を確認します
       </p>
     </header>
 

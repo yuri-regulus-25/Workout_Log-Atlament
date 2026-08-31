@@ -1,7 +1,7 @@
 <script lang="ts">
   import ApexCharts from 'apexcharts'
   import type { ApexOptions } from 'apexcharts'
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
   import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
@@ -44,6 +44,10 @@
   $: bodyPartSummaryRows = orderByBodyPartDisplayOrder(bodyPartSummary)
   $: mainGymBodyPartSummaryRows = orderByBodyPartDisplayOrder(getBodyPartSummary(volumeMetricSessions))
   $: recent28Sessions = getRecentSessions(filteredSessions, 28)
+  $: mainGymVolumeTrend = getMainGymVolumeTrendMetric(mainGymContext, recent28Sessions)
+  $: mainGymVolumeTrendPoints = mainGymVolumeTrend.state === 'available' ? mainGymVolumeTrend.value : []
+  $: mainGymVolumeTrendReady = mainGymVolumeTrend.state === 'available' && mainGymVolumeTrendPoints.length > 0
+  $: mainGymVolumeTrendKey = mainGymVolumeTrendPoints.map((point) => point.sessionId).join('|')
   $: machineVarietyRows = orderByBodyPartDisplayOrder(getBodyPartMachineVariety(recent28Sessions))
   $: totalSets = filteredSessions.reduce((total, session) => total + getTotalSets(session), 0)
   $: totalVolume = getMainGymTotalVolumeMetric(mainGymContext, filteredSessions)
@@ -55,19 +59,19 @@
   $: machineFrequencyRows = getMachineFrequencyRanking(filteredSessions).slice(0, 8)
   $: gymRows = getSessionsByGym(filteredSessions)
   $: bodyPartSetRows = orderByBodyPartDisplayOrder(getSetsByBodyPart(filteredSessions))
-  $: if (trendChart) {
-    trendChart.updateOptions(createTrendOptions(filteredSessions), false, true)
-  }
+  $: void syncTrendChart(mainGymVolumeTrendReady, mainGymVolumeTrendKey)
   $: if (bodyPartChart) {
     bodyPartChart.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
   }
 
-  let trendChartElement: HTMLDivElement
+  let trendChartElement: HTMLDivElement | null = null
   let bodyPartChartElement: HTMLDivElement
   let shellElement: HTMLElement
   let characterTriggerElement: HTMLParagraphElement
   let trendChart: ApexCharts | null = null
   let bodyPartChart: ApexCharts | null = null
+  let renderedMainGymVolumeTrendKey = ''
+  let trendChartSyncRequest = 0
   let navigation: { dispose: () => void } | null = null
   let characterEasterEgg: { dispose: () => void } | null = null
   let disposeThemeObserver: (() => void) | null = null
@@ -83,7 +87,7 @@
       assetBasePath: '/frontend-common/easter-egg/assets/',
     })
     disposeThemeObserver = observeThemeChanges(() => {
-      trendChart?.updateOptions(createTrendOptions(filteredSessions), false, true)
+      void syncTrendChart(mainGymVolumeTrendReady, mainGymVolumeTrendKey)
       bodyPartChart?.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
     })
 
@@ -96,13 +100,11 @@
       loadError = error instanceof Error ? error.message : 'Workout data could not be loaded.'
     }
 
-    trendChart = new ApexCharts(trendChartElement, createTrendOptions(filteredSessions))
     bodyPartChart = new ApexCharts(
       bodyPartChartElement,
       createBodyPartOptions(bodyPartSummaryRows),
     )
 
-    trendChart.render()
     bodyPartChart.render()
   })
 
@@ -114,10 +116,34 @@
     bodyPartChart?.destroy()
   })
 
-  function createTrendOptions(sourceSessions: WorkoutSession[]): ApexOptions {
+  async function syncTrendChart(ready: boolean, key: string): Promise<void> {
+    const request = ++trendChartSyncRequest
+    await tick()
+
+    if (request !== trendChartSyncRequest) {
+      return
+    }
+
+    if (!ready || !trendChartElement) {
+      trendChart?.destroy()
+      trendChart = null
+      renderedMainGymVolumeTrendKey = ''
+      return
+    }
+
+    if (!trendChart || renderedMainGymVolumeTrendKey !== key) {
+      trendChart?.destroy()
+      trendChart = new ApexCharts(trendChartElement, createTrendOptions(mainGymVolumeTrendPoints))
+      renderedMainGymVolumeTrendKey = key
+      await trendChart.render()
+      return
+    }
+
+    await trendChart.updateOptions(createTrendOptions(mainGymVolumeTrendPoints), false, true)
+  }
+
+  function createTrendOptions(trendPoints: typeof mainGymVolumeTrendPoints): ApexOptions {
     const chartTheme = getChartTheme()
-    const trendMetric = getMainGymVolumeTrendMetric(mainGymContext, sourceSessions)
-    const trendPoints = trendMetric.state === 'available' ? trendMetric.value : []
 
     return {
       chart: {
@@ -172,7 +198,7 @@
         foreColor: chartTheme.textMuted,
         toolbar: { show: false },
       },
-      colors: [chartTheme.secondary],
+      colors: [chartTheme.accent],
       dataLabels: { enabled: false },
       grid: { borderColor: chartTheme.grid },
       plotOptions: {
@@ -225,14 +251,14 @@
 
   function formatMainGymMetricState(metric: { state: string }): string {
     if (metric.state === 'unconfigured') {
-      return 'Not configured'
+      return 'Not Set'
     }
 
     if (metric.state === 'invalid') {
       return 'Unavailable'
     }
 
-    return 'No workout data loaded.'
+    return 'No Data'
   }
 </script>
 
@@ -246,7 +272,7 @@
     <h1>Analytics</h1>
     <p class="lead">
       データから傾向を見つける<br />
-      傾向を見つけることで、さらなる進化になる
+      ワークアウトデータをさまざまな視点から分析します
     </p>
   </header>
 
@@ -272,8 +298,8 @@
   {#if loadError}
     <section class="panel">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>データが正常ではありません。</h2>
-      <p class="muted">{loadError}</p>
+      <h2>データ取得異常</h2>
+      <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
     </section>
   {/if}
 
@@ -311,7 +337,13 @@
           </div>
         </div>
       </div>
-      <div bind:this={trendChartElement}></div>
+      {#if mainGymVolumeTrendReady}
+        {#key mainGymVolumeTrendKey}
+          <div bind:this={trendChartElement}></div>
+        {/key}
+      {:else}
+        <p class="muted">データがありません</p>
+      {/if}
     </article>
 
     <article class="panel">
@@ -340,9 +372,6 @@
         </div>
       </div>
       <p class="large-number">{trainingFrequencyPerWeek.toFixed(1)} / week</p>
-      <p class="muted">
-        記録期間全体での週あたり平均セッション数。
-      </p>
     </article>
   </section>
 
@@ -368,7 +397,7 @@
             <span>{row.machineCount}</span>
           </div>
         {:else}
-          <p class="muted">直近28日間の実施マシンはありません。</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>
@@ -378,8 +407,8 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">Main Gym Body Part Volume</p>
-            <h2>部位別ボリューム</h2>
+            <p class="eyebrow">Body Part Volume - Main Gym</p>
+            <h2>部位別ボリューム - メインジム</h2>
           </div>
         </div>
       </div>
@@ -396,7 +425,7 @@
             <span>{item.volume.toLocaleString()} kg</span>
           </div>
         {:else}
-          <p class="muted">{formatMainGymMetricState(mainGymFilteredSessions)}</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>
@@ -428,7 +457,7 @@
             <span>{formatDisplayDate(bodyPartLastTrainedRows.find((row) => row.bodyPart === item.bodyPart)?.lastTrainedDate ?? '-')}</span>
           </div>
         {:else}
-          <p class="muted">対象期間の部位別データはありません。</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>
@@ -454,7 +483,7 @@
             <span>{item.sessionCount}</span>
           </div>
         {:else}
-          <p class="muted">対象期間のマシン実施データはありません。</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>
@@ -467,7 +496,7 @@
           <div class="card-heading__icon"><i class="mdi mdi-map-marker-outline" aria-hidden="true"></i></div>
           <div class="card-heading__text">
             <p class="eyebrow">Gym Sessions</p>
-            <h2>Gym別セッション数</h2>
+            <h2>ジム</h2>
           </div>
         </div>
       </div>
@@ -482,7 +511,7 @@
             <span>{item.sessionCount}</span>
           </div>
         {:else}
-          <p class="muted">対象期間の Gym データはありません。</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>
@@ -508,7 +537,7 @@
             <span>{item.setCount}</span>
           </div>
         {:else}
-          <p class="muted">対象期間の部位別セットはありません。</p>
+          <p class="muted">データがありません</p>
         {/each}
       </div>
     </article>

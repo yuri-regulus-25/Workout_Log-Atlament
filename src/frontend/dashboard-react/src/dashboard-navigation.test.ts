@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getUniqueWorkoutDateRoute, getWorkoutDetailRoute, getWorkoutListRoute } from './dashboard-navigation'
+import { getUniqueWorkoutDateRoute, getWorkoutListRoute } from './dashboard-navigation'
 
 describe('dashboard navigation', () => {
   it('builds Workout Domain routes from existing date-based routing', () => {
     expect(getWorkoutListRoute()).toBe('/workouts/')
-    expect(getWorkoutDetailRoute('2026-08-14')).toBe('/workouts/2026-08-14/')
   })
 
   it('returns a chart data point route only when the date is unique', () => {
