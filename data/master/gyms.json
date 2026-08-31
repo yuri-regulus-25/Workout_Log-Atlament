@@ -7,7 +7,7 @@
       "short_name": "AF横須賀汐入",
       "active": true,
       "deleted": false,
-      "main": false
+      "main": true
     },
     {
       "gym_id": "af-akihabara",
