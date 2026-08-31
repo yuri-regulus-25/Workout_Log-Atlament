@@ -51,7 +51,7 @@ dist/
 ├─ frontend-common/
 ├─ dashboard/
 ├─ workouts/
-├─ exercises/
+├─ machines/
 ├─ analytics/
 └─ settings/
 ```
@@ -73,7 +73,7 @@ dist/
 - Error Pages
 - Workouts / Vue
 - Dashboard / React
-- Exercises / Angular
+- Machines / Angular
 - Analytics / Svelte
 - Settings / Solid
 
@@ -92,7 +92,7 @@ dist/
 
 - Portal Artifactを `dist/` 直下へ配置
 - Error Page Artifactを `dist/` 直下へ配置
-- Dashboard / Workouts / Exercises / Analytics / Settingsを各route配下へ配置
+- Dashboard / Workouts / Machines / Analytics / Settingsを各route配下へ配置
 - `frontend-common` の共有Assetを `dist/frontend-common/` へ配置
 
 用途:
@@ -203,7 +203,7 @@ Build済みの `dist/` を静的配信します。
 - `/dashboard/`
 - `/workouts/`
 - `/workouts/:date`
-- `/exercises/:id`
+- `/machines/:id`
 - `/analytics/`
 - `/settings/`
 - unknown routeの404
@@ -273,7 +273,7 @@ Development Gateway、Development Runtime、Portal、各Frontend開発Serverを�
 127.0.0.1:5174  Portal dev server
 127.0.0.1:5175  Dashboard / React
 127.0.0.1:5176  Workouts / Vue
-127.0.0.1:5177  Exercises / Angular
+127.0.0.1:5177  Machines / Angular
 127.0.0.1:5178  Analytics / Svelte
 127.0.0.1:5179  Settings / Solid
 127.0.0.1:5180  Development Runtime API
@@ -331,23 +331,23 @@ http://127.0.0.1:5176/workouts/
 
 - Gateway連携前提のWorkouts開発確認
 
-### npm run watch:exercises
+### npm run watch:machines
 
-Exercises Angularの開発Serverを固定Portで起動します。
+Machines Angularの開発Serverを固定Portで起動します。
 
 起動先:
 
 ```text
-http://127.0.0.1:5177/exercises/
+http://127.0.0.1:5177/machines/
 ```
 
 用途:
 
-- Gateway連携前提のExercises開発確認
+- Gateway連携前提のMachines開発確認
 
 注意:
 
-- Angularは `--serve-path /exercises/` を指定して起動します。
+- Angularは `--serve-path /machines/` を指定して起動します。
 
 ### npm run watch:analytics
 
@@ -397,13 +397,13 @@ Workouts Vueを開発起動します。
 - Workouts単体の開発確認
 - 必要に応じて既存Workout Data APIと併用
 
-### npm run dev:exercises
+### npm run dev:machines
 
-Exercises Angularを開発起動します。
+Machines Angularを開発起動します。
 
 用途:
 
-- Exercises単体の開発確認
+- Machines単体の開発確認
 - Angular CLIの開発Serverで確認
 
 ### npm run dev:analytics
@@ -437,8 +437,6 @@ http://127.0.0.1:5180/
 
 - `/api/v1/common/status`
 - `/api/v1/common/runtime/workouts`
-- `/api/common/status`
-- `/api/common/runtime/workouts`
 - 旧互換 `/api/workout-data`
 
 用途:
@@ -464,13 +462,13 @@ WorkoutsのProduction相当previewを起動します。
 
 - Workouts単体ArtifactのProduction寄り確認
 
-### npm run prod:exercises
+### npm run prod:machines
 
-ExercisesのProduction相当previewを起動します。
+MachinesのProduction相当previewを起動します。
 
 用途:
 
-- Exercises単体ArtifactのProduction寄り確認
+- Machines単体ArtifactのProduction寄り確認
 
 ### npm run prod:analytics
 
@@ -574,6 +572,6 @@ npm run build:windows
 
 - `dotnet build/test/publish` で `WindowsBase` の参照競合警告が出る場合があります。
 - Dashboard / AnalyticsでViteのchunk size warningが出る場合があります。
-- Exercises Angularでbundle budget warningが出る場合があります。
+- Machines Angularでbundle budget warningが出る場合があります。
 
 いずれも現時点ではBuild/Test失敗扱いではありません。

@@ -1,5 +1,6 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
 import { extname, join, relative } from 'node:path'
 import {
   loadMasterDataFromDirectory,
@@ -14,9 +15,11 @@ const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
 
 const apiRoutes = new Set([
   '/api/v1/common/status',
-  '/api/common/status',
+  '/api/v1/common/master-write/boundary',
+  '/api/v1/common/master-write/unresolved',
+  '/api/v1/common/master-write/documents/MACHINE_MASTER',
+  '/api/v1/common/master-write/documents/GYM_MASTER',
   '/api/v1/common/runtime/workouts',
-  '/api/common/runtime/workouts',
   '/api/workout-data',
 ])
 
@@ -39,6 +42,21 @@ createServer(async (request, response) => {
       return
     }
 
+    if (url.pathname.endsWith('/master-write/boundary')) {
+      await respondMasterWriteBoundary(response)
+      return
+    }
+
+    if (url.pathname.endsWith('/master-write/unresolved')) {
+      await respondUnresolvedMasterReferences(response)
+      return
+    }
+
+    if (url.pathname.includes('/master-write/documents/')) {
+      await respondMasterDocument(request, response, url.pathname)
+      return
+    }
+
     await respondLegacyWorkoutData(response)
   } catch (error) {
     writeJson(response, 500, fail(
@@ -51,9 +69,11 @@ createServer(async (request, response) => {
   console.log(`Atlament Node Development Runtime: http://127.0.0.1:${port}/`)
   console.log('API:')
   console.log('  GET /api/v1/common/status')
+  console.log('  GET /api/v1/common/master-write/boundary')
+  console.log('  GET /api/v1/common/master-write/unresolved')
+  console.log('  GET|PUT /api/v1/common/master-write/documents/MACHINE_MASTER')
+  console.log('  GET|PUT /api/v1/common/master-write/documents/GYM_MASTER')
   console.log('  GET /api/v1/common/runtime/workouts')
-  console.log('  GET /api/common/status')
-  console.log('  GET /api/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
 
@@ -63,8 +83,23 @@ async function respondStatus(response) {
   const runtimeAvailable = runtime.success
 
   writeJson(response, 200, ok({
-    version: versions.applicationFramework,
     versions,
+    readiness: readinessJson({
+      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
+      acceptingRequests: true,
+      configurationStatus: 'unknown',
+      credentialStatus: 'unknown',
+      githubStatus: 'unknown',
+      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
+      requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
+    }),
+    runtimeData: {
+      currentAvailable: runtimeAvailable,
+      currentGeneratedAt: null,
+      latestRemoteRetrieval: 'skipped',
+      latestValidation: runtimeAvailable ? 'succeeded' : 'failed',
+      fallbackActive: false,
+    },
     application: {
       status: runtimeAvailable ? 'ready' : 'degraded',
       degraded: !runtimeAvailable,
@@ -86,13 +121,43 @@ async function respondStatus(response) {
         portal: 'unknown',
         dashboard: 'unknown',
         workouts: 'unknown',
-        exercises: 'unknown',
+        machines: 'unknown',
         analytics: 'unknown',
         settings: 'unknown',
+        maintenance: 'unknown',
       },
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
-  }, runtime.errors))
+  }, runtime.errors, runtime.warnings))
+}
+
+function readinessJson(status) {
+  const requiredActions = Array.from(new Set(status.requiredActions)).sort()
+  const unavailableComponents = [
+    status.configurationStatus === 'unavailable' ? 'configuration' : '',
+    status.credentialStatus === 'unavailable' ? 'credential' : '',
+    status.runtimeDataStatus === 'unavailable' ? 'runtimeData' : '',
+  ].filter(Boolean)
+  const degradedComponents = [
+    status.githubStatus === 'degraded' ? 'github' : '',
+    status.runtimeDataStatus === 'degraded' ? 'runtimeData' : '',
+  ].filter(Boolean)
+
+  let state = 'ready'
+  if (requiredActions.includes('CONFIGURATION_REQUIRED') || requiredActions.includes('CREDENTIAL_REQUIRED')) {
+    state = 'unconfigured'
+  } else if (!status.acceptingRequests || status.applicationStatus === 'failed' || unavailableComponents.includes('runtimeData')) {
+    state = 'unavailable'
+  } else if (status.applicationStatus === 'degraded' || degradedComponents.length > 0 || unavailableComponents.length > 0 || requiredActions.length > 0) {
+    state = 'degraded'
+  }
+
+  return {
+    state,
+    requiredActions,
+    unavailableComponents,
+    degradedComponents,
+  }
 }
 
 async function loadVersions() {
@@ -100,6 +165,15 @@ async function loadVersions() {
   return {
     applicationFramework: 'development',
     frontendFramework: version.frontend,
+    nativePackages: {
+      windows: {
+        version: version.windows,
+      },
+      android: {
+        versionName: version.android.versionName,
+        versionCode: version.android.versionCode,
+      },
+    },
   }
 }
 
@@ -111,7 +185,161 @@ async function respondRuntimeWorkouts(response) {
     return
   }
 
-  writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors))
+  writeJson(response, 200, ok({ sessions: runtime.sessions }, runtime.errors, runtime.warnings))
+}
+
+async function respondMasterDocument(request, response, path) {
+  const type = path.endsWith('/MACHINE_MASTER') ? 'MACHINE_MASTER' : 'GYM_MASTER'
+  const documentPath = type === 'MACHINE_MASTER'
+    ? join(masterDirectory, 'machines.json')
+    : join(masterDirectory, 'gyms.json')
+  if (request.method === 'GET') {
+    writeJson(response, 200, ok({
+      type,
+      path: type === 'MACHINE_MASTER' ? 'master/machines.json' : 'master/gyms.json',
+      revision: await localRevision(documentPath),
+      content: await readFile(documentPath, 'utf8'),
+    }))
+    return
+  }
+
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET and PUT are supported.', true))
+    return
+  }
+
+  const payload = JSON.parse(await readRequestBody(request))
+  const currentRevision = await localRevision(documentPath)
+  if (payload.expectedRevision !== currentRevision) {
+    writeJson(response, 409, fail('MASTER_SYNC_REQUIRED', 'Master document must be synchronized before saving.', true))
+    return
+  }
+
+  const currentContent = await readFile(documentPath, 'utf8')
+  const validationErrors = await validateCandidateMasterWrite(type, currentContent, payload.content)
+  if (validationErrors.length > 0) {
+    writeJson(response, 400, failMany(validationErrors))
+    return
+  }
+
+  await writeFile(documentPath, payload.content, 'utf8')
+  writeJson(response, 200, ok({
+    type,
+    path: type === 'MACHINE_MASTER' ? 'master/machines.json' : 'master/gyms.json',
+    revision: await localRevision(documentPath),
+  }))
+}
+
+async function validateCandidateMasterWrite(type, currentContent, nextContent) {
+  if (typeof nextContent !== 'string' || nextContent.trim() === '') {
+    return [toError('MASTER_WRITE_INVALID', new Error('Master document write request is invalid.'), 'Master document write request is invalid.')]
+  }
+
+  if (type === 'GYM_MASTER' && hasMainGym(currentContent) && !hasMainGym(nextContent)) {
+    return [toError('MASTER_WRITE_INVALID', new Error('Configured Main Gym cannot be cleared.'), 'Configured Main Gym cannot be cleared.')]
+  }
+
+  const tempRoot = await mkdtemp(join(tmpdir(), 'atlament-dev-master-'))
+  try {
+    const tempMaster = join(tempRoot, 'master')
+    await mkdir(tempMaster, { recursive: true })
+    const machinesContent = type === 'MACHINE_MASTER'
+      ? nextContent
+      : await readFile(join(masterDirectory, 'machines.json'), 'utf8')
+    const gymsContent = type === 'GYM_MASTER'
+      ? nextContent
+      : await readFile(join(masterDirectory, 'gyms.json'), 'utf8')
+    await writeFile(join(tempMaster, 'machines.json'), machinesContent, 'utf8')
+    await writeFile(join(tempMaster, 'gyms.json'), gymsContent, 'utf8')
+
+    const masterResult = await loadMasterDataFromDirectory(tempMaster)
+    if (!masterResult.masterData || masterResult.issues.length > 0) {
+      return masterResult.issues.map((issue) => ({
+        code: 'MASTER_WRITE_INVALID',
+        message: issue.message,
+        recoverable: false,
+      }))
+    }
+
+    const workoutResult = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
+    return workoutResult.issues.map(toAfError)
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+}
+
+function hasMainGym(content) {
+  try {
+    const gyms = JSON.parse(content).gyms ?? []
+    return gyms.some((gym) => gym?.main === true)
+  } catch {
+    return false
+  }
+}
+
+async function localRevision(path) {
+  const current = await stat(path)
+  return `${current.size}-${Math.trunc(current.mtimeMs)}`
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    request.on('data', (chunk) => chunks.push(chunk))
+    request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    request.on('error', reject)
+  })
+}
+
+async function respondMasterWriteBoundary(response) {
+  writeJson(response, 200, ok({
+    repository: {
+      owner: '',
+      repository: '',
+      ref: 'main',
+      rootPath: '',
+    },
+    allowedTargets: [
+      { type: 'MACHINE_MASTER', path: 'master/machines.json', resourceKind: 'file', writeAllowed: true },
+      { type: 'GYM_MASTER', path: 'master/gyms.json', resourceKind: 'file', writeAllowed: true },
+    ],
+    security: {
+      configurationAvailable: false,
+      credentialConfigured: false,
+      credentialState: 'unknown',
+      repositoryConfigured: false,
+      writeEnabled: false,
+      workoutLogWriteAllowed: false,
+      rawJsonWriteAllowed: false,
+      genericGitWriteAllowed: false,
+    },
+  }))
+}
+
+async function respondUnresolvedMasterReferences(response) {
+  const runtime = await loadRuntimeWorkoutData()
+  const groups = new Map()
+  for (const warning of runtime.warnings) {
+    const isMachine = warning.referenceKind === 'machine'
+    const type = isMachine ? 'MACHINE_MASTER' : 'GYM_MASTER'
+    const referenceId = warning.originalId
+    const key = `${type}:${referenceId}`
+    const affected = groups.get(key) ?? {
+      type,
+      referenceId,
+      affectedWorkouts: [],
+    }
+    affected.affectedWorkouts.push({
+      filePath: warning.filePath ?? '',
+      line: warning.line ?? null,
+      message: warning.message,
+    })
+    groups.set(key, affected)
+  }
+
+  writeJson(response, 200, ok(Array.from(groups.values()).sort((a, b) =>
+    a.type.localeCompare(b.type) || a.referenceId.localeCompare(b.referenceId),
+  )))
 }
 
 async function respondLegacyWorkoutData(response) {
@@ -163,6 +391,7 @@ async function loadRuntimeWorkoutData() {
       success: false,
       sessions: [],
       errors: masterResult.issues.map(toAfError),
+      warnings: [],
     }
   }
 
@@ -174,6 +403,7 @@ async function loadRuntimeWorkoutData() {
       success: false,
       sessions: [],
       errors,
+      warnings: workoutResult.warnings ?? [],
     }
   }
 
@@ -181,16 +411,17 @@ async function loadRuntimeWorkoutData() {
     success: true,
     sessions: workoutResult.sessions,
     errors,
+    warnings: workoutResult.warnings ?? [],
   }
 }
 
 async function loadMasterData(directory) {
-  const [exercises, gyms] = await Promise.all([
-    readJson(join(directory, 'exercises.json')),
+  const [machines, gyms] = await Promise.all([
+    readJson(join(directory, 'machines.json')),
     readJson(join(directory, 'gyms.json')),
   ])
 
-  return { exercises, gyms }
+  return { machines, gyms }
 }
 
 async function readJson(path) {
@@ -214,10 +445,11 @@ async function collectWorkoutFiles(directory) {
   return files.flat().sort()
 }
 
-function ok(data, errors = []) {
+function ok(data, errors = [], warnings = []) {
   return {
     success: true,
     errors,
+    warnings,
     data,
   }
 }
@@ -226,6 +458,7 @@ function fail(code, message, recoverable) {
   return {
     success: false,
     errors: [{ code, message, recoverable }],
+    warnings: [],
     data: null,
   }
 }
@@ -234,6 +467,7 @@ function failMany(errors) {
   return {
     success: false,
     errors,
+    warnings: [],
     data: null,
   }
 }
@@ -252,9 +486,9 @@ function toAfError(issue) {
     : `${issue.filePath}:${issue.line}`
   const message = `${location}: ${issue.message}`
 
-  if (issue.message.startsWith('Unknown exercise_id:')) {
+  if (issue.message.startsWith('Unknown machine_id:')) {
     return {
-      code: 'MASTER_EXERCISE_NOT_FOUND',
+      code: 'MASTER_MACHINE_NOT_FOUND',
       message,
       recoverable: true,
     }

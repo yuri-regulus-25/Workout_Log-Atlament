@@ -10,21 +10,59 @@ import {
   formatTotalWeight,
   formatWeightKg,
   formatWorkoutStatus,
+  compareWorkoutSessions,
   getAverageSetWeight,
   getAverageSessionIntervalDays,
+  getBodyPartFrequency,
   getBodyPartMachineVariety,
+  getBodyPartShare,
   getBodyPartSummary,
+  getBodyPartTrend,
+  getCalendarMonthAggregates,
   getCurrentLocalYearMonth,
+  getDailyAggregates,
   getEstimated1RM,
-  getExerciseHistory,
+  getMachineHistory,
   getMonthlySessions,
   getMonthlyVolume,
+  getMainGymAverageSetWeightMetric,
+  getMainGymMaxWeightMetric,
+  getMainGymMonthlyVolumeMetric,
+  getMainGymTotalVolumeMetric,
+  getMainGymVolumeTrendMetric,
+  getMonthlyAggregates,
+  getNumericDelta,
+  getLastTrainedDateByBodyPart,
+  getMachineFrequencyRanking,
+  getGymDisplayName,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
   getPersonalRecords,
   getRecentSessions,
+  getSessionAggregates,
+  getSessionsByGym,
+  getSetsByBodyPart,
+  getMonthlyTrainingDays,
+  getWeekdayDistribution,
+  getWeeklyAggregates,
+  getWorkoutSummary,
+  filterSessionsByDateRange,
+  resolveCalendarMonthRange,
+  resolvePeriodComparison,
+  resolvePeriodRange,
+  resolvePreviousMonthRange,
+  resolvePreviousPeriod,
+  resolveHistoricalWorkoutReferences,
+  resolveMainGymContext,
+  resolveUniqueWorkoutByDate,
+  resolveWorkoutNeighbors,
+  resolveWorkoutNeighborsByDate,
   getTotalSets,
   getTotalVolume,
   getTrainingFrequencyPerWeek,
   getTrainingStreak,
+  validateWorkoutMasterData,
+  validateWorkoutMasterReferences,
 } from './index'
 
 describe('workout-core', () => {
@@ -35,8 +73,8 @@ describe('workout-core', () => {
     expect(getTotalVolume(sessions[0])).toBe(1_800)
   })
 
-  it('returns exercise history independent of UI framework', () => {
-    const history = getExerciseHistory(sessions, 'shoulder-press')
+  it('returns machine history independent of UI framework', () => {
+    const history = getMachineHistory(sessions, 'shoulder-press')
 
     expect(history).toHaveLength(1)
     expect(history[0]).toMatchObject({
@@ -46,19 +84,19 @@ describe('workout-core', () => {
     })
   })
 
-  it('returns exercise history from oldest to newest for chronological charts', () => {
-    const history = getExerciseHistory([
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 25, reps: 10 }] },
+  it('returns machine history from oldest to newest for chronological charts', () => {
+    const history = getMachineHistory([
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 25, reps: 10 }] },
       ]),
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
       ]),
     ], 'pec-deck')
 
     expect(history.map((row) => row.date)).toEqual(['2026-08-10', '2026-08-16'])
   })
-  it('handles empty exercise sets defensively without returning Infinity values', () => {
+  it('handles empty machine sets defensively without returning Infinity values', () => {
     const emptySetSessions: WorkoutSession[] = [
       {
         schema_version: 1,
@@ -66,9 +104,9 @@ describe('workout-core', () => {
         date: '2026-08-24',
         status: 'partial',
         gym: { id: 'example-gym', name: 'Example Gym' },
-        exercises: [
+        machines: [
           {
-            exercise_id: 'pec-deck',
+            machine_id: 'pec-deck',
             name: 'Pec Deck',
             body_part: 'chest',
             sets: [],
@@ -77,7 +115,7 @@ describe('workout-core', () => {
       },
     ]
 
-    const history = getExerciseHistory(emptySetSessions, 'pec-deck')
+    const history = getMachineHistory(emptySetSessions, 'pec-deck')
 
     expect(history[0]).toMatchObject({
       sets: 0,
@@ -115,6 +153,63 @@ describe('workout-core', () => {
     expect(summary.map((item) => item.bodyPart)).toContain('legs')
   })
 
+  it('keeps unresolved master references in workout totals but excludes them from body part classification', () => {
+    const unresolvedSessions: WorkoutSession[] = [
+      {
+        schema_version: 1,
+        session_id: '2026-08-24-01',
+        date: '2026-08-24',
+        status: 'complete',
+        gym: {
+          id: 'missing-gym',
+          resolution: { state: 'missing', originalId: 'missing-gym', resolvedId: null },
+        },
+        machines: [
+          {
+            machine_id: 'missing-machine',
+            resolution: { state: 'missing', originalId: 'missing-machine', resolvedId: null },
+            sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+          },
+        ],
+      },
+    ]
+
+    expect(getSessionAggregates(unresolvedSessions)[0]).toMatchObject({
+      gym: '?',
+      machineCount: 1,
+      setCount: 1,
+      repCount: 12,
+    })
+    expect(getTotalVolume(unresolvedSessions[0])).toBe(480)
+    expect(getBodyPartSummary(unresolvedSessions)).toEqual([])
+    expect(getSetsByBodyPart(unresolvedSessions)).toEqual([])
+  })
+
+  it('projects deleted master-derived display values as fallback text without body part placeholders', () => {
+    const deletedSession: WorkoutSession = {
+      schema_version: 1,
+      session_id: '2026-08-24-02',
+      date: '2026-08-24',
+      status: 'complete',
+      gym: {
+        id: 'deleted-gym',
+        resolution: { state: 'deleted', originalId: 'deleted-gym', resolvedId: 'deleted-gym' },
+      },
+      machines: [
+        {
+          machine_id: 'deleted-machine',
+          resolution: { state: 'deleted', originalId: 'deleted-machine', resolvedId: 'deleted-machine' },
+          sets: [{ set: 1, weight_kg: 40, reps: 12 }],
+        },
+      ],
+    }
+
+    expect(getGymDisplayName(deletedSession.gym)).toBe('?')
+    expect(getMachineDisplayName(deletedSession.machines[0])).toBe('?')
+    expect(getMachineBodyPartDisplay(deletedSession.machines[0])).toBe('?')
+    expect(deletedSession.machines[0]).not.toHaveProperty('body_part')
+  })
+
   it('returns personal record candidates', () => {
     const records = getPersonalRecords(sessions)
 
@@ -134,8 +229,8 @@ describe('workout-core', () => {
     expect(formatPersonalRecordType('estimated_1rm')).toBe('推定1RM')
     expect(
       formatPersonalRecordValue({
-        exerciseId: 'chest-press',
-        exerciseName: 'チェストプレス',
+        machineId: 'chest-press',
+        machineName: 'チェストプレス',
         date: '2026-08-16',
         type: 'weight',
         value: 27.5,
@@ -143,8 +238,8 @@ describe('workout-core', () => {
     ).toBe('27.5 kg')
     expect(
       formatPersonalRecordValue({
-        exerciseId: 'chest-press',
-        exerciseName: 'チェストプレス',
+        machineId: 'chest-press',
+        machineName: 'チェストプレス',
         date: '2026-08-16',
         type: 'reps',
         value: 12,
@@ -182,15 +277,198 @@ describe('workout-core', () => {
     ])
   })
 
+  it('resolves period presets without relying on frontend date logic', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-01-10-01', '2026-01-10'),
+      createMinimalSession('2026-07-31-01', '2026-07-31'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-28-01', '2026-08-28'),
+    ]
+
+    expect(resolvePeriodRange('7d', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-22',
+      endDate: '2026-08-28',
+    })
+    expect(resolvePeriodRange('28d', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-28',
+    })
+    expect(resolvePeriodRange('month', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    })
+    expect(resolvePeriodRange('3m', sourceSessions, '2026-08-28')).toEqual({
+      startDate: '2026-06-01',
+      endDate: '2026-08-31',
+    })
+    expect(resolvePeriodRange('6m', sourceSessions, '2026-01-15')).toEqual({
+      startDate: '2025-08-01',
+      endDate: '2026-01-31',
+    })
+    expect(resolvePeriodRange('all', sourceSessions)).toEqual({
+      startDate: '2026-01-10',
+      endDate: '2026-08-28',
+    })
+  })
+
+  it('filters sessions by inclusive period ranges and resolves previous periods', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-07-31-01', '2026-07-31'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-28-01', '2026-08-28'),
+      createMinimalSession('2026-08-29-01', '2026-08-29'),
+    ]
+
+    expect(
+      filterSessionsByDateRange(sourceSessions, { startDate: '2026-08-01', endDate: '2026-08-28' })
+        .map((session) => session.session_id),
+    ).toEqual(['2026-08-01-01', '2026-08-28-01'])
+    expect(resolvePreviousPeriod({ startDate: '2026-08-01', endDate: '2026-08-28' })).toEqual({
+      startDate: '2026-07-04',
+      endDate: '2026-07-31',
+    })
+    expect(resolvePreviousMonthRange(2026, 1)).toEqual({
+      startDate: '2025-12-01',
+      endDate: '2025-12-31',
+    })
+    expect(resolvePeriodComparison('all', sourceSessions).previous).toBeNull()
+    expect(resolvePeriodComparison('month', sourceSessions, '2026-08-28').previous).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+    })
+  })
+
+  it('calculates factual numeric deltas only when percentages are defined', () => {
+    expect(getNumericDelta(15, 10)).toEqual({
+      current: 15,
+      previous: 10,
+      absolute: 5,
+      percentage: 50,
+    })
+    expect(getNumericDelta(3, 0)).toEqual({
+      current: 3,
+      previous: 0,
+      absolute: 3,
+      percentage: null,
+    })
+  })
+
+  it('aggregates sessions by session, day, week, and month without volume comparisons', () => {
+    const aggregateSessions: WorkoutSession[] = [
+      createSessionWithMachines('2026-08-02-02', '2026-08-02', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 12 }] },
+      ]),
+      createSessionWithMachines('2026-08-02-01', '2026-08-02', [
+        { machine_id: 'lat-pulldown', name: 'Lat Pulldown', body_part: 'back', sets: [{ set: 1, weight_kg: 45, reps: 10 }] },
+      ]),
+      createSessionWithMachines('2026-08-03-01', '2026-08-03', [
+        {
+          machine_id: 'leg-press',
+          name: 'Leg Press',
+          body_part: 'legs',
+          sets: [
+            { set: 1, weight_kg: 100, reps: 10 },
+            { set: 2, weight_kg: 100, reps: 8 },
+          ],
+        },
+      ]),
+      createSessionWithMachines('2026-09-01-01', '2026-09-01', [
+        { machine_id: 'abdominal', name: 'Abdominal', body_part: 'core', sets: [{ set: 1, weight_kg: 35, reps: 15 }] },
+      ]),
+    ]
+
+    expect(getSessionAggregates(aggregateSessions).map((session) => session.sessionId)).toEqual([
+      '2026-08-02-01',
+      '2026-08-02-02',
+      '2026-08-03-01',
+      '2026-09-01-01',
+    ])
+    expect(getDailyAggregates(aggregateSessions)[0]).toMatchObject({
+      date: '2026-08-02',
+      sessionCount: 2,
+      machineCount: 2,
+      setCount: 2,
+      repCount: 22,
+    })
+    expect(getWeeklyAggregates(aggregateSessions)).toEqual([
+      {
+        weekStartDate: '2026-07-27',
+        weekEndDate: '2026-08-02',
+        sessionCount: 2,
+        machineCount: 2,
+        setCount: 2,
+        repCount: 22,
+      },
+      {
+        weekStartDate: '2026-08-03',
+        weekEndDate: '2026-08-09',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 2,
+        repCount: 18,
+      },
+      {
+        weekStartDate: '2026-08-31',
+        weekEndDate: '2026-09-06',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 1,
+        repCount: 15,
+      },
+    ])
+    expect(getMonthlyAggregates(aggregateSessions)).toEqual([
+      {
+        month: '2026-08',
+        sessionCount: 3,
+        machineCount: 3,
+        setCount: 4,
+        repCount: 40,
+      },
+      {
+        month: '2026-09',
+        sessionCount: 1,
+        machineCount: 1,
+        setCount: 1,
+        repCount: 15,
+      },
+    ])
+  })
+
+  it('resolves calendar month ranges and daily training markers', () => {
+    const calendarSessions = [
+      createMinimalSession('2026-02-01-01', '2026-02-01'),
+      createMinimalSession('2026-02-01-02', '2026-02-01'),
+      createMinimalSession('2026-03-01-01', '2026-03-01'),
+    ]
+    const calendar = getCalendarMonthAggregates(calendarSessions, 2026, 2)
+
+    expect(resolveCalendarMonthRange(2026, 2)).toEqual({
+      startDate: '2026-02-01',
+      endDate: '2026-02-28',
+    })
+    expect(calendar).toHaveLength(28)
+    expect(calendar[0]).toMatchObject({
+      date: '2026-02-01',
+      trainingDay: true,
+      sessionCount: 2,
+    })
+    expect(calendar[1]).toEqual({
+      date: '2026-02-02',
+      trainingDay: false,
+      sessionCount: 0,
+      sessions: [],
+    })
+  })
+
   it('counts unique machines by body part for a period', () => {
     const varietySessions: WorkoutSession[] = [
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
-        { exercise_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
-        { exercise_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
-        { exercise_id: 'hack-squat', name: 'Hack Squat', body_part: 'legs', sets: [{ set: 1, weight_kg: 80, reps: 10 }] },
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+        { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        { machine_id: 'hack-squat', name: 'Hack Squat', body_part: 'legs', sets: [{ set: 1, weight_kg: 80, reps: 10 }] },
       ]),
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
-        { exercise_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
       ]),
     ]
 
@@ -202,9 +480,9 @@ describe('workout-core', () => {
 
   it('calculates average set weight without reps or volume weighting', () => {
     const averageSessions: WorkoutSession[] = [
-      createSessionWithExercises('2026-08-10-01', '2026-08-10', [
+      createSessionWithMachines('2026-08-10-01', '2026-08-10', [
         {
-          exercise_id: 'pec-deck',
+          machine_id: 'pec-deck',
           name: 'Pec Deck',
           body_part: 'chest',
           sets: [
@@ -213,9 +491,9 @@ describe('workout-core', () => {
           ],
         },
       ]),
-      createSessionWithExercises('2026-08-16-01', '2026-08-16', [
+      createSessionWithMachines('2026-08-16-01', '2026-08-16', [
         {
-          exercise_id: 'pec-deck',
+          machine_id: 'pec-deck',
           name: 'Pec Deck',
           body_part: 'chest',
           sets: [{ set: 1, weight_kg: 25, reps: 10 }],
@@ -226,6 +504,428 @@ describe('workout-core', () => {
     expect(getAverageSetWeight(averageSessions, 'pec-deck')).toBe(22.5)
     expect(getAverageSetWeight(averageSessions, 'leg-press')).toBeNull()
   })
+
+  it('summarizes factual workout values without weight or volume judgment', () => {
+    const summarySession = createSessionWithMachines('2026-08-10-01', '2026-08-10', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [
+          { set: 1, weight_kg: 20, reps: 12 },
+          { set: 2, weight_kg: 20, reps: 10 },
+        ],
+      },
+      {
+        machine_id: 'lat-pulldown',
+        name: 'Lat Pulldown',
+        body_part: 'back',
+        sets: [{ set: 1, weight_kg: 45, reps: 8 }],
+      },
+    ])
+
+    expect(getWorkoutSummary(summarySession)).toEqual({
+      sessionId: '2026-08-10-01',
+      date: '2026-08-10',
+      gym: 'Example Gym',
+      machineCount: 2,
+      setCount: 3,
+      totalReps: 30,
+    })
+  })
+
+  it('resolves previous and next workouts by session id with boundary nulls', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-08-03-01', '2026-08-03'),
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-02-02', '2026-08-02'),
+      createMinimalSession('2026-08-02-01', '2026-08-02'),
+    ]
+
+    expect(resolveWorkoutNeighbors(sourceSessions, '2026-08-02-01')).toMatchObject({
+      current: { session_id: '2026-08-02-01' },
+      previous: { session_id: '2026-08-01-01' },
+      next: { session_id: '2026-08-02-02' },
+    })
+    expect(resolveWorkoutNeighbors(sourceSessions, '2026-08-01-01')).toMatchObject({
+      current: { session_id: '2026-08-01-01' },
+      previous: null,
+      next: { session_id: '2026-08-02-01' },
+    })
+    expect(resolveWorkoutNeighbors(sourceSessions, 'missing')).toBeNull()
+  })
+
+  it('resolves date-based workout navigation only when the date is unique', () => {
+    const sourceSessions = [
+      createMinimalSession('2026-08-01-01', '2026-08-01'),
+      createMinimalSession('2026-08-02-01', '2026-08-02'),
+      createMinimalSession('2026-08-02-02', '2026-08-02'),
+      createMinimalSession('2026-08-03-01', '2026-08-03'),
+    ]
+
+    expect(resolveUniqueWorkoutByDate(sourceSessions, '2026-08-01')?.session_id).toBe('2026-08-01-01')
+    expect(resolveUniqueWorkoutByDate(sourceSessions, '2026-08-02')).toBeNull()
+    expect(resolveWorkoutNeighborsByDate(sourceSessions, '2026-08-01')).toMatchObject({
+      current: { session_id: '2026-08-01-01' },
+      previous: null,
+      next: { session_id: '2026-08-02-01' },
+    })
+    expect(resolveWorkoutNeighborsByDate(sourceSessions, '2026-08-02')).toBeNull()
+  })
+
+  it('compares sessions by factual counts and machine membership only', () => {
+    const previous = createSessionWithMachines('2026-08-01-01', '2026-08-01', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [{ set: 1, weight_kg: 20, reps: 10 }],
+      },
+      {
+        machine_id: 'lat-pulldown',
+        name: 'Lat Pulldown',
+        body_part: 'back',
+        sets: [{ set: 1, weight_kg: 45, reps: 10 }],
+      },
+    ])
+    const current = createSessionWithMachines('2026-08-08-01', '2026-08-08', [
+      {
+        machine_id: 'pec-deck',
+        name: 'Pec Deck',
+        body_part: 'chest',
+        sets: [
+          { set: 1, weight_kg: 20, reps: 12 },
+          { set: 2, weight_kg: 20, reps: 8 },
+        ],
+      },
+      {
+        machine_id: 'leg-press',
+        name: 'Leg Press',
+        body_part: 'legs',
+        sets: [{ set: 1, weight_kg: 100, reps: 10 }],
+      },
+    ])
+
+    expect(compareWorkoutSessions(current, previous)).toMatchObject({
+      machineCountDelta: { current: 2, previous: 2, absolute: 0, percentage: 0 },
+      setCountDelta: { current: 3, previous: 2, absolute: 1, percentage: 50 },
+      totalRepsDelta: { current: 30, previous: 20, absolute: 10, percentage: 50 },
+      addedMachines: [{ machineId: 'leg-press', machineName: 'Leg Press' }],
+      removedMachines: [{ machineId: 'lat-pulldown', machineName: 'Lat Pulldown' }],
+    })
+  })
+
+  it('summarizes frequency and consistency distribution facts', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getWeekdayDistribution(distributionSessions)).toEqual([
+      { weekday: 0, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 1, sessionCount: 1, trainingDayCount: 1 },
+      { weekday: 2, sessionCount: 2, trainingDayCount: 1 },
+      { weekday: 3, sessionCount: 1, trainingDayCount: 1 },
+      { weekday: 4, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 5, sessionCount: 0, trainingDayCount: 0 },
+      { weekday: 6, sessionCount: 0, trainingDayCount: 0 },
+    ])
+    expect(getMonthlyTrainingDays(distributionSessions)).toEqual([
+      { month: '2026-08', trainingDayCount: 2, sessionCount: 3 },
+      { month: '2026-09', trainingDayCount: 1, sessionCount: 1 },
+    ])
+  })
+
+  it('summarizes body part distribution, share, trend, and last trained dates', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getSetsByBodyPart(distributionSessions)).toEqual([
+      { bodyPart: 'back', setCount: 1 },
+      { bodyPart: 'chest', setCount: 3 },
+      { bodyPart: 'legs', setCount: 1 },
+    ])
+    expect(getBodyPartFrequency(distributionSessions)).toEqual([
+      { bodyPart: 'back', sessionCount: 1 },
+      { bodyPart: 'chest', sessionCount: 3 },
+      { bodyPart: 'legs', sessionCount: 1 },
+    ])
+    expect(getBodyPartShare(distributionSessions)).toEqual([
+      { bodyPart: 'back', setCount: 1, share: 0.2 },
+      { bodyPart: 'chest', setCount: 3, share: 0.6 },
+      { bodyPart: 'legs', setCount: 1, share: 0.2 },
+    ])
+    expect(getBodyPartTrend(distributionSessions)).toEqual([
+      { month: '2026-08', bodyPart: 'back', setCount: 1, sessionCount: 1 },
+      { month: '2026-08', bodyPart: 'chest', setCount: 2, sessionCount: 2 },
+      { month: '2026-09', bodyPart: 'chest', setCount: 1, sessionCount: 1 },
+      { month: '2026-09', bodyPart: 'legs', setCount: 1, sessionCount: 1 },
+    ])
+    expect(getLastTrainedDateByBodyPart(distributionSessions)).toEqual([
+      { bodyPart: 'chest', lastTrainedDate: '2026-09-02' },
+      { bodyPart: 'legs', lastTrainedDate: '2026-09-02' },
+      { bodyPart: 'back', lastTrainedDate: '2026-08-25' },
+    ])
+  })
+
+  it('counts body part trend sessions once when a session has multiple machines for the same body part', () => {
+    const trendSessions = [
+      createSessionWithMachines('2026-09-02-01', '2026-09-02', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 22.5, reps: 10 }] },
+        { machine_id: 'chest-press', name: 'Chest Press', body_part: 'chest', sets: [{ set: 1, weight_kg: 30, reps: 10 }] },
+      ]),
+    ]
+
+    expect(getBodyPartTrend(trendSessions)).toEqual([
+      { month: '2026-09', bodyPart: 'chest', setCount: 2, sessionCount: 1 },
+    ])
+  })
+
+  it('ranks machine frequency and groups sessions by gym without weight semantics', () => {
+    const distributionSessions = createDistributionSessions()
+
+    expect(getMachineFrequencyRanking(distributionSessions)).toEqual([
+      { machineId: 'pec-deck', machineName: 'Pec Deck', bodyPart: 'chest', sessionCount: 3, occurrenceCount: 3 },
+      { machineId: 'lat-pulldown', machineName: 'Lat Pulldown', bodyPart: 'back', sessionCount: 1, occurrenceCount: 1 },
+      { machineId: 'leg-press', machineName: 'Leg Press', bodyPart: 'legs', sessionCount: 1, occurrenceCount: 1 },
+    ])
+    expect(getSessionsByGym(distributionSessions)).toEqual([
+      { gymId: 'example-gym', gymName: 'Example Gym', sessionCount: 3 },
+      { gymId: 'second-gym', gymName: 'Second Gym', sessionCount: 1 },
+    ])
+  })
+
+  it('resolves main gym context from gym master lifecycle state', () => {
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a'), gymMasterItem('b')] })).toEqual({
+      state: 'unconfigured',
+    })
+    expect(resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a', { main: true })] })).toMatchObject({
+      state: 'configured',
+      gym: { gym_id: 'a' },
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'multiple-main-gyms',
+    })
+    expect(
+      resolveMainGymContext({
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { active: false, main: true })],
+      }),
+    ).toMatchObject({
+      state: 'invalid',
+      reason: 'inactive-or-deleted-main-gym',
+    })
+  })
+
+  it('validates master uniqueness and main gym constraints as shared domain rules', () => {
+    const result = validateWorkoutMasterData({
+      machines: {
+        schema_version: 1,
+        machines: [machineMasterItem('a'), machineMasterItem('a')],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [gymMasterItem('a', { main: true }), gymMasterItem('b', { main: true })],
+      },
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        'duplicate-machine-id',
+        'multiple-main-gyms',
+      ]),
+    )
+  })
+
+  it('distinguishes historical master references from new-write selectable references', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+    const sessions = [
+      rawWorkoutSession('historical-inactive', 'inactive-gym', ['inactive-machine']),
+      rawWorkoutSession('historical-deleted', 'deleted-gym', ['deleted-machine']),
+      rawWorkoutSession('historical-missing', 'missing-gym', ['missing-machine']),
+    ]
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'historical' }).issues.map((issue) => issue.code))
+      .toEqual(['unknown-gym-reference', 'unknown-machine-reference'])
+
+    expect(validateWorkoutMasterReferences(masterData, sessions, { mode: 'new-write' }).issues.map((issue) => issue.code))
+      .toEqual([
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'inactive-or-deleted-gym-reference',
+        'inactive-or-deleted-machine-reference',
+        'unknown-gym-reference',
+        'unknown-machine-reference',
+      ])
+  })
+
+  it('resolves historical master reference lifecycle states without rewriting workout logs', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [
+          machineMasterItem('active-machine'),
+          machineMasterItem('inactive-machine', { active: false }),
+          machineMasterItem('deleted-machine', { deleted: true }),
+        ],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [
+          gymMasterItem('active-gym'),
+          gymMasterItem('inactive-gym', { active: false }),
+          gymMasterItem('deleted-gym', { deleted: true }),
+        ],
+      },
+    }
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('active-history', 'active-gym', ['active-machine']),
+    )).toMatchObject({
+      sessionId: 'active-history',
+      gym: { referenceId: 'active-gym', state: 'active' },
+      machines: [{ referenceId: 'active-machine', state: 'active', index: 0 }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('inactive-history', 'inactive-gym', ['inactive-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'inactive-gym', state: 'inactive' },
+      machines: [{ referenceId: 'inactive-machine', state: 'inactive' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('deleted-history', 'deleted-gym', ['deleted-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'deleted-gym', state: 'deleted' },
+      machines: [{ referenceId: 'deleted-machine', state: 'deleted' }],
+    })
+
+    expect(resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('missing-history', 'missing-gym', ['missing-machine']),
+    )).toMatchObject({
+      gym: { referenceId: 'missing-gym', state: 'missing' },
+      machines: [{ referenceId: 'missing-machine', state: 'missing' }],
+    })
+  })
+
+  it('resolves source_ids to existing master records without changing raw workout ids', () => {
+    const masterData = {
+      machines: {
+        schema_version: 1,
+        machines: [machineMasterItem('known-machine', { source_ids: ['legacy-machine'] })],
+      },
+      gyms: {
+        schema_version: 1,
+        gyms: [gymMasterItem('known-gym', { source_ids: ['legacy-gym'] })],
+      },
+    }
+
+    const result = resolveHistoricalWorkoutReferences(
+      masterData,
+      rawWorkoutSession('legacy-history', 'legacy-gym', ['legacy-machine']),
+    )
+
+    expect(result.gym).toMatchObject({
+      referenceId: 'legacy-gym',
+      state: 'active',
+      record: { gym_id: 'known-gym' },
+    })
+    expect(result.machines[0]).toMatchObject({
+      referenceId: 'legacy-machine',
+      state: 'active',
+      record: { machine_id: 'known-machine' },
+    })
+  })
+
+  it('calculates weight and volume metrics only from configured main gym sessions', () => {
+    const context = resolveMainGymContext({
+      schema_version: 1,
+      gyms: [gymMasterItem('main-gym', { main: true }), gymMasterItem('other-gym')],
+    })
+    const sourceSessions = [
+      {
+        ...createSessionWithMachines('2026-08-01-01', '2026-08-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-08-02-01', '2026-08-02', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+        ]),
+        gym: { id: 'other-gym', name: 'Other Gym' },
+      },
+      {
+        ...createSessionWithMachines('2026-08-03-01', '2026-08-03', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 200, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', resolution: { state: 'missing', originalId: 'main-gym', resolvedId: null } },
+      },
+      {
+        ...createSessionWithMachines('2026-09-01-01', '2026-09-01', [
+          { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 30, reps: 10 }] },
+        ]),
+        gym: { id: 'main-gym', name: 'Main Gym' },
+      },
+    ]
+
+    expect(getMainGymTotalVolumeMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: 500,
+      sessions: [{ session_id: '2026-08-01-01' }, { session_id: '2026-09-01-01' }],
+    })
+    expect(getMainGymMonthlyVolumeMetric(context, sourceSessions, 2026, 8)).toMatchObject({
+      state: 'available',
+      value: 200,
+      sessions: [{ session_id: '2026-08-01-01' }],
+    })
+    expect(getMainGymVolumeTrendMetric(context, sourceSessions)).toMatchObject({
+      state: 'available',
+      value: [
+        { sessionId: '2026-08-01-01', date: '2026-08-01', volume: 200 },
+        { sessionId: '2026-09-01-01', date: '2026-09-01', volume: 300 },
+      ],
+    })
+    expect(getMainGymMaxWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 30,
+    })
+    expect(getMainGymAverageSetWeightMetric(context, sourceSessions, 'pec-deck')).toMatchObject({
+      state: 'available',
+      value: 25,
+    })
+  })
+
+  it('returns explicit unavailable state for main gym metrics when context is not configured', () => {
+    const context = resolveMainGymContext({ schema_version: 1, gyms: [gymMasterItem('a')] })
+
+    expect(getMainGymTotalVolumeMetric(context, sessions)).toEqual({ state: 'unconfigured' })
+  })
 })
 
 function createMinimalSession(sessionId: string, date: string): WorkoutSession {
@@ -235,18 +935,86 @@ function createMinimalSession(sessionId: string, date: string): WorkoutSession {
     date,
     status: 'complete',
     gym: { id: 'example-gym', name: 'Example Gym' },
-    exercises: [],
+    machines: [],
   }
 }
 
-function createSessionWithExercises(
+function createSessionWithMachines(
   sessionId: string,
   date: string,
-  exercises: WorkoutSession['exercises'],
+  machines: WorkoutSession['machines'],
 ): WorkoutSession {
   return {
     ...createMinimalSession(sessionId, date),
-    exercises,
+    machines,
   }
 }
 
+function createDistributionSessions(): WorkoutSession[] {
+  return [
+    createSessionWithMachines('2026-08-24-01', '2026-08-24', [
+      { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+    ]),
+    {
+      ...createSessionWithMachines('2026-08-25-01', '2026-08-25', [
+        { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+        { machine_id: 'lat-pulldown', name: 'Lat Pulldown', body_part: 'back', sets: [{ set: 1, weight_kg: 45, reps: 10 }] },
+      ]),
+      gym: { id: 'second-gym', name: 'Second Gym' },
+    },
+    createSessionWithMachines('2026-08-25-02', '2026-08-25', []),
+    createSessionWithMachines('2026-09-02-01', '2026-09-02', [
+      { machine_id: 'pec-deck', name: 'Pec Deck', body_part: 'chest', sets: [{ set: 1, weight_kg: 22.5, reps: 10 }] },
+      { machine_id: 'leg-press', name: 'Leg Press', body_part: 'legs', sets: [{ set: 1, weight_kg: 100, reps: 10 }] },
+    ]),
+  ]
+}
+
+function gymMasterItem(
+  gymId: string,
+  overrides: Partial<ReturnType<typeof gymMasterItemBase>> = {},
+): ReturnType<typeof gymMasterItemBase> {
+  return { ...gymMasterItemBase(gymId), ...overrides }
+}
+
+function gymMasterItemBase(gymId: string) {
+  return {
+    gym_id: gymId,
+    name: `Gym ${gymId}`,
+    active: true,
+    deleted: false,
+    main: false,
+  }
+}
+
+function machineMasterItem(
+  machineId: string,
+  overrides: Partial<ReturnType<typeof machineMasterItemBase>> = {},
+): ReturnType<typeof machineMasterItemBase> {
+  return { ...machineMasterItemBase(machineId), ...overrides }
+}
+
+function machineMasterItemBase(machineId: string) {
+  return {
+    machine_id: machineId,
+    name: `Machine ${machineId}`,
+    body_part: 'chest' as const,
+    aliases: [],
+    active: true,
+    deleted: false,
+  }
+}
+
+function rawWorkoutSession(sessionId: string, gymId: string, machineIds: string[]) {
+  return {
+    schema_version: 1,
+    session_id: sessionId,
+    date: '2026-08-24',
+    status: 'complete' as const,
+    gym_id: gymId,
+    machines: machineIds.map((machineId) => ({
+      machine_id: machineId,
+      sets: [{ set: 1, weight_kg: 20, reps: 10 }],
+    })),
+  }
+}

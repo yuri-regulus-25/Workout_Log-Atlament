@@ -5,7 +5,7 @@ Portal画面のSource Applicationです。
 ## 役割
 
 - `/` のPortal UIを提供します。
-- Dashboard / Workouts / Exercises / Analytics / Settingsへの入口を提供します。
+- Dashboard / Workouts / Machines / Analytics / Settingsへの入口を提供します。
 - Startup SyncやRuntime Data不足を、Windows AFのStatus APIから取得して通知します。
 - Atlament BrandingとPortal向けCharacter Easter Eggを表示します。
 

@@ -10,7 +10,7 @@ src/frontend/
 ├─ errors/
 ├─ dashboard-react/
 ├─ workouts-vue/
-├─ exercises-angular/
+├─ machines-angular/
 ├─ analytics-svelte/
 └─ settings-solid/
 ```
@@ -40,7 +40,7 @@ dist/
 ├─ frontend-common/
 ├─ dashboard/
 ├─ workouts/
-├─ exercises/
+├─ machines/
 ├─ analytics/
 └─ settings/
 ```
@@ -52,7 +52,7 @@ dist/
 ```sh
 npm run dev:dashboard
 npm run dev:workouts
-npm run dev:exercises
+npm run dev:machines
 npm run dev:analytics
 npm run dev:settings
 ```

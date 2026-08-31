@@ -30,7 +30,7 @@
 - `portal`
 - `dashboard-react`
 - `workouts-vue`
-- `exercises-angular`
+- `machines-angular`
 - `analytics-svelte`
 - `settings-solid`
 - `errors`

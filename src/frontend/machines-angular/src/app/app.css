@@ -1,12 +1,36 @@
-.hero-grid {
+.selector-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 24px;
-  align-items: end;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
 }
 
+.field input,
 .field select {
   width: 100%;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--wl-text-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.filter-actions button {
+  border: 1px solid var(--wl-primary-soft);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-primary-strong);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.search-panel {
+  margin-bottom: 16px;
 }
 
 .metric-grid {
@@ -48,6 +72,11 @@
   overflow: hidden;
   border: 1px solid var(--wl-border);
   border-radius: var(--wl-radius-inner);
+}
+
+.history-table > .empty {
+  margin: 0;
+  padding: 16px 14px;
 }
 
 .history-row {
@@ -93,23 +122,19 @@
 }
 
 @media (max-width: 900px) {
-  .hero-grid,
   .metric-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @container (max-width: 980px) {
-  .metric-grid {
+  .metric-grid,
+  .selector-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @container (max-width: 760px) {
-  .hero-grid {
-    grid-template-columns: 1fr;
-  }
-
   .history-row {
     gap: 8px;
     grid-template-columns: 92px 44px 82px 48px 92px;
@@ -130,7 +155,8 @@
 }
 
 @container (max-width: 560px) {
-  .metric-grid {
+  .metric-grid,
+  .selector-panel {
     grid-template-columns: 1fr;
   }
 

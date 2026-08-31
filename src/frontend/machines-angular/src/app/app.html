@@ -1,44 +1,89 @@
 <main #shell class="app-shell {{ pageTransitionClassName }}">
   <header class="page-hero">
     <div class="hero-top">
-      <div class="atl-brand-row" aria-label="Atlament Exercises">
+      <div class="atl-brand-row" aria-label="Atlament Machines">
         <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
       </div>
     </div>
-    <div class="hero-grid">
-      <div>
-        <h1>Performance Detail</h1>
-        <p class="lead">
-          種目ごとの変化を追う<br />
-          変化を追うことで、未来を変えられる
-        </p>
-      </div>
-
-      <label class="field">
-        <span>Machine</span>
-        <select [value]="selectedExerciseId()" (change)="selectExercise($any($event.target).value)">
-          @for (exercise of exerciseOptions(); track exercise.exercise_id) {
-            <option
-              [value]="exercise.exercise_id"
-              [selected]="exercise.exercise_id === selectedExerciseId()"
-            >
-              {{ exercise.name }}
-            </option>
-          }
-        </select>
-      </label>
-    </div>
+    <h1>Performance Detail</h1>
+    <p class="lead">
+      種目ごとの変化を追う<br />
+      種目ごとの記録と推移を確認します
+    </p>
   </header>
+
+  <section class="panel search-panel">
+    <div class="panel-header">
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-magnify" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Search Target</p>
+          <h2>検索対象</h2>
+        </div>
+      </div>
+    </div>
+    <div class="selector-panel" aria-label="Machine selector filters">
+        <label class="field">
+          <span>Machine Search</span>
+          <input
+            type="search"
+            [value]="machineSearchQuery()"
+            placeholder="Machine name"
+            (input)="updateMachineSearch($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span>Body Part</span>
+          <select [value]="bodyPartFilter()" (change)="updateBodyPartFilter($any($event.target).value)">
+            <option value="">-</option>
+            @for (bodyPart of bodyPartOptions(); track bodyPart) {
+              <option [value]="bodyPart">{{ formatBodyPartLabel(bodyPart) }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Machine</span>
+          <select
+            [value]="selectedMachineId()"
+            [disabled]="filteredMachineOptions().length === 0"
+            (change)="selectMachine($any($event.target).value)"
+          >
+            @for (machine of filteredMachineOptions(); track machine.machine_id) {
+              <option
+                [value]="machine.machine_id"
+                [selected]="machine.machine_id === selectedMachineId()"
+              >
+                {{ displayMachineName(machine) }}
+              </option>
+            }
+          </select>
+        </label>
+
+        <div class="filter-actions" aria-live="polite">
+          <button type="button" (click)="clearMachineFilters()">Reset</button>
+        </div>
+    </div>
+  </section>
+
+  @if (filteredMachineOptions().length === 0) {
+    <section class="panel" role="status" aria-live="polite">
+      <p class="eyebrow">No Results</p>
+      <h2>条件に一致するマシンがありません。</h2>
+      <p class="muted">検索対象を確認してください</p>
+    </section>
+  }
 
   @if (loadError()) {
     <section class="panel" role="alert" aria-live="polite">
       <p class="eyebrow">Data Load Warning</p>
-      <h2>データが正常ではありません。</h2>
-      <p class="muted">{{ loadError() }}</p>
+      <h2>データ取得異常</h2>
+      <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
     </section>
   }
 
-  @if (hasInvalidExerciseIdParameter()) {
+  @if (hasInvalidMachineIdParameter()) {
     <section class="parameter-error-card" role="alert" aria-live="polite">
       <p class="eyebrow">Parameter Error</p>
       <h2>パラメータ不正</h2>
@@ -50,22 +95,23 @@
         </svg>
         <span>存在しないマシンIDが指定されたため、初期表示を行います。</span>
       </p>
-      <p class="muted">指定ID: {{ invalidExerciseId() }}</p>
+      <p class="muted">指定ID: {{ invalidMachineId() }}</p>
     </section>
   }
 
+  @if (hasActiveMachineSelection()) {
   <section class="metric-grid" aria-label="Machine summary">
     <article class="metric-card">
       <span>Latest</span>
       <strong>{{ latestDate() }}</strong>
     </article>
     <article class="metric-card">
-      <span>Best Weight</span>
-      <strong>{{ bestWeight() }} kg</strong>
+      <span>Main Gym Best Weight</span>
+      <strong>{{ bestWeightLabel() }}</strong>
     </article>
     <article class="metric-card">
-      <span>Estimated 1RM</span>
-      <strong>{{ estimatedOneRepMax() }} kg</strong>
+      <span>Main Gym Estimated 1RM</span>
+      <strong>{{ estimatedOneRepMaxLabel() }}</strong>
     </article>
     <article class="metric-card">
       <span>Total Sets</span>
@@ -83,8 +129,8 @@
         <div class="card-heading">
           <div class="card-heading__icon"><i class="mdi mdi-chart-line" aria-hidden="true"></i></div>
           <div class="card-heading__text">
-            <p class="eyebrow">{{ selectedMachineTitle() }} progress - Best Weight</p>
-            <h2>{{ selectedMachineJapaneseName() }} 進捗 - 最大荷重</h2>
+            <p class="eyebrow">{{ selectedMachineTitle() }} Best Weight Progress - Main Gym</p>
+            <h2>{{ selectedMachineJapaneseName() }} 進捗最大荷重推移 - メインジム</h2>
           </div>
         </div>
       </div>
@@ -118,7 +164,7 @@
       <p class="muted">Session</p>
       <p class="large-number-right">{{ history().length }} sessions</p>
       <p class="muted">Best Volume</p>
-      <p class="large-number-right">{{ bestWeight() }} kg </p>
+      <p class="large-number-right">{{ bestWeightLabel() }}</p>
       <p class="muted">Max reps</p>
       <p class="large-number-right">{{ bestReps() }} Reps</p>
     </article>
@@ -145,7 +191,7 @@
         <span class="volume-cell">Volume</span>
       </div>
 
-      @for (row of history(); track row.date + row.exerciseId) {
+      @for (row of history(); track row.date + row.machineId) {
         <div class="history-row">
           <span class="date-cell">{{ formatDate(row.date) }}</span>
           <span class="gym-cell">{{ row.gym }}</span>
@@ -155,8 +201,9 @@
           <span class="volume-cell">{{ row.volume.toLocaleString() }} kg</span>
         </div>
       } @empty {
-        <p class="empty">No machine history found.</p>
+        <p class="empty">データがありません</p>
       }
     </div>
   </section>
+  }
 </main>

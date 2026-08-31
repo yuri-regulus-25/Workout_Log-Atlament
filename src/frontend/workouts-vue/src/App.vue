@@ -6,10 +6,10 @@
           <p ref="characterTrigger" class="eyebrow atl-character-trigger">Atlament / {{ pageTitle }}</p>
         </div>
       </div>
-      <h1>{{ pageTitle }}</h1>
+      <h1 ref="pageHeading" tabindex="-1">{{ pageTitle }}</h1>
       <p class="lead">
         これまでの記録を辿る<br />
-        記録を見ることで、進歩になる
+        過去のワークアウト記録を確認します
       </p>
     </header>
 
@@ -40,6 +40,13 @@ export default {
   beforeUnmount() {
     this.navigation?.dispose()
     this.characterEasterEgg?.dispose()
+  },
+  watch: {
+    "$route.fullPath"() {
+      this.$nextTick(() => {
+        this.$refs.pageHeading?.focus()
+      })
+    },
   },
   computed: {
     isWorkoutTop() {

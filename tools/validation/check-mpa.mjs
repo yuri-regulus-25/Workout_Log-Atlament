@@ -1,16 +1,16 @@
 import { spawn } from 'node:child_process'
+import { hostedApplications } from '../application-registry.mjs'
 
 const port = Number(process.env.MPA_CHECK_PORT ?? 4183)
 const origin = `http://127.0.0.1:${port}`
 
 const pages = [
   '/',
-  '/dashboard/',
-  '/workouts/',
-  '/workouts/2026-08-14',
-  '/exercises/pec-deck',
-  '/analytics/',
-  '/settings/',
+  ...hostedApplications.flatMap((application) => (
+    application.dynamicSmokePath
+      ? [application.smokePath, application.dynamicSmokePath]
+      : [application.smokePath]
+  )),
 ]
 
 const notFoundPages = [
@@ -18,6 +18,7 @@ const notFoundPages = [
   '/dashboard/2026-08-14',
   '/analytics/detail',
   '/settings/repository',
+  '/maintenance/detail',
 ]
 
 const server = spawn(process.execPath, ['tools/dev-runtime/preview-mpa.mjs'], {

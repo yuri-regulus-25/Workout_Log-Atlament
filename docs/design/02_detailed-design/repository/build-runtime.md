@@ -28,11 +28,12 @@ Copy 対象:
 - `src/version.json` を `dist/version.json` へ配置する。
 - Dashboard を `dist/dashboard/` へ配置する。
 - Workouts を `dist/workouts/` へ配置する。
-- Exercises を `dist/exercises/` へ配置する。
+- Machines を `dist/machines/` へ配置する。
 - Analytics を `dist/analytics/` へ配置する。
 - Settings を `dist/settings/` へ配置する。
+- Resource Management を `dist/maintenance/` へ配置する。
 
-現行 MPA build script が認識するのは、これら既存 application のみである。
+現行 MPA build script が認識するのは、`tools/application-registry.mjs` に定義された Portal と既存 hosted application のみである。
 
 ## Development Runtime
 
@@ -42,10 +43,11 @@ Development では local Node runtime と gateway を使用する。
 - Portal: `127.0.0.1:5174`
 - Dashboard: `127.0.0.1:5175`
 - Workouts: `127.0.0.1:5176`
-- Exercises: `127.0.0.1:5177`
+- Machines: `127.0.0.1:5177`
 - Analytics: `127.0.0.1:5178`
 - Settings: `127.0.0.1:5179`
 - Development Runtime API: `127.0.0.1:5180`
+- Resource Management: `127.0.0.1:5181`
 
 Node development runtime は repository の `data/master` と `data/workouts` を直接読み取り、local development 用に AF-compatible read API を公開する。Credential storage、GitHub sync、configuration write、native shell lifecycle は実装しない。
 

@@ -4,13 +4,15 @@ import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import {
-  formatBodyPart,
+  compareWorkoutSessions,
   formatDisplayDate,
   formatTotalWeight,
-  getExerciseVolume,
-  getSessionSetCount,
-  getSessionVolume,
+  getGymDisplayName,
+  getMachineBodyPartDisplay,
+  getMachineDisplayName,
+  resolveWorkoutNeighborsByDate,
 } from '@workout-lab/workout-core'
+import { formatCountLabel, getMachinePresentation, getMachineReps, getWorkoutDaySummary } from '../workout-detail-presentation'
 
 const props = defineProps<{
   date: string
@@ -19,6 +21,12 @@ const props = defineProps<{
 const workoutSessions = ref<WorkoutSession[]>([])
 const loadError = ref<string | null>(null)
 const sessions = computed(() => workoutSessions.value.filter((workout) => workout.date === props.date))
+const collapsedMachines = ref(new Set<string>())
+const workoutNavigation = computed(() => resolveWorkoutNeighborsByDate(workoutSessions.value, props.date))
+const sessionComparison = computed(() => {
+  const navigation = workoutNavigation.value
+  return navigation?.previous ? compareWorkoutSessions(navigation.current, navigation.previous) : null
+})
 
 onMounted(async () => {
   try {
@@ -29,44 +37,127 @@ onMounted(async () => {
     loadError.value = error instanceof Error ? error.message : 'Workout data could not be loaded.'
   }
 })
-const totalExercises = computed(() =>
-  sessions.value.reduce((total, session) => total + session.exercises.length, 0),
-)
-const totalSets = computed(() =>
-  sessions.value.reduce((total, session) => total + getSessionSetCount(session), 0),
-)
-const totalVolume = computed(() =>
-  sessions.value.reduce((total, session) => total + getSessionVolume(session), 0),
-)
+const daySummary = computed(() => getWorkoutDaySummary(sessions.value))
+
+function machineKey(session: WorkoutSession, machineId: string): string {
+  return `${session.session_id}:${machineId}`
+}
+
+function isMachineCollapsed(session: WorkoutSession, machineId: string): boolean {
+  return collapsedMachines.value.has(machineKey(session, machineId))
+}
+
+function toggleMachine(session: WorkoutSession, machineId: string) {
+  const next = new Set(collapsedMachines.value)
+  const key = machineKey(session, machineId)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  collapsedMachines.value = next
+}
+
+function formatSignedCount(value: number, singular: string, plural: string): string {
+  return `${value > 0 ? '+' : ''}${formatCountLabel(value, singular, plural)}`
+}
+
+function machineNames(machines: Array<{ machineName: string }>): string {
+  return machines.length > 0 ? machines.map((machine) => machine.machineName).join(', ') : '-'
+}
+
 </script>
 
 <template>
   <section v-if="loadError" class="panel" style="margin-bottom: 16px">
     <p class="eyebrow">Data Load Warning</p>
-    <h2>データが正常ではありません。</h2>
-    <p class="muted">{{ loadError }}</p>
+    <h2>データ取得異常</h2>
+    <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
   </section>
 
   <section v-if="sessions.length > 0" class="view-stack">
-    <p>{{ formatDisplayDate(props.date) }} · {{ sessions.length }} session</p>
+    <div class="detail-summary-heading">
+      <p class="eyebrow">{{ formatDisplayDate(props.date) }}</p>
+      <h2>{{ daySummary.gymNames }}</h2>
+      <p class="muted">{{ sessions.length }} {{ sessions.length === 1 ? "session" : "sessions" }}</p>
+    </div>
+
+    <nav v-if="workoutNavigation" class="detail-navigation" aria-label="Workout navigation">
+      <RouterLink
+        v-if="workoutNavigation.previous"
+        class="text-action"
+        :to="{ name: 'workout-detail', params: { date: workoutNavigation.previous.date } }"
+      >
+        <i class="mdi mdi-chevron-left" aria-hidden="true" />Previous
+      </RouterLink>
+      <span v-else class="muted">Previous</span>
+      <RouterLink
+        v-if="workoutNavigation.next"
+        class="text-action"
+        :to="{ name: 'workout-detail', params: { date: workoutNavigation.next.date } }"
+      >
+        Next<i class="mdi mdi-chevron-right" aria-hidden="true" />
+      </RouterLink>
+      <span v-else class="muted">Next</span>
+    </nav>
 
     <section class="summary-grid">
       <article class="metric-card">
         <span>Machines</span>
-        <strong>{{ totalExercises }} {{ totalExercises === 1 ? "Machine": "Machines" }}</strong>
+        <strong>{{ formatCountLabel(daySummary.totalMachines, "Machine", "Machines") }}</strong>
       </article>
       <article class="metric-card">
         <span>Sets</span>
-        <strong>{{ totalSets }} {{ totalSets === 1 ? "Set": "Sets" }}</strong>
+        <strong>{{ formatCountLabel(daySummary.totalSets, "Set", "Sets") }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Total Reps</span>
+        <strong>{{ formatCountLabel(daySummary.totalReps, "Rep", "Reps") }}</strong>
       </article>
       <article class="metric-card">
         <span>Volume</span>
-        <strong>{{ totalVolume.toLocaleString() }} kg</strong>
+        <strong>{{ daySummary.totalVolume.toLocaleString() }} kg</strong>
       </article>
       <article class="metric-card">
         <span>Sessions</span>
         <strong>{{ sessions.length }} {{ sessions.length === 1 ? "Session": "Sessions" }}</strong>
       </article>
+    </section>
+
+    <section v-if="sessionComparison" class="panel">
+      <div class="panel-header">
+        <div class="card-heading">
+          <div class="card-heading__icon"><i class="mdi mdi-compare-horizontal" aria-hidden="true" /></div>
+          <div class="card-heading__text">
+            <p class="eyebrow">Session Compare</p>
+            <h2>前回セッション比較</h2>
+          </div>
+        </div>
+      </div>
+      <div class="compare-grid">
+        <article class="metric-card">
+          <span>Machines</span>
+          <strong>{{ formatSignedCount(sessionComparison.machineCountDelta.absolute, "Machine", "Machines") }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Sets</span>
+          <strong>{{ formatSignedCount(sessionComparison.setCountDelta.absolute, "Set", "Sets") }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Total Reps</span>
+          <strong>{{ formatSignedCount(sessionComparison.totalRepsDelta.absolute, "Rep", "Reps") }}</strong>
+        </article>
+      </div>
+      <div class="compare-lists">
+        <div>
+          <p class="eyebrow">Added Machines</p>
+          <p class="muted">{{ machineNames(sessionComparison.addedMachines) }}</p>
+        </div>
+        <div>
+          <p class="eyebrow">Removed Machines</p>
+          <p class="muted">{{ machineNames(sessionComparison.removedMachines) }}</p>
+        </div>
+      </div>
     </section>
 
     <section v-for="session in sessions" :key="session.session_id" class="panel">
@@ -75,26 +166,63 @@ const totalVolume = computed(() =>
           <div class="card-heading__icon"><i class="mdi mdi-text-box-outline" aria-hidden="true" /></div>
           <div class="card-heading__text">
             <p class="eyebrow">Workout Detail</p>
-            <h2>ワークアウト詳細 - {{ session.gym.name }}</h2>
+            <h2>ワークアウト詳細 - {{ getGymDisplayName(session.gym) }}</h2>
           </div>
         </div>
       </div>
 
-      <div class="exercise-list">
-        <article v-for="exercise in session.exercises" :key="exercise.exercise_id" class="exercise-card">
-          <div class="exercise-header">
+      <div class="machine-list">
+        <article v-for="machine in session.machines" :key="machine.machine_id" class="machine-card">
+          <div class="machine-header">
             <div>
-              <h3>{{ exercise.name }}</h3>
-              <p>{{ formatBodyPart(exercise.body_part) }} · {{ formatTotalWeight(getExerciseVolume(exercise)) }}</p>
+              <h3>{{ getMachineDisplayName(machine) }}</h3>
+              <p>
+                {{ getMachineBodyPartDisplay(machine) }} ·
+                {{ formatCountLabel(machine.sets.length, "set", "sets") }} ·
+                {{ formatCountLabel(getMachineReps(machine), "rep", "reps") }} ·
+                {{ formatTotalWeight(getMachinePresentation(machine).volume) }}
+              </p>
             </div>
-            <a class="text-action" :href="`${applicationRoutes.exercises}${exercise.exercise_id}/`">View Performance Detail</a>
+            <div class="machine-actions">
+              <button
+                type="button"
+                class="text-action"
+                :aria-expanded="!isMachineCollapsed(session, machine.machine_id)"
+                @click="toggleMachine(session, machine.machine_id)"
+              >
+              <i :class="isMachineCollapsed(session, machine.machine_id) ? 'mdi mdi-unfold-more-horizontal' : 'mdi mdi-unfold-less-horizontal'" />
+              </button>
+              <a class="text-action" :href="`${applicationRoutes.machines}${machine.machine_id}/`">
+                <i class="mdi mdi-chart-line" aria-hidden="true" />Performance
+              </a>
+            </div>
           </div>
-          <ul>
-            <li v-for="set in exercise.sets" :key="set.set">
-              Set {{ set.set }} · {{ set.weight_kg }} kg × {{ set.reps }} reps
-              <span v-if="set.rir !== undefined && set.rir !== null"> · RIR {{ set.rir }}</span>
-            </li>
-          </ul>
+          <div v-if="!isMachineCollapsed(session, machine.machine_id)" class="set-table-wrap">
+            <table class="set-table">
+              <thead>
+                <tr>
+                  <th>Set</th>
+                  <th>Weight</th>
+                  <th>Reps</th>
+                  <th v-if="getMachinePresentation(machine).hasRir" class="supporting-cell">RIR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="set in machine.sets" :key="set.set">
+                  <td>{{ set.set }}</td>
+                  <td>{{ set.weight_kg }} kg</td>
+                  <td>{{ set.reps }}</td>
+                  <td v-if="getMachinePresentation(machine).hasRir" class="supporting-cell">
+                    <span v-if="set.rir !== undefined && set.rir !== null">{{ set.rir }}</span>
+                    <span v-else>—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="(machine.notes?.length ?? 0) > 0" class="machine-notes">
+              <p v-for="note in machine.notes ?? []" :key="note" class="note-line">{{ note }}</p>
+            </div>
+          </div>
         </article>
       </div>
 
@@ -106,7 +234,7 @@ const totalVolume = computed(() =>
   </section>
 
   <section v-else class="view-stack">
-    <p>記録されていない日を見ようとしたみたい。戻ろう。</p>
+    <p>指定された日付のデータがありませんでした。サボりですか？サボりました？</p>
     <a class="text-action" :href="applicationRoutes.workouts"><i class="mdi mdi-chevron-double-left" />Back to Workout Domain</a>
   </section>
 </template>

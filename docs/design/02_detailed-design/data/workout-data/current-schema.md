@@ -19,22 +19,22 @@ Raw session の required field:
 | `session_id` | string | yes | Date からの auto-generation はない。 |
 | `date` | string | yes | `YYYY-MM-DD`. |
 | `status` | string | yes | `complete` or `partial`. |
-| `gym_id` | string | yes | Gym Master で resolve できる必要がある。 |
-| `exercises` | array | yes | Exercise list。 |
+| `gym_id` | string | yes | Gym Master reference。Runtime では `resolved` / `missing` / `deleted` として resolution を保持する。 |
+| `machines` | array | yes | Machine list。 |
 | `condition` | object | no | Optional session condition。 |
 | `notes` | string[] | no | Optional session notes。 |
 
-`complete` session は少なくとも 1 つの valid exercise を必要とする。`partial` session は empty exercise list を持てる。
+`complete` session は少なくとも 1 つの valid machine を必要とする。`partial` session は empty machine list を持てる。
 
-## Raw Exercise
+## Raw Machine
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `exercise_id` | string | yes | Exercise Master で resolve できる必要がある。 |
-| `sets` | array | yes | Valid exercise には少なくとも 1 つの valid set が必要。 |
-| `notes` | string[] | no | Optional exercise notes。 |
+| `machine_id` | string | yes | Machine Master reference。Runtime では `resolved` / `missing` / `deleted` として resolution を保持する。 |
+| `sets` | array | yes | Valid machine には少なくとも 1 つの valid set が必要。 |
+| `notes` | string[] | no | Optional machine notes。 |
 
-Workout file は exercise display name または body part を保存しない。これらの field は Master Data から取得される。
+Workout file は machine display name または body part を保存しない。これらの field は Master Data から取得される。
 
 ## Raw Set
 
@@ -55,8 +55,11 @@ Normalized runtime session は `workout-types` の TypeScript `WorkoutSession` s
 主な normalized change:
 
 - raw `gym_id` は resolved `gym` object に置き換えられる。
-- raw exercise は `name` と `body_part` で拡張される。
-- raw `exercise_id`、set data、notes は保持される。
+- `gym` / machine は `resolution.state`, `resolution.originalId`, `resolution.resolvedId` を持つ。
+- resolved Gym は Master 由来の `name` / `short_name` を持つ。missing/deleted Gym は Master 由来表示値を持たず、表示 helper が `?` を返す。
+- resolved Machine は Master 由来の `name` / `body_part` を持つ。missing/deleted Machine は Master 由来表示値を持たず、表示 helper が `?` を返す。
+- raw set data、notes は保持される。source ID で解決できた場合の runtime ID は canonical Master ID になる。missing Machine の runtime ID は original ID を保持する。
+- unresolved Master reference は Runtime warning として top-level `warnings` に報告される。warning は original ID、resolved ID、reference kind、resolution state、session/file location を持つ。
 
 ## Validation and Compatibility
 
@@ -66,12 +69,12 @@ Normalized runtime session は `workout-types` の TypeScript `WorkoutSession` s
 - missing required field
 - invalid date format
 - invalid status
-- missing or unknown `gym_id`
-- missing or unknown `exercise_id`
+- missing `gym_id`
+- missing `machine_id`
 - missing set field
 - duplicate Master ID
 - invalid Master body part
 
-Native AF の sync-set level behavior では、Master Resolve failure は remote sync set 全体を reject し、current runtime data を部分更新しない。
+Unknown/deleted `gym_id` または `machine_id` は reject せず、Runtime warning として扱う。Unresolved Master reference だけを理由に Runtime Error、degraded、fallback を発火しない。sets/reps/weight/count aggregate は unresolved Machine を含め、body part 別分類は `body_part` を持つ Machine のみ対象にする。
 
 Historical Workout Log compatibility は、old record を current Master ID で resolve することで維持される。現行 schema は machine identity、main gym context、workout duration、structured PR field を含まない。

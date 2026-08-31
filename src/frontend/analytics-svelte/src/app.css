@@ -22,6 +22,19 @@
   align-items: start;
 }
 
+.analytics-period-panel {
+  margin-bottom: 16px;
+}
+
+.summary-table > .muted {
+  margin: 0;
+  padding: 16px 14px;
+}
+
+.period-field {
+  min-width: 180px;
+}
+
 .machine-variety-table .summary-row {
   grid-template-columns: minmax(0, 1fr) 96px;
 }
@@ -30,9 +43,23 @@
   grid-template-columns: minmax(0, 1fr) 64px 128px;
 }
 
+.body-part-share-table .summary-row {
+  grid-template-columns: minmax(0, 1fr) 64px 72px 104px;
+}
+
+.machine-ranking-table .summary-row,
+.gym-session-table .summary-row,
+.body-part-sets-table .summary-row {
+  grid-template-columns: minmax(0, 1fr) 96px;
+}
+
 .machine-variety-table .summary-row span:last-child,
 .body-part-volume-table .summary-row span:nth-child(2),
-.body-part-volume-table .summary-row span:nth-child(3) {
+.body-part-volume-table .summary-row span:nth-child(3),
+.body-part-share-table .summary-row span:nth-child(n + 2),
+.machine-ranking-table .summary-row span:last-child,
+.gym-session-table .summary-row span:last-child,
+.body-part-sets-table .summary-row span:last-child {
   white-space: nowrap;
 }
 
@@ -57,5 +84,10 @@
   .body-part-volume-table .summary-row {
     font-size: 0.8rem;
     grid-template-columns: minmax(0, 1fr) 44px 98px;
+  }
+
+  .body-part-share-table .summary-row {
+    font-size: 0.78rem;
+    grid-template-columns: minmax(0, 1fr) 40px 48px 80px;
   }
 }

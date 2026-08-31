@@ -25,7 +25,7 @@ Portal は plain HTML、CSS、JavaScript を使用する。React/Vue/Angular/Sve
 現行 page は以下を提供する。
 
 - Atlament entry header
-- Dashboard、Workout Domain、Performance Detail、Analytics、Application Settings の application card
+- Dashboard、Workout Domain、Performance Detail、Analytics、Application Settings、Resource Management の application card
 - framework label
 - branding logo behavior
 - Character Easter Egg trigger
@@ -41,7 +41,7 @@ Current state:
 
 - loading: startup または manual sync が running
 - success: running sync が successful に complete
-- warning: runtime data が required、または runtime data available 中に GitHub が degraded
+- warning: runtime data が required、または `runtimeData.fallbackActive` が true
 - error: startup/manual sync failed、または Status API request failed
 
 Success display は visible period と fade out の後に自動で hidden になる。Warning と error は visible のまま残る。

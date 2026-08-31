@@ -73,15 +73,12 @@ public sealed class AfHttpHost : IAsyncDisposable
         builder.WebHost.UseKestrel(options => options.ListenLocalhost(port));
         var app = builder.Build();
         MapApi(app, "/api/v1/common");
-        MapApi(app, "/api/common");
         app.MapGet("/{**path}", ServeFrontendAsync);
         return app;
     }
 
     private void MapApi(WebApplication app, string prefix)
     {
-        // Keep v1 and legacy prefixes mapped to the same handlers. Frontend can migrate routes
-        // without duplicating AF behavior.
         app.MapGet($"{prefix}/status", () => Results.Json(_application.GetStatus(), AfJson.Options));
         app.MapGet($"{prefix}/runtime/workouts", () =>
         {
@@ -102,6 +99,24 @@ public sealed class AfHttpHost : IAsyncDisposable
             return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
         });
         app.MapGet($"{prefix}/credential/status", () => Results.Json(_application.GetCredentialStatus(), AfJson.Options));
+        app.MapGet($"{prefix}/master-write/boundary", () => Results.Json(_application.GetMasterWriteBoundary(), AfJson.Options));
+        app.MapGet($"{prefix}/master-write/unresolved", async (HttpContext context) =>
+        {
+            var result = await _application.GetUnresolvedMasterReferencesAsync(context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapGet($"{prefix}/master-write/documents/{{type}}", async (string type, HttpContext context) =>
+        {
+            var result = await _application.ReadMasterDocumentAsync(type, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPut($"{prefix}/master-write/documents/{{type}}", async (string type, HttpContext context) =>
+        {
+            var update = await context.Request.ReadFromJsonAsync<MasterDocumentWriteRequest>(AfJson.Options, context.RequestAborted)
+                ?? new MasterDocumentWriteRequest(null, null);
+            var result = await _application.WriteMasterDocumentAsync(type, update, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
         app.MapPost($"{prefix}/credential", async (HttpContext context) =>
         {
             var update = await context.Request.ReadFromJsonAsync<CredentialUpdate>(AfJson.Options, context.RequestAborted)
@@ -138,7 +153,7 @@ public sealed class AfHttpHost : IAsyncDisposable
             // This is distinct from a user navigating to an unknown route.
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await context.Response.WriteAsJsonAsync(AfResponses.Fail<object>(
-                new AfError(AfErrorCodes.HostingArtifactNotFound, "Frontend artifact is unavailable.", true)), AfJson.Options);
+                new AfError(AfErrorCodes.HostingArtifactNotFound, "エラーが発生しました。アプリケーションを再起動してください。", true)), AfJson.Options);
             return;
         }
 

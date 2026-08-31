@@ -4,9 +4,66 @@
   "date": "2026-07-13",
   "status": "complete",
   "gym_id": "af-shioiri",
-  "exercises": [
-    {"exercise_id":"pectoral-fly","sets":[{"set":1,"weight_kg":15,"reps":10},{"set":2,"weight_kg":20,"reps":10},{"set":3,"weight_kg":22.5,"reps":10}]},
-    {"exercise_id":"rear-delt","sets":[{"set":1,"weight_kg":15,"reps":10},{"set":2,"weight_kg":12.5,"reps":10},{"set":3,"weight_kg":12.5,"reps":10}]},
-    {"exercise_id":"shoulder-press","sets":[{"set":1,"weight_kg":12.5,"reps":10},{"set":2,"weight_kg":15,"reps":10},{"set":3,"weight_kg":15,"reps":10}]}
+  "machines": [
+    {
+      "machine_id": "pectoral-fly",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 15,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 20,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 22.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "rear-delt",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 15,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 12.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 12.5,
+          "reps": 10
+        }
+      ]
+    },
+    {
+      "machine_id": "shoulder-press",
+      "sets": [
+        {
+          "set": 1,
+          "weight_kg": 12.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 15,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 15,
+          "reps": 10
+        }
+      ]
+    }
   ]
 }

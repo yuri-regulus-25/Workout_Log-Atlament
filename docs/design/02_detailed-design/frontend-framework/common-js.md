@@ -30,18 +30,19 @@ Root `src/shared/frontend-common/src/index.ts` は以下の typed helper を公�
 
 ## Navigation Metadata
 
-`navigation/routes.ts` は current route を定義する。
+`navigation/application-registry.js` は current application metadata の共有SoTであり、Portal card、shared drawer、MPA build/validation、Development Runtime gateway/watch が同じ registry を参照する。`navigation/routes.ts` は TypeScript consumer 向けに同じ current route を定義する。
 
 ```text
 portal: /
 dashboard: /dashboard/
 workouts: /workouts/
-exercises: /exercises/
+machines: /machines/
 analytics: /analytics/
 settings: /settings/
+maintenance: /maintenance/
 ```
 
-`navigation/apps.ts` はそれらの application の display metadata と icon を定義する。Drawer は current `applications` list を含む。`portal` は `drawer:false` だが metadata には残る。
+`navigation/apps.ts` はそれらの application の display metadata と icon を定義する。Drawer は current `applications` list を含む。`portal` は `drawer:false` だが metadata には残る。Portal cards は `portalCardApplications` を使用し、`portal` を除く current hosted applications、`dashboard`、`workouts`、`machines`、`analytics`、`settings`、`maintenance` を表示する。
 
 ## Shared Navigation UI
 

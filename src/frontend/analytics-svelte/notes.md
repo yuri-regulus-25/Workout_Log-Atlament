@@ -20,7 +20,7 @@
 
 - Uses runtime master/workout data loaded through `@workout-lab/workout-data`.
 - PR rules are intentionally simple until real training data clarifies stricter record semantics.
-- Links to `/dashboard/` and `/exercises/:id` assume future MPA integration.
+- Links to `/dashboard/` and `/machines/:id` assume future MPA integration.
 
 ## First impressions
 

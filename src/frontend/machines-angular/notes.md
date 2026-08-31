@@ -18,7 +18,7 @@
 ## Deliberate shortcuts
 
 - Uses runtime master/workout data loaded through `@workout-lab/workout-data`.
-- Parses `/exercises/:id` from `window.location.pathname` for this first domain slice instead of adding full Angular routing.
+- Parses `/machines/:id` from `window.location.pathname` for this first domain slice instead of adding full Angular routing.
 - Machine List remains intentionally absent, per design.
 
 ## First impressions

@@ -4,38 +4,90 @@
   "date": "2026-05-06",
   "status": "complete",
   "gym_id": "af-yakoekimae",
-  "exercises": [
+  "machines": [
     {
-      "exercise_id": "leg-press",
+      "machine_id": "leg-press",
       "sets": [
-        { "set": 1, "weight_kg": 100, "reps": 10 },
-        { "set": 2, "weight_kg": 120, "reps": 10 },
-        { "set": 3, "weight_kg": 140, "reps": 8 },
-        { "set": 4, "weight_kg": 160, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 100,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 120,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 140,
+          "reps": 8
+        },
+        {
+          "set": 4,
+          "weight_kg": 160,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "chest-press",
+      "machine_id": "chest-press",
       "sets": [
-        { "set": 1, "weight_kg": 33, "reps": 10 },
-        { "set": 2, "weight_kg": 33, "reps": 8 },
-        { "set": 3, "weight_kg": 40, "reps": 8 }
+        {
+          "set": 1,
+          "weight_kg": 33,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 33,
+          "reps": 8
+        },
+        {
+          "set": 3,
+          "weight_kg": 40,
+          "reps": 8
+        }
       ]
     },
     {
-      "exercise_id": "hip-abduction",
+      "machine_id": "hip-abduction",
       "sets": [
-        { "set": 1, "weight_kg": 60, "reps": 10 },
-        { "set": 2, "weight_kg": 71.25, "reps": 10 },
-        { "set": 3, "weight_kg": 71.25, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 60,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 71.25,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 71.25,
+          "reps": 10
+        }
       ]
     },
     {
-      "exercise_id": "hip-adduction",
+      "machine_id": "hip-adduction",
       "sets": [
-        { "set": 1, "weight_kg": 52.5, "reps": 10 },
-        { "set": 2, "weight_kg": 52.5, "reps": 10 },
-        { "set": 3, "weight_kg": 56.25, "reps": 10 }
+        {
+          "set": 1,
+          "weight_kg": 52.5,
+          "reps": 10
+        },
+        {
+          "set": 2,
+          "weight_kg": 52.5,
+          "reps": 10
+        },
+        {
+          "set": 3,
+          "weight_kg": 56.25,
+          "reps": 10
+        }
       ]
     }
   ]

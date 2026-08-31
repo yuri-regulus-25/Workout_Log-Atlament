@@ -40,6 +40,7 @@ Load issue は Data Load Warning として表示する。
 - monthly workout count
 - monthly set count
 - monthly volume
+- previous month comparison for workout count and set count
 - latest workout date
 - recent session の Volume Trends area chart
 - Latest Workout card
@@ -61,6 +62,14 @@ Dashboard は `workout-core` を以下に使用する。
 - body part summary
 - display date formatting
 - workout rows
+- previous month range and factual deltas
+
+Phase 5-A 以降、Dashboard から再利用可能な `workout-core` logic:
+
+- period range resolution for `7d` / `28d` / `month` / `3m` / `6m` / `all`
+- previous period and previous month range resolution
+- factual delta calculation for count-based values
+- daily / weekly / monthly aggregation based on session count, machine count, set count, and rep count
 
 ## Navigation
 
