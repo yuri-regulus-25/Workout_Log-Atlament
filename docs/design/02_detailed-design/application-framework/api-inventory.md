@@ -2,25 +2,11 @@
 
 現行v3.0.0リリース系列のAPI棚卸し結果。
 
-## Scope
+API の意味論そのものは [AF API Contract](./api-contract.md) を正とする。この文書の Phase 記録を最新契約の根拠にはしない。
 
-Inventory target:
+## Current / Planned Endpoint Inventory
 
-- Windows AF: `src/application/windows/Host/AfHttpHost.cs`
-- Android AF: `src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt`
-- Node development runtime: `tools/dev-runtime/development-runtime.mjs`
-- Shared frontend clients:
-  - `src/shared/frontend-common/src/index.ts`
-  - `src/shared/frontend-common/src/af-client.js`
-  - `src/shared/workout-data/src/index.ts`
-- Frontend consumers:
-  - `src/frontend/portal/src/main.js`
-  - `src/frontend/settings-solid/src/App.tsx`
-  - workout domain apps through `@workout-lab/workout-data`
-
-## Endpoint Inventory
-
-| Endpoint | Producer | Consumer | Decision |
+| Endpoint | Native Producer | Main Consumer | State |
 |---|---|---|---|
 | `GET /api/v1/common/status` | Windows, Android, Node dev runtime | Portal status gate, Settings status panel, AF tests | Keep |
 | `GET /api/v1/common/runtime/workouts` | Windows, Android, Node dev runtime | `@workout-lab/workout-data` runtime loader used by dashboard/workouts/machines/analytics | Keep |
@@ -42,85 +28,59 @@ Inventory target:
 | `/api/common/*` | Former Windows, Android, Node dev runtime alias | No current frontend client or runtime loader | Remove |
 | `GET /api/workout-data` | Node dev/runtime preview tooling only | `@workout-lab/workout-data` fallback and Vite/preview dev tooling | Keep as dev-only legacy data endpoint outside native AF contract |
 
-## Response Field Inventory
+Recovery endpoint の内訳は [Recovery 契約](./recovery-contract.md) を参照する。
+
+## Producer Scope
+
+Node development runtime は native AF の全機能を模倣する必要はない。Local development に必要な read-only subset を提供できる。
+
+ただし同名 endpoint / DTO を実装する場合は native AF と意味を変えない。
+
+## Current Response Facts
 
 ### Common Envelope
 
-`success`, `errors`, `warnings`, and `data` are consumed by shared clients and Settings error handling. `errors[].code`, `errors[].message`, and `errors[].recoverable` are retained as the shared error contract. Runtime Master reference warnings use `warnings[]` so unresolved Master references do not imply request failure or fallback.
-
-### Status Data
-
-Retained fields:
-
-- `versions.applicationFramework`: Settings display and AF version source.
-- `versions.frontendFramework`: Settings display.
-- `versions.nativePackages.windows.version`: Settings display for Windows package version.
-- `versions.nativePackages.android.versionName`: Settings display for Android package version.
-- `versions.nativePackages.android.versionCode`: Settings display for Android package code.
-- `readiness.state`, `readiness.requiredActions`, `readiness.unavailableComponents`, `readiness.degradedComponents`: shared setup/readiness/runtime state contract for frontend gating.
-- `runtimeData.currentAvailable`, `runtimeData.currentGeneratedAt`, `runtimeData.latestRemoteRetrieval`, `runtimeData.latestValidation`, `runtimeData.fallbackActive`, `runtimeData.quarantinedWorkoutResourceCount`: minimum runtime-data freshness, fallback, and Workout quarantine facts for shared recovery policy.
-- `recovery.brokenResourceCount`, `recovery.brokenWorkoutResourceCount`, `recovery.brokenMasterResourceCount`, `recovery.recoverableResourceCount`, `recovery.activeDraftCount`: Recovery inventory and local draft facts for Maintenance UI/status display.
-- `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
-- `operations.startup`: Portal startup/runtime gate and AF test harness.
-- `operations.manualSync`: Portal manual sync state display.
-- `operations.configurationUpdate`, `operations.credentialUpdate`, `operations.shutdown`: AF diagnostic/status contract.
-- `components.github`: Portal and Settings GitHub state display.
-- `components.runtimeData`: Portal runtime availability display.
-- `components.configuration`, `components.credential`, `components.hosting`: AF diagnostic/status contract.
-- `requiredActions`: Portal runtime/setup gate and AF tests.
-
-### Configuration Update Data
-
-Retained field:
-
-- `remoteChecked`: Settings message branch after repository/resource changes.
-
-Removed field:
-
-- `saved`: no current frontend, native control, or test consumer. Success is already represented by the common envelope `success`.
-
-### Sync Data
-
-Retained field:
-
-- `degraded`: Settings manual sync message branch when remote sync falls back to local runtime data.
-
-Removed fields:
-
-- `source`: no current frontend, native control, or test consumer.
-- `updated`: no current frontend, native control, or test consumer. Success is already represented by the common envelope `success`.
-
-## Drift Cleanup
-
-Windows, Android, and Node development runtime now expose the same current prefix for shared endpoints:
-
 ```text
-/api/v1/common
+success
+errors
+warnings
+data
 ```
 
-The legacy `/api/common/*` alias is removed from producers and documentation. Unknown `/api/*` routes continue to return an API error instead of frontend HTML.
+`errors[].code` は logic 用 stable code、`message` は人間向け表示。Runtime warning は request failure と分離する。
 
-## Phase3 Contract Refinement
+### Status
 
-`GET /api/v1/common/status` no longer publishes top-level `version`. The value duplicated `versions.applicationFramework`; Windows, Android, Node development runtime, and Settings now use `versions.applicationFramework` as the single AF version field.
+主な facts:
 
-## Phase4 Read Information Extension
+- `versions.*`
+- `readiness.*`
+- `runtimeData.*`
+- `application.*`
+- `operations.*`
+- `components.*`
+- `requiredActions`
 
-`GET /api/v1/common/status` now publishes native package metadata under `versions.nativePackages`. This adds only package version information already held by platform build metadata or the shipped `version.json`; component status and data freshness fields were not added because Phase3 status already represents the existing component states and no lightweight cross-platform last-successful-sync persistence exists yet.
+v2.1.0 では Broken Resource / Recovery / quarantine を Frontend が独自推論しないための structured facts を追加する。具体形は API Contract を正とする。
 
-## Phase8-A Readiness Model
+### Configuration Update
 
-`GET /api/v1/common/status` now publishes `readiness` as the shared application readiness model. Frontends should consume this domain state instead of deriving setup/runtime failure independently. Main Gym unconfigured state is intentionally excluded from readiness and remains a feature-level optional context.
+`remoteChecked` は repository / resources 変更後の remote check 実施有無を表す。
 
-## Phase8-C Access and Recovery
+### Sync
 
-Shared frontend clients derive Application Access Policy from `readiness`. `unconfigured` blocks normal applications while keeping Settings/Setup recovery available. `ready` allows normal applications. `degraded` keeps normal applications available and restricts only affected components. `unavailable` blocks unsafe normal application access and exposes recovery actions such as Settings, credential update, retry sync, or reload.
+`degraded` は従来 remote failure + LKG fallback の表示分岐に使用する。
 
-Configured credential failures are runtime failures rather than setup absence. Remote fetch failure with existing Runtime Data remains a degraded fallback state: GitHub is degraded, Runtime Data stays available, and normal applications may continue using the previous successful data.
+Resource Health の `degraded`、Application Readiness の `degraded`、operation result の `degraded` は異なる state space である。文書・型・変数では何の degraded か判別できる名称を優先する。
 
-## Phase8-D Unified Status and Credential Lifecycle
+## Removed / Legacy Fields
 
-Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, and active fallback. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.
+- top-level `version`: `versions.applicationFramework` と重複するため削除済み。
+- configuration update `saved`: envelope `success` と重複するため削除済み。
+- sync `source`: consumer 不在のため削除済み。
+- sync `updated`: envelope `success` と重複するため削除済み。
+
+Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, active fallback, and quarantine. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.
 
 ## v3.0.0 Recovery Contract
 

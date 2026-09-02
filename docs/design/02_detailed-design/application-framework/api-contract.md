@@ -1,18 +1,14 @@
 # Application Framework API Contract
 
-Windows と Android は localhost 上で同じ現行 API shape を公開する。
-
-Current prefix:
+Windows と Android は localhost 上で同じ API shape と意味論を公開する。
 
 ```text
 /api/v1/common
 ```
 
-Shared frontend client、Windows AF、Android AF、Node development runtime はこの versioned prefix を使用する。
+Shared frontend client、Windows AF、Android AF、Node development runtime の対応範囲は異なり得るが、同じ endpoint / DTO を実装する場合に意味を Platform ごとに変えない。
 
 ## Response Envelope
-
-現行 AF API はすべて以下を使用する。
 
 ```json
 {
@@ -23,7 +19,7 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 }
 ```
 
-`errors` entry は以下を持つ。
+Error entry:
 
 ```json
 {
@@ -33,28 +29,16 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 }
 ```
 
-`warnings` entry は Runtime Data を accept しながら報告する user-actionable warning である。Master reference warning は以下を持つ。
+Logic は stable `code` と structured facts を使用し、`message` を parse しない。
 
-```json
-{
-  "code": "MASTER_REFERENCE_MISSING",
-  "referenceKind": "machine",
-  "resolutionState": "missing",
-  "originalId": "legacy-machine-id",
-  "resolvedId": null,
-  "sessionId": "2026-08-24-01",
-  "filePath": "data/workouts/2026/08/2026-08-24.json",
-  "line": null,
-  "message": "Machine master reference is missing: legacy-machine-id."
-}
-```
+## Public Endpoints
 
-## Endpoints
+### Core
 
 | Method | Path | Responsibility |
 |---|---|---|
 | GET | `/status` | Current AF status snapshot。 |
-| GET | `/runtime/workouts` | Normalized current runtime workout session。 |
+| GET | `/runtime/workouts` | Normalized current Runtime Workout Sessions。 |
 | POST | `/sync` | Manual remote sync。 |
 | GET | `/configuration` | Current non-secret AF configuration。 |
 | POST | `/configuration` | Partial configuration update。 |
@@ -75,25 +59,52 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 | POST | `/recovery/resources/{resourceKey}/commit` | 検証済みRecovery内容のコミット。Windows/Androidは修復可能なリソースをコミットでき、書き込み境界が利用不能な場合は `RECOVERY_UNAVAILABLE` を返す。 |
 | POST | `/shutdown` | Application shutdown request。 |
 
-Legacy `/api/common/*` alias は現行 contract では公開しない。Unknown `/api/*` route は frontend HTML へ fall through せず、platform error response を返す。
+### Master Resource Management
+
+| Method | Path | Responsibility |
+|---|---|---|
+| GET | `/master-write/boundary` | 固定 Master write boundary と security state。 |
+| GET | `/master-write/unresolved` | Runtime 上の unresolved Master reference。 |
+| GET | `/master-write/documents/{type}` | Local Master snapshot の revision と content。 |
+| PUT | `/master-write/documents/{type}` | Expected revision 付き Master document write。 |
+
+### Recovery
+
+Recovery の詳細は [Recovery 契約](./recovery-contract.md) を正とする。
+
+```text
+GET    /recovery/resources
+GET    /recovery/resources/{resourceKey}
+GET    /recovery/resources/{resourceKey}/source
+GET    /recovery/resources/{resourceKey}/draft
+POST   /recovery/resources/{resourceKey}/draft
+PUT    /recovery/resources/{resourceKey}/draft
+DELETE /recovery/resources/{resourceKey}/draft
+POST   /recovery/resources/{resourceKey}/validate
+POST   /recovery/resources/{resourceKey}/commit
+```
+
+Legacy `/api/common/*` alias は公開しない。Unknown `/api/*` route は Frontend HTML へ fall through せず 404 を返す。
 
 ## Status Data
 
-Status は以下を含む。Version 情報は `versions` object に集約し、top-level `version` は公開しない。
+Status は Version、Readiness、Runtime、Application、Operation、Component の facts を返す。Frontend はこれらから Resource Health や write eligibility を独自推論しない。
+
+代表 facts:
 
 - `versions.applicationFramework`
 - `versions.frontendFramework`
 - `versions.nativePackages.windows.version`
 - `versions.nativePackages.android.versionName`
 - `versions.nativePackages.android.versionCode`
-- `readiness.state`: `unconfigured`, `ready`, `degraded`, or `unavailable`
+- `readiness.state`
 - `readiness.requiredActions`
 - `readiness.unavailableComponents`
 - `readiness.degradedComponents`
 - `runtimeData.currentAvailable`
 - `runtimeData.currentGeneratedAt`
-- `runtimeData.latestRemoteRetrieval`: `unknown`, `succeeded`, `failed`, or `skipped`
-- `runtimeData.latestValidation`: `unknown`, `succeeded`, `failed`, or `skipped`
+- `runtimeData.latestRemoteRetrieval`
+- `runtimeData.latestValidation`
 - `runtimeData.fallbackActive`
 - `runtimeData.quarantinedWorkoutResourceCount`
 - `recovery.brokenResourceCount`
@@ -104,11 +115,38 @@ Status は以下を含む。Version 情報は `versions` object に集約し、t
 - `application.status`
 - `application.degraded`
 - `application.acceptingRequests`
-- operation state: `startup`, `manualSync`, `configurationUpdate`, `credentialUpdate`, `shutdown`
-- component state: `configuration`, `credential`, `github`, `runtimeData`、および per-app hosting state
+- operation state
+- component state
 - `requiredActions`
 
-代表的な required action:
+v2.1.0 Recovery 反映時は少なくとも次の facts を status またはその structured child object で公開する。
+
+```text
+brokenResourceCount
+brokenWorkoutResourceCount
+brokenMasterResourceCount
+recoverableResourceCount
+activeDraftCount
+quarantinedWorkoutResourceCount
+```
+
+具体 DTO 配置は implementation と shared type を一致させる。Message や Runtime Session 数から Frontend が再計算しない。
+
+## Application Readiness
+
+```text
+unconfigured
+ready
+degraded
+unavailable
+```
+
+- `unconfigured`: Repository configuration または credential が不足し setup 未完了。
+- `ready`: 通常利用に必要な状態が揃っている。
+- `degraded`: Runtime は利用可能だが、一部 component / Resource に確認・復旧事項がある。
+- `unavailable`: setup 済みだが Runtime を安全に利用できない。
+
+代表 required action:
 
 ```text
 CONFIGURATION_REQUIRED
@@ -116,26 +154,17 @@ CREDENTIAL_REQUIRED
 RUNTIME_DATA_REQUIRED
 ```
 
-## Application Readiness
+`RUNTIME_DATA_REQUIRED` は Runtime が本当に利用不能な場合だけ使用する。Broken Workout Resource が隔離されても利用可能な Runtime がある場合、Recovery は案内対象だが `RUNTIME_DATA_REQUIRED` にはしない。
 
-Readiness は frontend が個別に初期設定/利用可能/障害状態を推測しないための共通 domain contract である。Windows、Android、Node development runtime、shared frontend client は同じ state 名を使用する。
+Main Gym 未設定は optional Domain Context 不足であり readiness failure ではない。
 
-| State | Meaning |
-|---|---|
-| `unconfigured` | Repository/branch configuration または credential が不足しており、初期設定が未完了。 |
-| `ready` | 通常利用に必要な configuration、credential、Runtime Data が揃っている。 |
-| `degraded` | Runtime Data は利用可能だが、GitHub access、credential validity、fallback operation など一部 component が劣化している。 |
-| `unavailable` | 初期設定済みだが Runtime Data がなく、通常 application を安全に利用できない。 |
-
-Readiness は `CONFIGURATION_REQUIRED` と `CREDENTIAL_REQUIRED` を setup failure として扱う。Credential が設定済みで期限切れ/無効になった場合は setup 未完了へ戻さず、credential component の runtime failure として扱う。`RUNTIME_DATA_REQUIRED` は設定済み環境の runtime failure として扱う。Main Gym 未設定は optional domain context 不足であり、readiness failure に含めない。
-
-Shared frontend client は `readiness` と `runtimeData` facts から Application Access Policy を derive する。`unconfigured` は Settings/Setup 等の復旧領域のみを許可し、`ready` は通常Applicationを許可する。`degraded` は影響componentだけを制限して通常Applicationを継続し、`unavailable` は安全に利用できない通常Applicationを制限する。`runtimeData.fallbackActive` が `true` の場合は Remote取得またはvalidationに失敗したが、既存正常Runtime Dataで継続利用中である。
-
-Windows / Android の入力状態別 contract は [Runtime Contract Matrix](./runtime-contract-matrix.md) を正とする。
+詳細な入力状態別 contract は [Runtime Contract Matrix](./runtime-contract-matrix.md) を正とする。
 
 ## Configuration Data
 
-現行 configuration schema:
+### 現行 schema
+
+現行実装には以下が存在する。
 
 ```json
 {
@@ -160,7 +189,44 @@ Windows / Android の入力状態別 contract は [Runtime Contract Matrix](./ru
 }
 ```
 
-Valid resource type は以下のみである。
+### 修正する契約
+
+`required` と `emptyAllowed` は利用者設定から廃止する。Resource の存在要件・空状態は Resource Type ごとの Domain Contract とする。
+
+目標形:
+
+```json
+{
+  "schemaVersion": 2,
+  "repository": {
+    "owner": "",
+    "repository": "",
+    "ref": "main",
+    "rootPath": ""
+  },
+  "resources": [
+    { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory" },
+    { "type": "MACHINE_MASTER", "path": "master/machines.json", "resourceKind": "file" },
+    { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file" }
+  ],
+  "timeouts": {
+    "githubRequestTimeoutSec": 10,
+    "syncOperationTimeoutSec": 60,
+    "generalApiTimeoutSec": 30,
+    "shutdownTimeoutSec": 10
+  }
+}
+```
+
+`schemaVersion: 2` は移行時の目標例であり、実装時に既存 configuration migration / backward compatibility と合わせて確定する。既存 field を意味だけ変えて使い回さない。
+
+Resource Type semantics:
+
+- `WORKOUT`: Resource 0 件は正常な初期状態。存在する空 file は正常空状態の標準表現ではない。
+- `MACHINE_MASTER`: configured file 自体の不在は異常。有効 file 内の record 0 件は許容可能。
+- `GYM_MASTER`: configured file 自体の不在は異常。有効 file 内の record 0 件は許容可能。
+
+Valid resource type:
 
 ```text
 WORKOUT
@@ -168,7 +234,7 @@ MACHINE_MASTER
 GYM_MASTER
 ```
 
-Valid resource kind は以下である。
+現行 Resource Kind:
 
 ```text
 file
@@ -177,114 +243,88 @@ directory
 
 ## Master Write Contract
 
-Master write endpoint が受け付ける `type` は以下のみである。
+Master write endpoint が受け付ける `type`:
 
 ```text
 MACHINE_MASTER
 GYM_MASTER
 ```
 
-`/master-write/boundary` は repository owner/repository/ref と固定 target を返す。Target path は configuration の resource path を信頼せず、AF 内部の allowlist で固定する。
+`/master-write/boundary` は repository owner / repository / ref と固定 target を返す。Target path は request の任意値を信頼せず AF 内部で認可する。
+
+現行 target:
 
 - `MACHINE_MASTER`: `master/machines.json`
 - `GYM_MASTER`: `master/gyms.json`
 
-Security state は credential/configuration の availability と、公開しない操作を boolean で返す。Workout Log write、Raw JSON write、Generic Git write は `false` であり、対応 endpoint も存在しない。
+Frontend へ Generic Git write、Raw Workout write、credential、任意 commit message を公開しない。
 
-Native AF の `GET /master-write/documents/{type}` は current Local Master snapshot を返す。Local Master snapshot は Wake Up / Settings Sync によって Runtime Data と一緒に保存される。Resource Management の read/refresh は Remote Master body を独自に取得しない。Local Master snapshot がない場合、native AF は `MASTER_SYNC_REQUIRED` を返す。
+`GET /master-write/documents/{type}` は current Local Master snapshot を返す。Snapshot がない場合は `MASTER_SYNC_REQUIRED`。
 
-`GET /master-write/documents/{type}` response data:
+Write は Local revision と `expectedRevision`、candidate whole-master validation、Remote revision を確認してから実行する。Commit message は AF 固定。
 
-```json
-{
-  "type": "MACHINE_MASTER",
-  "path": "master/machines.json",
-  "revision": "github-content-sha",
-  "content": "{ \"schema_version\": 1, \"machines\": [] }"
-}
-```
+Whole-master validation:
 
-`PUT /master-write/documents/{type}` request:
+- duplicate ID を active / deleted 双方を含め reject。
+- `main:true` は最大 1 件。
+- Main Gym は active / non-deleted record のみ。
+- 設定済み Main Gym を意図せず 0 件へ戻す遷移は reject。
+- Runtime が参照する Gym / Machine の logical delete は許可し、次回 rebuild で unresolved warning とする。
 
-```json
-{
-  "expectedRevision": "github-content-sha",
-  "content": "{ \"schema_version\": 1, \"machines\": [] }"
-}
-```
-
-Successful write response data:
-
-```json
-{
-  "type": "MACHINE_MASTER",
-  "path": "master/machines.json",
-  "revision": "new-github-content-sha"
-}
-```
-
-`GET /master-write/unresolved` response data:
-
-```json
-[
-  {
-    "type": "MACHINE_MASTER",
-    "referenceId": "legacy-machine-id",
-    "affectedWorkouts": [
-      {
-        "filePath": "data/workouts/2026/08/2026-08-24.json",
-        "line": null,
-        "message": "data/workouts/2026/08/2026-08-24.json: Machine master is not found: legacy-machine-id."
-      }
-    ]
-  }
-]
-```
-
-Unresolved list は current Local Runtime Data の Runtime warning から生成する。Raw Workout JSON は更新しない。Local Runtime Data がない場合、native AF は `MASTER_SYNC_REQUIRED` を返す。
-
-Write は Local Master snapshot revision と `expectedRevision` を比較し、candidate content を whole-master validation した後、GitHub Contents API で Remote revision metadata を確認してから 1 回の PUT を実行する。Local revision mismatch または Remote revision mismatch は sync-required/conflict response であり、client は再取得または Settings Sync 後に表示 revision を更新する必要がある。Commit message は AF 固定で、request から受け取らない。
-
-Write 前には whole-master validation を実行する。Duplicate ID は active/deleted の双方を含めて reject し、`main:true` は最大 1 件、かつ active/non-deleted Gym のみ許可する。設定済み Main Gym を 0 件へ戻す遷移は reject する。Runtime Data が参照している Gym/Machine の logical delete は許可し、参照側は次回 sync/runtime rebuild で unresolved warning として扱う。PUT 成功後は returned revision を Local Master snapshot へ反映し、Local Runtime Data を confirmed Master documents で rebuild する。
-
-Unresolved reference を既存 Master record へ resolve する場合は、Master record の optional `source_ids` に unresolved raw ID を追加する。Runtime normalization は `machine_id` / `gym_id` に加えて `source_ids` を lookup key として扱い、normalized output は canonical Master ID を返す。新規 Master record で resolve する場合は unresolved raw ID を canonical ID として通常 Create flow を通す。
+Unresolved reference を既存 Master record へ resolve する場合は `source_ids` を利用できる。Raw Workout ID は書き換えず、Runtime normalization が canonical Master ID へ解決する。
 
 主な failure code:
 
-- `MASTER_WRITE_INVALID`: schema/domain/lifecycle/reference violation、unknown type、invalid request。
-- `MASTER_WRITE_CONFLICT`: stale revision または GitHub contents conflict。
-- `MASTER_WRITE_FAILED`: GitHub write success response が ambiguous。
-- `GITHUB_UNAUTHORIZED`
-- `GITHUB_FORBIDDEN`
-- `GITHUB_RATE_LIMIT`
-- `GITHUB_RESOURCE_NOT_FOUND`
-- `GITHUB_CONNECTION_FAILED`
-- `GITHUB_TIMEOUT`
-- `GITHUB_SERVER_ERROR`
+```text
+MASTER_WRITE_INVALID
+MASTER_WRITE_CONFLICT
+MASTER_WRITE_FAILED
+MASTER_SYNC_REQUIRED
+GITHUB_UNAUTHORIZED
+GITHUB_FORBIDDEN
+GITHUB_RATE_LIMIT
+GITHUB_RESOURCE_NOT_FOUND
+GITHUB_CONNECTION_FAILED
+GITHUB_TIMEOUT
+GITHUB_SERVER_ERROR
+```
+
+`GITHUB_RATE_LIMIT` を共通 stable code とし、Platform 固有の `GITHUB_RATE_LIMITED` 等を別名として増やさない。
+
+## Recovery Contract Summary
+
+Recovery は Master Write と同様に用途限定 write boundary だが、Broken Workout Resource も対象にできる。
+
+- Frontend は Resource Health を判定しない。
+- Frontend は Raw replacement body / arbitrary path / commit message を送らない。
+- Same-path replacement は Contents API を使用できる。
+- Path relocation は old delete + new create を 1 atomic Git commit で行う。
+- Candidate validation が正常に完了し `commitAllowed=false` となる場合は operation success として扱う。
+- Git success 後の reflection failure は Git rollback せず「保存済み・反映失敗」として区別する。
 
 ## Credential Data
 
-Credential status は以下を公開する。
+Credential status:
 
-- `configured`
-- `state`: `available`, `missing`, `invalid`, `expired`, or `unknown`
-- `limitDate`
+```text
+configured
+state: available | missing | invalid | expired | unknown
+limitDate
+```
 
-Token value は API 経由で返却されない。
+Token value は API 経由で返さない。
 
 ## Operation Concurrency
 
-現行 implementation は conflict する overlapping operation を防止する。Startup sync と manual sync は同時実行できない。
+Conflict する overlapping operation を防止する。Startup sync と manual sync は同時実行しない。
 
-## Operation Results
+Recovery Draft / Git write は専用 revision による optimistic concurrency を使用し、repository-wide lock は設けない。
 
-Configuration update data:
+## HTTP Status
 
-```json
-{
-  "remoteChecked": true
-}
-```
+HTTP status の意味は [HTTP API I/O](../io/http-api.md) を正とする。
+
+特に「Domain validation の結果が commit 不可」と「validation operation 自体の失敗」を区別する。
 
 `remoteChecked` は request が `repository` または `resources` を変更した場合に `true` になる。
 
@@ -298,7 +338,7 @@ Sync data:
 
 `degraded` は remote sync 失敗時に local runtime data で継続した場合に `true` になる。
 
-Unresolved Master reference は `resolved` / `missing` / `deleted` を Runtime entity の `resolution` と top-level `warnings` に保持する。`missing` / `deleted` だけでは `/sync` の `degraded`、status の `fallbackActive`、readiness degradation を発火しない。Workout は Runtime Data として accept され、sets/reps/weight/count aggregate の対象に残る。
+Unresolved Master reference は `resolved` / `missing` / `deleted` / `invalid_excluded` を Runtime entity の `resolution` と top-level `warnings` に保持する。`missing` / `deleted` / `invalid_excluded` だけでは `/sync` の `degraded`、status の `fallbackActive`、readiness degradation を発火しない。Workout は Runtime Data として accept され、sets/reps/weight/count aggregate の対象に残る。
 
 ## Recovery Contract
 

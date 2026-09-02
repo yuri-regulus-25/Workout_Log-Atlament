@@ -1,6 +1,6 @@
-# Master Data 現行 Schema
+# Master Data Schema と整合性契約
 
-現行 Master Data は `data/master/` 配下にある。
+現行 Master Data:
 
 ```text
 data/master/
@@ -8,13 +8,9 @@ data/master/
 └─ gyms.json
 ```
 
-現行には machine、body part entity、separate record としての alias、main gym configuration の Master file は存在しない。
-
 ## Machine Master
 
-File: `data/master/machines.json`
-
-Top-level structure:
+Top-level:
 
 ```json
 {
@@ -23,17 +19,17 @@ Top-level structure:
 }
 ```
 
-各 machine record は以下を持つ。
+主要 field:
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `machine_id` | string | yes | Unique machine ID。Workout Log から reference される。 |
-| `source_ids` | string[] | no | Raw Workout 上の legacy/unresolved `machine_id` を既存 canonical Machine へ解決する alias。 |
-| `name` | string | yes | Display name。 |
-| `body_part` | string | yes | Supported body part value のいずれかである必要がある。 |
-| `aliases` | string[] | no、JS parser では `[]` default | 現行 data に存在する。 |
-| `active` | boolean | yes | Parser/validator で必須。 |
-| `deleted` | boolean | yes、JS parser では missing を `false` に normalize | Logical delete flag。Historical reference の存在解決には使用しない。 |
+| Field | Required | Meaning |
+|---|---|---|
+| `machine_id` | yes | canonical unique ID |
+| `source_ids` | no | legacy / unresolved raw ID の alias |
+| `name` | yes | display name |
+| `body_part` | yes | supported body part |
+| `aliases` | no | display/search alias |
+| `active` | yes | current availability |
+| `deleted` | yes | logical delete |
 
 Supported body part:
 
@@ -43,9 +39,7 @@ chest, back, legs, shoulders, arms, glutes, core, cardio, other
 
 ## Gym Master
 
-File: `data/master/gyms.json`
-
-Top-level structure:
+Top-level:
 
 ```json
 {
@@ -54,73 +48,107 @@ Top-level structure:
 }
 ```
 
-各 gym record は以下を持つ。
+主要 field:
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `gym_id` | string | yes | Unique gym ID。Workout Log から reference される。 |
-| `source_ids` | string[] | no | Raw Workout 上の legacy/unresolved `gym_id` を既存 canonical Gym へ解決する alias。 |
-| `name` | string | yes | Display name。 |
-| `short_name` | string | no | Short display name。 |
-| `active` | boolean | yes | Parser/validator で必須。 |
-| `deleted` | boolean | yes、JS parser では missing を `false` に normalize | Logical delete flag。Historical reference の存在解決には使用しない。 |
-| `main` | boolean | yes、JS parser では missing を `false` に normalize | Main Gym flag。初期状態では 0 件を許容する。 |
+| Field | Required | Meaning |
+|---|---|---|
+| `gym_id` | yes | canonical unique ID |
+| `source_ids` | no | legacy / unresolved raw ID の alias |
+| `name` | yes | display name |
+| `short_name` | no | short display name |
+| `active` | yes | current availability |
+| `deleted` | yes | logical delete |
+| `main` | yes | Main Gym flag |
+
+## Resource の存在と record 0件
+
+Master file の**不在**と、有効な Master file に record が **0件**ある状態を区別する。
+
+- configured Machine Master file 不在: 異常。
+- configured Gym Master file 不在: 異常。
+- `{ "schema_version": 1, "machines": [] }`: schema として有効な正常状態になり得る。
+- `{ "schema_version": 1, "gyms": [] }`: schema として有効な正常状態になり得る。
+
+したがって Resource Configuration の `emptyAllowed` / `required` boolean でこの意味を利用者が変更する設計にはしない。
+
+Main Gym は初期状態で0件を許容する。ただし一度 Main Gym を設定した後、Resource Management の通常 write で意図せず Main Gym 0件へ戻す遷移は拒否する。これは Master schema の「空配列がvalidか」とは別の write transition policy である。
 
 ## Validation
 
-現行 validation は以下を check する。
+Whole Master validation は以下を確認する。
 
-- top-level object shape
-- `schema_version`
-- required array
-- required record field
-- duplicate `machine_id`
-- duplicate `gym_id`
-- valid machine `body_part`
-- required `active`
+- top-level object / `schema_version`
+- required array / record field
+- canonical ID uniqueness
+- `source_ids` と canonical / other source ID の衝突
+- Machine `body_part`
+- Main Gym 最大1件
+- Main Gym は active / non-deleted record のみ
 
-Shared domain validation は `@workout-lab/workout-core` の `validateWorkoutMasterData` と `validateWorkoutMasterReferences` を使用する。
+Logical deleted record も ID uniqueness の対象とし、deleted ID を再利用しない。
 
-`validateWorkoutMasterData` は typed Master Data に対して schema version、required domain fields、unique ID、Machine `body_part`、Main Gym constraint を validation する。
-Master write pipeline では AF が同等の whole-master validation を最終防衛線として実行する。Logical deleted record も ID unique 判定対象であり、deleted ID の再利用は禁止する。`source_ids` も ID unique set に含め、canonical ID または別 record の `source_ids` と衝突する値は禁止する。Write 前には対象 document と相手側 Master document の current revision を揃えて検証し、Main Gym は最大 1 件、かつ `active:true` / `deleted:false` の Gym だけを許可する。既に Main Gym が設定されている Gym Master を 0 件状態へ戻す write は invalid である。
+Historical reference と new-write reference は意味を分ける。
 
-`validateWorkoutMasterReferences` は Workout Log の actual references だけを扱う。
+- historical: inactive record は参照可能。deleted / missing は Runtime warning として理由を保持する。
+- new-write: `active:true` かつ `deleted:false` の record のみ候補。
 
-- `historical` mode: referenced Gym/Machine が存在すれば valid。Inactive/logically deleted record も historical resolution では valid。
-- `new-write` mode: referenced Gym/Machine は `active:true` かつ `deleted:false` でなければ invalid。
-- Missing Gym/Machine reference は mode に関係なく invalid。
+`source_ids` で canonical record に解決しても Raw Workout value は書き換えない。
 
-Historical reference report では `resolveHistoricalWorkoutReferences` / `resolveHistoricalWorkoutReferenceReport` を使用し、reference を `active`、`inactive`、`deleted`、`missing` に分類する。Runtime resolution では `deleted` と `missing` を warnings として扱い、Workout Log SoT はこの分類のために rewrite しない。`source_ids` で解決した場合、raw Workout value は保持され、runtime/frontend には canonical Master ID と display fields が返る。
+## Runtime Resolution
 
-Main Gym dependent weight/volume metrics は `getMainGym*Metric` family を使用する。Main Gym context が configured の場合だけ `available` state として Main Gym sessions に限定した値を返す。Main Gym が未設定の場合は `unconfigured`、constraint 違反の場合は `invalid` を返し、比較可能な kg 値を作らない。
+Runtime は reference を少なくとも次の facts として区別する。
 
-`active:false` は historical Workout reference として valid である。`deleted:true` は Master record として存在するが、Runtime resolution では `deleted` warning になり Master 由来表示値を返さない。
+```text
+resolved / active
+resolved / inactive
+deleted
+missing
+```
 
-新規利用候補として扱える record は `active:true` かつ `deleted:false` の record である。Physical delete は導入しない。
+v2.3.0 Master partial acceptance ではさらに、Master 内に存在したが validation により除外された record を `invalid/excluded` として内部的に区別可能にする。
 
-Main Gym は Gym Master record の `main:true` で表す。全 Gym 中最大 1 件であり、初期未設定状態として 0 件を許容する。設定後は Resource Management と AF write pipeline の双方で 0 件化を拒否する。`main:true` の Gym が inactive または deleted の場合は invalid な Main Gym context である。
+`missing`、`deleted`、`invalid/excluded` が UI 上同じ `? + warning` 表現になることは許容するが、内部 reason を潰さない。
 
-## Resource Management Application Behavior
+根拠のない name / body part 等を推論しない。
 
-Resource Management は `/maintenance/` で提供する Master Data maintenance UI である。`maintenance` は route/application ID として残るが、user-facing application name は Resource Management である。Machine/Gym の Create、single-record Edit、Copy to Create、logical Delete、Restore、Main Gym replacement を提供する。Raw JSON editor、arbitrary path write、bulk edit/delete/restore は提供しない。
+## Resource Health と将来の Record Isolation
 
-Resource Management の初期表示と refresh は `/api/v1/common/master-write/documents/{type}` から Local Master snapshot を読み込む。Windows / Android の native AF は Runtime Data 内に保存された `masterDocuments` snapshot を source とし、Resource Management 表示用 data として Remote Master body を独自に read しない。Local Master snapshot が存在しない場合は `MASTER_SYNC_REQUIRED` を返す。
+v2.1.0 では structurally Broken な Master Resource は新 Runtime adoption を停止する。whole-runtime LKG があれば fallback、なければ unavailable。
 
-Unresolved view は `/api/v1/common/master-write/unresolved` から Runtime warning 由来の missing/deleted Gym/Machine reference を同一 unresolved ID 単位で表示する。Affected Workout table で file path/message を確認できる。Resolve to existing は selected active/non-deleted Master record の `source_ids` に unresolved ID を追加する。Create from unresolved は unresolved ID を initial canonical ID として通常 Create dialog を開く。異なる unresolved ID を複数選択する bulk resolve は提供しない。同一 unresolved ID が複数 Workout に現れる場合だけ、1 つの `source_ids` mapping としてまとめて解決する。
+v2.3.0 で Master partial acceptance を導入する場合:
 
-Delete/Restore と Main Gym replacement は row action から開始し、実際の write 前に confirmation dialog を表示する。Edit form では `deleted` と `main` を free boolean として編集できない。Main Gym は active かつ non-deleted Gym だけに設定でき、Main Gym の Delete は UI で拒否する。
+- Resource 自体を構造的に解釈できない場合は whole Resource Broken のまま。
+- 構造を安全に解釈できる場合、Record 単位 validation を行える。
+- valid Record は Runtime 採用可能。
+- invalid Record は Runtime から隔離可能。
+- Recovery の修復・Git replacement 単位は引き続き whole Resource。
 
-Save 成功時は returned revision で表示 state を更新する。Save 失敗時は dialog/draft を閉じず、server error message を表示する。Stale revision conflict の場合も local edit content は保持され、user は再取得後に再適用を判断する。
+つまり **Runtime isolation unit と Recovery write unit は同じである必要はない。**
 
-Native AF write sequence は Local Master snapshot の revision と request `expectedRevision` を比較し、candidate content と相手側 Local Master document を合わせて validation し、Remote revision metadata を確認してから GitHub Contents API へ PUT する。PUT 成功後は returned revision で Local Master snapshot を更新し、Remote Workout data と confirmed Local Master documents から Local Runtime Data を rebuild する。Rebuild または local save に失敗した場合は、remote save 済みであることを示す sync-required error を返す。
+Workout Resource の partial acceptance はこの v2.3.0 方針には含めない。
 
-Development runtime は local `data/master/*.json` に対する same-shape GET/PUT を提供する。Windows runtime と Android runtime は同じ `/master-write/*` shape と Local Master snapshot based read/write ordering を持つ。
+## Main Gym Metrics
 
-## Runtime Use
+Main Gym dependent Weight / Volume metric は Main Gym context が valid な場合だけ比較可能な値を返す。
 
-Master Data は Workout Data の normalize に使用される。
+- configured + valid: Main Gym Session に限定して available。
+- unconfigured: unavailable / unconfigured。
+- constraint violation: invalid。
 
-- raw `gym_id` は normalized `gym.id`、`gym.name`、optional `gym.short_name` になる。
-- raw `machine_id` は normalized `machine_id`、`name`、`body_part` になる。
+Main Gym 未設定を Application Readiness failure にはしない。
 
-Normalized `gym` / machine は Master reference `resolution` を持つ。Reference が `missing` または `deleted` の場合も Runtime Data は accept され、top-level `warnings` に original ID と reason を保持する。Master 由来表示値は shared display helper が `?` として投影する。
+## Resource Management
+
+Resource Management は Machine / Gym の Create、Edit、Copy to Create、logical Delete、Restore、Main Gym replacement を提供する。
+
+Raw JSON editor、arbitrary path write、bulk edit/delete/restore は提供しない。
+
+Read は Local Master snapshot を使用する。Write は expected revision、whole-master validation、Remote revision を確認した用途限定 Git write とする。
+
+Main Gym の Delete は UI で拒否し、`deleted` / `main` を free boolean として編集させない。
+
+Save conflict では local edit content を保持し、利用者が再取得後の再適用を判断する。
+
+## Physical Delete
+
+Master Record の通常操作では Physical delete を導入しない。Historical Workout reference を保持するため logical delete を使用する。

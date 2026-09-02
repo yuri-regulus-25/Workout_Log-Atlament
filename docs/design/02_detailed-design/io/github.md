@@ -1,12 +1,22 @@
-# GitHub I/O 現行仕様
+# GitHub I/O 現行仕様と設計方針
 
-GitHub は native AF runtime における raw Workout Data と Master Data の external source である。
+GitHub は native AF における Workout Data と Master Data の外部 Source of Truth である。
 
 ## Access Model
 
-現行 native AF GitHub access は Workout Data fetch と Master Data read/write を持つ。Workout Log write と generic Git write は実装しない。
+GitHub access は「データ種別ごとの read/write 可否」だけではなく、**用途を限定した Domain operation** として公開する。
 
-API は repository configuration を使用する。
+許可される操作だけが専用境界を持ち、Frontend へ以下を公開しない。
+
+- Generic Git write
+- Raw JSON / JSONL write
+- arbitrary repository path
+- arbitrary commit message
+- Git credential
+
+現行通常機能は Workout fetch と Master read/write を持つ。v2.1.0 Recovery は Broken Workout / Master Resource の安全な replacement write を追加する。
+
+Repository configuration:
 
 - owner
 - repository
@@ -14,51 +24,133 @@ API は repository configuration を使用する。
 - root path
 - resource paths
 
-Resource path は request 前に root path と combine される。
+Resource path は request 前に root path と combine する。ただし write target authorization は利用者入力 path をそのまま信用せず、各 Domain operation の認可規則で確定する。
 
-## Current Resources
+## Resources
 
-現行 valid resource type:
+```text
+WORKOUT
+MACHINE_MASTER
+GYM_MASTER
+```
 
-- `WORKOUT`: directory, default `workouts/`
-- `MACHINE_MASTER`: file, default `master/machines.json`
-- `GYM_MASTER`: file, default `master/gyms.json`
+現行 default:
 
-## Fetch Behavior
+- `WORKOUT`: directory, `workouts/`
+- `MACHINE_MASTER`: file, `master/machines.json`
+- `GYM_MASTER`: file, `master/gyms.json`
 
-Workout directory fetch は directory entry を traverse し、JSON / JSONL runtime file を保持する。
+Resource の存在・空状態は `required` / `emptyAllowed` の自由設定ではなく Resource Type の Domain Contract とする方向へ移行する。
 
-Master resource は file として fetch される。
+## Fetch / Inspection
 
-GitHub error は以下のような AF error code へ map される。
+Workout directory fetch は entry を traverse し JSON / JSONL Resource を取得する。Master は file Resource として取得する。
 
-- `GITHUB_UNAUTHORIZED`
-- `GITHUB_FORBIDDEN`
-- `GITHUB_RATE_LIMIT`
-- `GITHUB_RESOURCE_NOT_FOUND`
-- `GITHUB_CONNECTION_FAILED`
-- `GITHUB_TIMEOUT`
-- `GITHUB_SERVER_ERROR`
+v2.1.0 以降は取得成功と Runtime 採用可否を分離する。取得した Resource は Inspection / Validation を通し、Health に応じて採用・隔離・fallback を判断する。
 
-Android は現行 source で HTTP 429 を `GITHUB_RATE_LIMITED` へ map しており、Windows constant `GITHUB_RATE_LIMIT` と spelling が異なる。
+GitHub error の共通 stable code:
 
-## Master Write Behavior
+```text
+GITHUB_UNAUTHORIZED
+GITHUB_FORBIDDEN
+GITHUB_RATE_LIMIT
+GITHUB_RESOURCE_NOT_FOUND
+GITHUB_CONNECTION_FAILED
+GITHUB_TIMEOUT
+GITHUB_SERVER_ERROR
+```
 
-Master write は GitHub Contents API のみに限定する。書き込み target は AF 内部 allowlist で固定し、configuration や request body から任意 path を受け取らない。
+Android 現行実装の `GITHUB_RATE_LIMITED` は共通 `GITHUB_RATE_LIMIT` へ統一する。
 
-- `MACHINE_MASTER`: `master/machines.json`
-- `GYM_MASTER`: `master/gyms.json`
+## Master Write
+
+Master write は用途限定 endpoint から GitHub Contents API を使用する。現行 target は AF 内部 allowlist で固定する。
+
+```text
+MACHINE_MASTER -> master/machines.json
+GYM_MASTER     -> master/gyms.json
+```
 
 Write sequence:
 
-1. Local Master snapshot の revision と request の `expectedRevision` を比較する。
-2. Request content と相手側 Local Master document を合わせて whole-master validation する。
-3. 対象 remote Master content metadata を GET して current SHA を確認する。
-4. Remote SHA と Local Master snapshot revision が一致する場合だけ、fixed commit message、base64 content、current SHA、configured branch で PUT する。
-5. PUT 成功後、new SHA を Local Master snapshot revision として採用し、Remote Workout data と confirmed Local Master documents から Local Runtime Data を rebuild する。
+1. Local Master snapshot revision と `expectedRevision` を比較。
+2. Candidate whole-master validation。
+3. Remote content metadata を取得し current SHA を確認。
+4. Remote / Local revision が一致する場合のみ fixed commit message で PUT。
+5. 成功後 new SHA を採用し Runtime を rebuild。
 
-Local revision mismatch または remote revision mismatch は PUT せず sync-required/conflict response を返す。GitHub PUT が 409 を返した場合も conflict へ map する。PUT response に new SHA がない場合は `MASTER_WRITE_FAILED` とする。
+Local / Remote mismatch と GitHub 409 は conflict とする。Ambiguous success は `MASTER_WRITE_FAILED` とし blind retry しない。
 
-Runtime Data が参照中の Gym/Machine の logical delete は Master write として許可する。参照側は次回 sync/runtime rebuild で unresolved warning として扱い、Workout Data file は書き換えない。Unresolved Master resolution も Master write として処理する。既存 record への解決は `source_ids` の追加、新規 record への解決は通常 Create flow であり、Workout Data file は GitHub に PUT しない。
+Runtime が参照中の Gym / Machine logical delete は許可する。Workout Raw Data は変更せず、次回 Runtime rebuild で unresolved warning とする。
 
-Master write は Production Repository を直接触る integration test を前提にしない。Windows unit/integration tests は fake `HttpMessageHandler` で GitHub status、network error、timeout、ambiguous write response を再現する。
+## Recovery Write
+
+Recovery は Master write とは別の用途限定 Git write 境界である。
+
+### 共通規則
+
+- 1 Recovery = 1 Broken Resource = 1 logical Git commit。
+- Source `path + revision` を optimistic concurrency の基準とする。
+- Write 前に source revision と関連 repository context を再確認する。
+- unrelated Resource を同時変更しない。
+- auto merge / rebase / overwrite / force / non-fast-forward を行わない。
+- Commit message は AF 固定。
+- Raw source / replacement content / credential を log や summary に残さない。
+
+### Same-path replacement
+
+同じ path の replacement は GitHub Contents API を使用できる。
+
+### Path relocation
+
+Path が変わる Recovery は、旧 path の削除と新 path の作成を **1 atomic Git commit** で実行する。
+
+```text
+expected remote parent
+  ↓ recheck
+create replacement blob/tree
+  ↓
+old path delete + new path create
+  ↓
+create commit
+  ↓ remote head recheck
+update ref (fast-forward only)
+```
+
+Git Data API 等の atomic primitive を使用する。Contents API を順番に2回呼ぶ delete→create / create→delete は禁止する。Atomic operation を提供できない Platform build は relocation を成功扱いしてはならない。
+
+Remote head が期待 parent から変化していた場合は `RECOVERY_WRITE_CONFLICT`。Force update しない。
+
+Git write result が曖昧な場合は Remote state を reconcile し、既に commit 済みかを確認してから次の操作を決める。同一内容を blind retry しない。
+
+## Reflection
+
+Recovery commit 成功後は re-inspection / sync / Runtime rebuild を試行する。
+
+Reflection failure は Git commit を rollback しない。
+
+```text
+Git failed
+Git saved + reflection failed
+Git saved + reflection succeeded
+```
+
+を区別する。2番目は `RECOVERY_REFLECTION_FAILED` として「保存済み・反映失敗」を表現する。
+
+## Testing
+
+Production Repository を直接変更する unit / integration test を前提にしない。
+
+GitHub transport と write primitive は fake / test double で以下を再現できるようにする。
+
+- HTTP status / auth failure
+- rate limit
+- network error / timeout
+- revision conflict
+- ambiguous write result
+- remote head changed before ref update
+- same-path write
+- atomic relocation
+- Git success + reflection failure
+
+Windows / Android で同じ Git write policy を検証する共通 test vector / contract test を持つ。

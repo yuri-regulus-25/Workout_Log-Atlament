@@ -1,86 +1,65 @@
-# Dashboard 現行仕様
+# Dashboard 現行仕様と期間契約
 
-## Responsibility
+## 責務
 
-Dashboard は現在の workout situation を概観表示する。
+Dashboard は Workout の現在状況を概観表示する。詳細履歴 explorer ではなく、Workout Data を編集しない。
 
-Detailed history explorer ではなく、Workout Data を edit しない。
+Source: `src/frontend/dashboard-react/`
 
-## Source and Framework
+Framework: React / TypeScript / Vite / react-apexcharts。
 
-Source:
-
-```text
-src/frontend/dashboard-react/
-```
-
-Framework:
-
-- React
-- TypeScript
-- Vite
-- ApexCharts through `react-apexcharts`
-
-## Route
-
-```text
-/dashboard/
-```
+Route: `/dashboard/`
 
 ## Data Access
 
-Dashboard は `@workout-lab/workout-data` の `loadRuntimeWorkoutSessions()` を call する。
+`@workout-lab/workout-data` の `loadRuntimeWorkoutSessions()` を使用する。Load issue は Data Load Warning として表示する。
 
-Load issue は Data Load Warning として表示する。
+## Widget と期間
 
-## Current Screen Behavior
+Dashboard 全体に暗黙の単一期間を仮定しない。各 Widget がどの期間の事実を表示するかを明示する。
 
-現行 Dashboard は以下を render する。
+| Widget / Metric | Period Contract |
+|---|---|
+| Workout Count | current local calendar month |
+| Set Count | current local calendar month |
+| Volume | current local calendar month |
+| Workout / Set comparison | current month vs previous calendar month |
+| Latest Workout Date | latest available Session |
+| Latest Workout | latest available Session |
+| Recent Workouts | latest N Sessions。Nは表示仕様 |
+| Volume Trends | recent Session window defined by widget |
+| Set Count Trends | widget-defined trend period |
+| Training Balance | current local calendar month |
 
-- monthly workout count
-- monthly set count
-- monthly volume
-- previous month comparison for workout count and set count
-- latest workout date
-- recent session の Volume Trends area chart
-- Latest Workout card
-- Set Count Trends bar chart
-- current month body part sets の Training Balance bar chart
-- Workout Detail への link を持つ Recent Workouts table
+`month` は rolling 30 days ではなく current local calendar month を意味する。
 
-Current month は `workout-core` の `getCurrentLocalYearMonth()` により、runtime local calendar month に基づいて resolve される。
+Widget 固有期間を変更する場合は、その Widget の契約として明示し、「Dashboardだから全部今月」と推測させない。
 
 ## Core Use
 
-Dashboard は `workout-core` を以下に使用する。
+Dashboard は `workout-core` の決定論的集計を使用する。
 
-- monthly sessions
-- monthly volume
+- monthly sessions / volume
 - recent sessions
-- total sets
-- total volume
+- total sets / volume
 - body part summary
-- display date formatting
-- workout rows
-- previous month range and factual deltas
+- previous month range
+- factual delta
+- period range resolution
+- daily / weekly / monthly aggregation
 
-Phase 5-A 以降、Dashboard から再利用可能な `workout-core` logic:
+Dashboard は集計結果から、根拠となるモデルなしに成長・不足・刺激・効果・良否を推論しない。
 
-- period range resolution for `7d` / `28d` / `month` / `3m` / `6m` / `all`
-- previous period and previous month range resolution
-- factual delta calculation for count-based values
-- daily / weekly / monthly aggregation based on session count, machine count, set count, and rep count
+Weight / Volume を Performance 比較へ使う場合は同一 Gym・同一 Machine の比較可能性原則に従う。
 
 ## Navigation
 
-Dashboard は current route ID `dashboard` で shared navigation を受け取る。
+Current route ID は `dashboard`。
 
-Recent workout row は以下へ link する。
+現行 Recent Workout row は `/workouts/<date>/` へ link する。これは Date navigation policy であり Workout Domain Identity を Date とする契約ではない。
 
-```text
-/workouts/<date>/
-```
+将来 Session detail / edit を直接指す場合は `session_id` を明示的に識別できる route を使用する。
 
 ## Styling
 
-Dashboard は shared styles に加えて `src/frontend/dashboard-react/src/App.css` と `index.css` を使用する。
+Shared styles に加え Application 固有 CSS を使用する。Cross-framework interaction semantics は共通UX契約へ従う。

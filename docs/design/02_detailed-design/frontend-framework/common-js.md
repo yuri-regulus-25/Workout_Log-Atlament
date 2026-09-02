@@ -1,109 +1,158 @@
-# Frontend Common JS 現行仕様
+# Frontend Common 現行仕様と設計方針
 
 Common frontend code は `src/shared/frontend-common/` 配下にある。
 
-## Exports
+## 責務
 
-Package は以下を export する。
+Frontend Common は Framework に依存しない意味論・metadata・client boundary を共有する。
 
-- root AF client type と function
-- navigation utility
-- page transition constant と class name
-- theme utility
-- branding utility と CSS
-- Character Easter Egg utility と CSS
+主な責務:
+
+- typed AF client
+- Application metadata / navigation
+- Application Access Policy
+- Theme semantic contract
+- Branding semantic contract
+- page transition
+- shared interaction contract
+- Character Easter Egg
+
+React / Vue / Angular / Svelte / Solid 等の Component 実装そのものを強制共有する必要はない。
 
 ## AF Client
 
-Root `src/shared/frontend-common/src/index.ts` は以下の typed helper を公開する。
+Typed helper は `/api/v1/common/*` を呼び common AF response envelope を parse する。
 
-- `getAfStatus()`
-- `getConfiguration()`
-- `updateConfiguration()`
-- `getCredentialStatus()`
-- `updateCredential()`
-- `syncWorkoutData()`
-
-これらの helper は `/api/v1/common/*` を call し、common AF response envelope を parse し、result に `httpStatus` を追加する。
-
-`src/shared/frontend-common/src/af-client.js` は、Portal が使用する小さな JavaScript `getAfStatus()` helper も提供する。
-
-## Navigation Metadata
-
-`navigation/application-registry.js` は current application metadata の共有SoTであり、Portal card、shared drawer、MPA build/validation、Development Runtime gateway/watch が同じ registry を参照する。`navigation/routes.ts` は TypeScript consumer 向けに同じ current route を定義する。
+現行代表 helper:
 
 ```text
-portal: /
-dashboard: /dashboard/
-workouts: /workouts/
-machines: /machines/
-analytics: /analytics/
-settings: /settings/
-maintenance: /maintenance/
+getAfStatus()
+getConfiguration()
+updateConfiguration()
+getCredentialStatus()
+updateCredential()
+syncWorkoutData()
 ```
 
-`navigation/apps.ts` はそれらの application の display metadata と icon を定義する。Drawer は current `applications` list を含む。`portal` は `drawer:false` だが metadata には残る。Portal cards は `portalCardApplications` を使用し、`portal` を除く current hosted applications、`dashboard`、`workouts`、`machines`、`analytics`、`settings`、`maintenance` を表示する。
+v2.1.0 Recovery では purpose-limited Recovery helper / DTO を同じ shared boundary へ追加する。
 
-## Shared Navigation UI
+Frontend client は Resource Health、readiness、write eligibility を human message から推論しない。AF が返す structured facts / stable code を使用する。
 
-`initializeAppNavigation()` は non-Portal application へ navigation を inject する。
+## Application Registry
 
-生成するもの:
+Hosted Application metadata は**単一の Registry を Source of Truth** とする。
 
-- desktop drawer
-- mobile header
-- mobile drawer
-- overlay
-- branding logo triggers
-- theme toggle triggers
+現行 `navigation/application-registry.js` と `navigation/routes.ts` 等に同じ route 情報が重複している場合、長期的には Registry または Registry から生成した artifact に統合する。
 
-Shared navigation state は DOM class と ARIA attribute で表現される。
+Registry から導出する対象:
+
+- Portal cards
+- shared navigation
+- production route / base path
+- MPA build / validation
+- Development Gateway / watch
+- Windows / Android AF hosting metadata
+- TypeScript consumer metadata
+
+同じ Application 一覧を利用箇所ごとに手書きしない。
+
+現行 hosted routes:
+
+```text
+portal      /
+dashboard   /dashboard/
+workouts    /workouts/
+machines    /machines/
+analytics   /analytics/
+settings    /settings/
+maintenance /maintenance/
+```
+
+`maintenance` は内部 route/application ID として残せるが、利用者向け機能名は Resource Management / Data Recovery 等、実際の機能を表す名称を使用する。
+
+## Shared Navigation
+
+Navigation の共通契約は「同じDOMを必ず使う」ではなく、意味・配置・状態・interaction・accessibility を共有する。
+
+`initializeAppNavigation()` は現行 non-Portal application へ desktop drawer、mobile header / drawer、overlay、branding / theme trigger を提供する。
+
+Framework 固有 Application が独自 Component で同じ Navigation を実装する場合も、Application Registry と共通UX契約を正とする。
 
 ## Theme
 
-Theme state は localStorage key に保存される。
+Theme は semantic contract と永続化実装を分離する。
+
+Semantic state:
 
 ```text
-atlament.system.theme
+light
+dark
 ```
 
-Light mode は explicit `data-theme` attribute を持たない。Dark mode は `data-theme="dark"` を使用する。
+現行 browser implementation:
+
+```text
+localStorage: atlament.system.theme
+DOM: data-theme="dark"
+```
+
+LocalStorage key や DOM attribute は現行 implementation detail であり、Theme の意味そのものではない。
+
+Application は semantic Design Token を使用し、primary / danger / warning 等の意味色を画面ごとに hard-code しない。
 
 ## Branding
 
-Branding state は localStorage key に保存される。
+Branding も semantic state と保存方式を分離する。
+
+現行 browser implementation:
 
 ```text
-atlament.system.branding.logoVariant
+localStorage: atlament.system.branding.logoVariant
+primary   -> green brand
+secondary -> violet brand
+DOM: data-brand
 ```
 
-Current mapping:
+Branding storage implementation を Application 固有 Domain logic にしない。
 
-- `primary` logo -> green brand
-- `secondary` logo -> violet brand
+## Common UX Contract
 
-Brand state は `data-brand="green"` または `data-brand="violet"` で表現される。
+Cross-framework UX は [共通UX契約](./common-ux-contract.md) を正とする。
+
+共有対象の例:
+
+- Dialog semantics
+- Loading Overlay
+- Primary Action
+- Reset
+- Pagination
+- Responsive behavior
+- Hover / Touch
+- accessibility
+- Empty / Warning / Error state
+
+Framework ごとに Component source が異なることは許容するが、利用者に見える意味論を理由なく変えない。
 
 ## Page Transition
 
-現行 page transition は以下を使用する。
+現行 page transition:
 
-- class name exported by page transition package
 - 240ms entry animation
-- right-to-left offset of 32px
+- right-to-left offset 32px
 - opacity transition
-- `prefers-reduced-motion` は animation を disable にする
+- `prefers-reduced-motion` では animation disable
+
+Animation timing は UX implementation detail であり、Domain contract にはしない。
 
 ## Character Easter Egg
 
 Character Easter Egg は `src/shared/frontend-common/src/easter-egg/` 配下にある。
 
-Current trigger:
+現行 trigger:
 
-- Application name text が current page lifetime 中に 5 回 click される。
-- Count は永続化されない。
-- Character image と text を含む fixed lower-left snackbar を表示する。
-- Message active 中の repeated trigger は queue される。
-- Asset と voice category は source 内の asset/category contract を通じて選択される。
+- Application name を page lifetime 中5回 click。
+- Count は永続化しない。
+- fixed lower-left snackbar を表示。
+- active 中の repeated trigger は queue。
 
 AF はこの feature に関与しない。

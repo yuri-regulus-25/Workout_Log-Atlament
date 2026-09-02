@@ -2,9 +2,18 @@
 
 ## Root Scripts
 
-Root `package.json` は主要な build / validation workflow を定義する。
+Root `package.json` は主要 build / validation workflow を定義する。
 
-主要 script:
+- `npm run build`: Frontend application を build し MPA artifact を assemble。
+- `npm run build:apps`: Portal、Error Pages、各 application を build。
+- `npm run build:mpa`: `dist/` assemble。
+- `npm run preview:mpa`: build 済み `dist/` serve。
+- `npm run watch`: development runtime / gateway / frontend dev server 起動。
+- `npm test`: Vitest。
+- `npm run check:all`: version / Analytics / data / MPA smoke check。
+- `npm run build:windows`: Windows distribution。
+- `npm run build:android`: Android debug APK。
+- `npm run build:android:release`: Android release APK。
 
 - `pnpm run build`: すべての frontend application を build し、MPA artifact を assemble する。
 - `pnpm run build:apps`: Portal、Error Pages、各 framework app を build する。
@@ -19,43 +28,56 @@ Root `package.json` は主要な build / validation workflow を定義する。
 
 ## MPA Assembly
 
-`tools/build/build-mpa.mjs` は production `dist/` layout を作成する。
+現行 `tools/build/build-mpa.mjs` は production `dist/` layout を作成する。
 
-Copy 対象:
+```text
+dist/
+├─ portal root / error pages / version.json
+├─ dashboard/
+├─ workouts/
+├─ machines/
+├─ analytics/
+├─ settings/
+└─ maintenance/
+```
 
-- Portal artifact を `dist/` root へ配置する。
-- Error page artifact を `dist/` root へ配置する。
-- `src/version.json` を `dist/version.json` へ配置する。
-- Dashboard を `dist/dashboard/` へ配置する。
-- Workouts を `dist/workouts/` へ配置する。
-- Machines を `dist/machines/` へ配置する。
-- Analytics を `dist/analytics/` へ配置する。
-- Settings を `dist/settings/` へ配置する。
-- Resource Management を `dist/maintenance/` へ配置する。
-
-現行 MPA build script が認識するのは、`tools/application-registry.mjs` に定義された Portal と既存 hosted application のみである。
+現行 MPA build が認識する Application は `tools/application-registry.mjs` を基準とする。
 
 ## Development Runtime
 
-Development では local Node runtime と gateway を使用する。
+Development:
 
-- Development Gateway: `127.0.0.1:5173`
-- Portal: `127.0.0.1:5174`
-- Dashboard: `127.0.0.1:5175`
-- Workouts: `127.0.0.1:5176`
-- Machines: `127.0.0.1:5177`
-- Analytics: `127.0.0.1:5178`
-- Settings: `127.0.0.1:5179`
-- Development Runtime API: `127.0.0.1:5180`
-- Resource Management: `127.0.0.1:5181`
+```text
+Gateway                 127.0.0.1:5173
+Portal                  127.0.0.1:5174
+Dashboard               127.0.0.1:5175
+Workouts                127.0.0.1:5176
+Machines                127.0.0.1:5177
+Analytics               127.0.0.1:5178
+Settings                127.0.0.1:5179
+Development Runtime API 127.0.0.1:5180
+Resource Management     127.0.0.1:5181
+```
 
-Node development runtime は repository の `data/master` と `data/workouts` を直接読み取り、local development 用に AF-compatible read API を公開する。Credential storage、GitHub sync、configuration write、native shell lifecycle は実装しない。
+Node development runtime は repository `data/master` / `data/workouts` を直接読み、local development 用 AF-compatible read API を公開する。
+
+Credential storage、GitHub sync、configuration write、Native lifecycle 等を完全模倣する必要はない。ただし Native AF と同じ endpoint / DTO を提供する箇所は同じ意味論に従う。
+
+## Runtime Contract
+
+Windows / Android Runtime の product behavior は [Runtime Contract Matrix](../application-framework/runtime-contract-matrix.md) を正とする。
+
+Build / packaging の違いを理由に Resource Health、readiness、Recovery、empty state 等の意味を変えない。
+
+Runtime file の物理名や保存 root は Platform Adapter の責務であり、Domain logic は logical storage contract を使用する。
 
 ## Preview Runtime
 
 `preview:mpa` は build 済み `dist/` のみを serve する。Source file は build しない。
 
-`check:mpa` は `preview:mpa` に対して known production route と expected 404 behavior を validate する。
+`check:mpa` は known production route と expected 404 behavior を検証する。
+
+Application Registry から導出できる route / artifact の smoke test は registry を入力として生成し、別の手書き application list を test 内に持たない方向へ寄せる。
 
 ## Version Management
 
@@ -66,3 +88,5 @@ Node development runtime は repository の `data/master` と `data/workouts` �
 - Android Gradle version metadata
 
 File ごとの手動 version edit は documented update path ではない。
+
+About 等の表示画面は Version metadata の Source of Truth にならず、共通 Build Metadata contract を読み取る viewer とする。
