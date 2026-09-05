@@ -1,14 +1,20 @@
-# Atlament v3.0.0 — Application Shell Design
+# Atlament v3.0.0 — Application Shell 実装指示書
 
-## Positioning
+## 1. 目的
 
-v3.0.0でDashboard以下のApplication群へ適用するApplication Shellを刷新する。
+v3.0.0では、Dashboard以下の各画面へ共通適用するApplication Shellを刷新する。
 
-本資料は完成DOM / CSS仕様ではなく、責務・構造・Visual DirectionのBaselineを定義する。
+本資料は、Application Shellの責務・画面構造・実装境界・レスポンシブ時の挙動を定義する実装指示書である。
 
-作成済みのApplication Shell MockをVisual Baselineとする。ただし、Mock内のApplication Contentはv2.x系HTMLを検証目的で組み込んだものであり、DOM構造や細かなCSS値をv3.0.0の確定仕様とはしない。
+参照対象のMHTMLモックは、完成済みDOM / CSSの仕様書ではない。画面全体の構造、視覚上の方向性、配置関係を確認するための基準として使用する。
 
-## Shell Structure
+特に、各アプリケーション用モック内の画面本文はv2.x系HTMLを検証目的で組み込んだものであり、そのDOM構造・CSS値・余白値をv3.0.0の確定仕様として流用してはならない。
+
+---
+
+## 2. 実装対象と責務
+
+Application Shellは以下を担当する。
 
 ```text
 Viewport
@@ -19,30 +25,69 @@ Viewport
       └─ Screen Content
 ```
 
-- Navigation / HeaderはShell責務とする。
-- Main Surfaceは大きな角丸を持つNeutral系Floating Surfaceとする。
-- Theme / Brand Colorは主としてShell外周へ使用する。
-- Screen固有UIはMain Surface内へ配置する。
-- Viewport全体ではなくMain Surface内部を主なScroll領域とする。
-- Scrollbarは視覚的には目立たせない方向とする。
-- ShellはVanilla JavaScript + CSSで一元実装する。
-- React / Vue / Angular / Svelte / SolidJS等の各Screen FrameworkへShell実装を分散させない。
+### Shellが担当するもの
 
-## Visual Direction
+- Atlament Logoの表示
+- Portalへの戻り導線
+- Application Navigation
+- 現在画面の識別情報を表示するHeader
+- Header文字列部のEaster Egg
+- Main Surfaceの配置
+- Desktop / MobileでのNavigation表示方式切替
+- Shell外周のテーマ表現
 
-- Theme Surface + Floating Main Surfaceを基本構造とする。
-- Primary ColorはGreenを基本とする。
-- 現行より柔らかいVisualへ刷新する。
-- Application Screenの実用性・情報密度は維持する。
-- Redesignを理由として過剰な余白や巨大なUIを導入しない。
-- Atlamentらしさは主としてShell / Brand Surface側で表現する。
-- spacing / radius / font size / breakpoint等の具体値はMockを参考に実装時調整する。
+### Shellへ持ち込まないもの
 
-## Header
+以下は各画面側の責務としてMain Surface内に残す。
 
-従来各Screen内に存在していたScreen Title / Descriptionは削除ではなくShell Headerへ責務移管する。
+- 検索条件
+- Filter
+- Period Selector
+- Session Navigation
+- 作成・編集などの画面固有操作
+- 画面固有データ
+- 画面固有の状態管理
 
-Headerは原則として以下の1行形式とする。
+Shell側へ画面固有ロジックを吸収してはならない。
+
+---
+
+## 3. 実装方式
+
+Application Shellは **Vanilla JavaScript + CSSで一元実装する**。
+
+React / Vue.js / Angular / Svelte / SolidJSの各画面へ、Shell本体の実装を分散させてはならない。
+
+各Framework側は、原則としてMain Surfaceへ自身の画面内容を描画する責務のみを持つ。
+
+実装上、各FrameworkからShellへ必要な情報を渡す必要がある場合も、Shell実装そのものをFramework別に複製しないこと。
+
+---
+
+## 4. Main Surface
+
+Main Surfaceは、Shell外周のテーマ面上に配置する大きな角丸の中立色Surfaceとする。
+
+実装時は以下を守る。
+
+- 画面固有UIはMain Surface内へ配置する。
+- 主な縦スクロール領域はViewport全体ではなくMain Surface内部とする。
+- NavigationとHeaderはMain Surface内スクロールに追従させず、Shell構造として固定する。
+- Scrollbarは視覚的に過度に目立たせない。
+- 既存画面の情報密度を不必要に落とさない。
+- UI刷新を理由に、巨大な余白・巨大なCard・情報量削減を行わない。
+
+角丸・余白・Surface色・影などの具体値はモックを初期基準とし、実画面を組み込んだ状態で調整する。
+
+---
+
+## 5. Header
+
+### 5.1 責務
+
+従来各画面内に存在していた画面名と説明文は、削除ではなくShell Headerへ責務を移す。
+
+Headerは現在画面を識別するための簡潔な1行表示とする。
 
 ```text
 {Screen Name} - {日本語概要}
@@ -54,23 +99,41 @@ Headerは原則として以下の1行形式とする。
 Dashboard - 現在までのワークアウトの概要を表示します
 ```
 
-従来のTitle + Subtitleによる2段構成をそのまま移植せず、Screen Nameと日本語概要を1行へ簡略化する。
+### 5.2 実装ルール
 
-Search / Filter / Period Selector / Session Navigation / Create・Edit等のDomain固有ActionはScreen責務としてMain Surface内に残す。
+- 画面名と概要は1行で表示する。
+- 従来のTitle + Subtitleによる2段構成をそのまま再現しない。
+- 日本語概要は短い1文とする。
+- 画面固有操作をHeaderへ追加しない。
+- Header文字列の表示責務はShellへ集約する。
 
-現行モデルでHeader文字列部に存在するEaster EggはShell Header側へ移植し、各Frameworkへ分散させない。
+### 5.3 Easter Egg
 
-## Navigation
+現行のEaster Eggは、Header文字列部へ移植する。
+
+実装時は以下を守る。
+
+- Easter Eggの処理はShell Header側へ置く。
+- 各Frameworkの画面コンポーネントへ同等処理を複製しない。
+- 既存挙動の詳細は現行ソース確認後に継承する。
+- 現行挙動を確認できない場合は、新しい挙動を推測して作らず作業を止める。
+
+---
+
+## 6. Navigation
+
+Navigationは以下の2領域に分ける。
 
 ```text
 Navigation
-├─ Fixed Area
+├─ 固定領域
 │  ├─ Atlament Logo SVG
 │  ├─ Divider
-│  └─ Portal Access
+│  └─ Portal
 │     ├─ Icon
 │     └─ Label
-└─ Scrollable Area
+│
+└─ スクロール領域
    └─ Application Navigation
       ├─ Dashboard
       ├─ Workout
@@ -80,17 +143,27 @@ Navigation
       └─ Settings
 ```
 
-### Logo
+### 6.1 固定領域
 
-- 既存Atlament Logo SVGを利用する。
-- LogoはNavigation ItemではなくBrand Identityとして扱う。
-- 現行のLogo押下Primary Color Changeギミックは継承候補とする。
-- Primary Color ChangeのためだけにSettingsへ設定項目を追加しない。
-- 本InteractionはBrand Interaction / Easter Eggに近い位置付けとする。
+Logo、Divider、PortalはNavigation内で固定する。
 
-### Portal Access
+Application Navigationの項目数が増えた場合も、LogoとPortalがスクロールによって押し出されない構造にする。
 
-PortalはApplication Shell内のScreenではないため、Application Navigationとは意味的・Visual的に分離する。
+### 6.2 Logo
+
+- 既存Atlament Logo SVGを使用する。
+- LogoをNavigation Itemとして扱わない。
+- LogoはBrand Identityとして扱う。
+- 現行のLogo押下によるPrimary Color変更機能は継承候補とする。
+- Primary Color変更機能だけを理由としてSettingsへ新規設定項目を追加しない。
+
+Logo押下時の現行挙動を実装前に確認し、継承可否を判断する。現行仕様が不明な場合は推測実装しない。
+
+### 6.3 Portal
+
+PortalはApplication Shell内部の画面ではない。
+
+Portal導線はApplication Navigationと意味的にも視覚的にも分離する。
 
 ```text
 Logo
@@ -105,52 +178,21 @@ Resource Management
 Settings
 ```
 
-Portal AccessはNavigation上部へ固定し、Application NavigationのScrollによって押し出されない構造とする。
+PortalはNavigation上部の固定領域へ配置する。
 
-Icon候補は `mdi-arrange-send-to-back` とする。最終的なIcon選択は実装時に調整可能とする。
+Portal用Iconは `mdi-arrange-send-to-back` を候補とする。Iconの最終採用は実装時に視認性を確認して決定する。
 
-### Application Navigation
+### 6.4 Application Navigation
 
-Dashboard以下のApplication NavigationのみをNavigation内部のScroll対象とする。
+Dashboard以下のApplication NavigationのみをNavigation内部のスクロール対象とする。
 
-Visualは作成済みShell MockのNavigationをBaselineとする。
+各項目はShell内部の画面遷移を担当する。
 
-## Responsive Navigation
+PortalだけはShell内部遷移ではなく、Portal Layoutへの切替として扱う。
 
-### md以上
+---
 
-Navigationを常時表示する。
-
-### smレベル
-
-常設Navigationを非表示にし、同一のNavigation ContentをMobile Drawerとして表示する。
-
-Desktop用とMobile用でNavigation責務を二重実装しない。
-
-```text
-Desktop / Tablet
-Navigation Content → Shell左側へ常設
-
-Mobile
-Navigation Content → 通常非表示
-                   → Edge Swipe時にDrawer表示
-```
-
-Mobile Drawerは左端からのSwipeで表示する。
-
-想定Interaction:
-
-- 左端からSwipe → Drawer Open
-- Drawer外領域Tap → Drawer Close
-- Application Navigation選択 → Drawer Close + Screen遷移
-- Portal選択 → Portal遷移
-- Drawerを左方向へSwipe → Drawer Close
-
-Drawer幅は画面横幅の約70%を初期Baselineとする。ただし厳密値は固定せず、実機確認時に調整する。
-
-Gesture閾値・Animation Duration・Easing等も実装詳細として扱う。
-
-## Portal Boundary
+## 7. Portalとの境界
 
 PortalはDashboardより上位のEntry Pointであり、Application Shell内部へ収容しない。
 
@@ -166,57 +208,149 @@ Application Shell
   └─ Settings
 ```
 
-Shell上のPortal AccessはShell内部の別Screenへの遷移ではなく、Portalへ戻るための導線とする。
+Portal選択時はApplication Shellを外し、Portal独自Layoutへ切り替える。
 
-Portalへ遷移した時点でApplication Shellは外れ、Portal独自Layoutへ切り替わる。
+PortalとApplication Shellは同一Layoutを共有しない。
 
-PortalとApplication Shellは同一Layoutを共有しないが、Primary Color / Surface / Typography / Motion等のVisual Languageは共有可能とする。
+ただし、以下の視覚言語は共通化してよい。
 
-Portal詳細Redesignは別途検討する。
+- Primary Green
+- Logo
+- Typography
+- 角丸Surface
+- 影
+- Motionの方向性
+- Iconの扱い
 
-## Responsive / Visual Detail Policy
+共通の見た目を持つことと、同一Layout Componentを共有することは別問題として扱う。
 
-設計段階では以下を過度に固定しない。
+---
 
-- breakpointの厳密なpx値
+## 8. レスポンシブ時のNavigation
+
+### 8.1 md以上
+
+NavigationをShell左側へ常時表示する。
+
+### 8.2 smレベル
+
+常設Navigationを非表示にする。
+
+同一のNavigation Contentを、左端から呼び出すDrawerとして表示する。
+
+Desktop用とMobile用でNavigation内容を二重実装してはならない。
+
+```text
+Navigation Content
+├─ Logo
+├─ Portal
+└─ Application Navigation
+
+md以上
+└─ Shell左側へ常設
+
+smレベル
+└─ 通常非表示
+   └─ 左端SwipeでDrawer表示
+```
+
+### 8.3 Mobile Drawerで必要な挙動
+
+実装時は最低限、以下の操作を成立させる。
+
+- 左端から右方向へSwipeするとDrawerを開く。
+- Drawer外領域をTapするとDrawerを閉じる。
+- Application Navigation選択後にDrawerを閉じて画面遷移する。
+- Portal選択時はDrawerを閉じてPortalへ遷移する。
+- Drawer上で左方向へSwipeするとDrawerを閉じる。
+
+Drawer幅は画面横幅のおおむね70%を初期基準とするが、厳密値は固定しない。
+
+Swipe判定距離、Animation Duration、Easing、Drawer幅の最終値は実機確認後に調整する。
+
+---
+
+## 9. 視覚方針
+
+- Primary ColorはGreenを基本とする。
+- Shell外周でAtlamentらしさを表現する。
+- Main Surfaceは中立色を中心とする。
+- 現行より柔らかい視覚表現へ寄せる。
+- 情報密度を維持する。
+- 視認性・操作性を損なう装飾は追加しない。
+
+以下の具体値は本資料では固定しない。
+
+- breakpointのpx値
 - Navigation幅
-- Mobile Drawer幅の厳密値
-- spacing / radius / font size
-- Swipe判定距離
-- transition duration / easing
-- scrollbarの細かな実装
+- Drawer幅の厳密値
+- spacing
+- radius
+- font size
+- Swipe閾値
+- transition時間
+- easing
+- scrollbarの細部
 
-これらはShell Mockを初期Baselineとし、実際のScreen Contentを組み込んだ実装時に調整する。
+これらはモックと実画面の両方を確認しながら調整する。
 
-一方、Responsiveによって責務・構造が変化する箇所については本設計で定義する。
+---
 
-## Implementation Principles
+## 10. 実装手順
 
-1. Shell責務を各Application Frameworkへ分散させない。
-2. Screen固有責務をShellへ過剰に持ち込まない。
-3. Mockの具体値より、Mockが示す空間構造とVisual Directionを優先する。
-4. Responsive時に同一Navigation Contentを可能な限り再利用する。
-5. UI上の修正箇所から実装責務を人間が自然に追跡できる構造を維持する。
-6. 実装上の複雑性が判明した場合は本設計をBaselineとして追加分割・調整する。
+実装時は以下の順序で進める。
 
-## Decision Status
+1. 現行Shell関連ソースを確認し、Navigation / Header / Layout / Easter Egg / Primary Color変更処理の所在を特定する。
+2. 現行画面側に重複しているShell責務を洗い出す。
+3. Vanilla JavaScript + CSSによるShell本体を一元化する。
+4. Headerへ画面名と日本語概要の表示責務を移す。
+5. Header Easter EggをShell側へ移す。
+6. Navigationを固定領域とスクロール領域へ分ける。
+7. Portal導線とApplication Navigationを分離する。
+8. Main Surface内部のみが主にスクロールする構造へ調整する。
+9. md以上の常設Navigationを実装する。
+10. smレベルで同一Navigation ContentをDrawerとして表示する。
+11. 各Framework画面から重複したShell実装を除去する。
+12. Desktop / Tablet / Mobileで表示崩れと遷移を確認する。
 
-| 項目 | 状態 |
+現行ソース確認の結果、本資料と矛盾する既存依存が見つかった場合は、その場で推測修正せず影響範囲を整理してから対応する。
+
+---
+
+## 11. 完了条件
+
+以下を満たした時点でApplication Shell実装を完了とみなす。
+
+- Dashboard以下の各画面で同一Shellが使用されている。
+- Shell本体が各Frameworkへ重複実装されていない。
+- Headerに `画面名 - 日本語概要` が表示される。
+- 画面固有操作がHeaderへ移動していない。
+- Header Easter EggがShell側で動作する。
+- Logo / PortalがApplication Navigationのスクロールに巻き込まれない。
+- Application Navigationのみが必要に応じてスクロールする。
+- Portal選択時にApplication Shellが外れる。
+- md以上でNavigationが常設される。
+- smレベルでNavigationが通常非表示となりDrawerから利用できる。
+- Desktop / Tablet / Mobileで主要操作が成立する。
+- Main Surface内の画面情報密度が不必要に低下していない。
+
+---
+
+## 12. 未確定事項
+
+以下は実装時調整事項として残す。
+
+| 項目 | 扱い |
 |---|---|
-| Shell全体構造 | 決定 |
-| Visual Direction | Shell MockをBaselineとして決定 |
-| Shell実装 | Vanilla JavaScript + CSS |
-| Header責務 | 決定 |
-| Header表示形式 | `画面名 - 日本語概要` |
-| Header Easter Egg | Shell Headerへ移植 |
-| Main Surface / Scroll責務 | 決定 |
-| Navigation構造 | 決定 |
-| Logo | 既存SVG利用 |
-| Logo Primary Color Change | 継承候補 |
-| Portal Access | Navigation上部固定 / Application Navigationと分離 |
-| Application Navigation | Navigation下部 / Scroll対象 |
-| md以上 | Navigation常設 |
-| smレベル | Navigation非表示 / Edge Swipe Drawer |
-| Mobile Drawer幅 | 約70%をBaseline、実装時調整 |
-| Responsive細部 | Mock + 実装時調整 |
-| Portal詳細設計 | 別途検討 |
+| breakpointの具体px値 | 実装時調整 |
+| Navigation幅 | 実装時調整 |
+| Drawer幅 | 約70%を初期基準として調整 |
+| Swipe閾値 | 実機確認後に決定 |
+| Animation Duration / Easing | 実機確認後に決定 |
+| Header font size | モック基準で調整 |
+| Nav spacing | モック基準で調整 |
+| Logo表示サイズ | モック基準で調整 |
+| Portal Icon | `mdi-arrange-send-to-back` を候補として最終確認 |
+| Logo押下Primary Color変更 | 現行挙動確認後に継承可否判断 |
+
+未確定事項を推測で固定しないこと。
