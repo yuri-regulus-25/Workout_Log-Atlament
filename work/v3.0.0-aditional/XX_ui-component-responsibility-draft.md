@@ -1,54 +1,109 @@
-# Atlament v3.0.0 UI / Component Responsibility Draft
+# Atlament v3.0.0 — UIコンポーネント責務 実装指示書
 
 ## 1. 目的
 
-v3.0.0ではUI刷新だけでなく、Frontendのリファクタリングと人間可読性の改善を行う。
+v3.0.0ではUI刷新と同時に、Frontend実装の責務整理と人間可読性の改善を行う。
 
-本資料は、現行画面をユーザーから見える責務単位で分解した初期設計案である。
-実装都合から先にコンポーネント境界を決めず、まず視覚上・UX上の責務を基準に分割する。
+本資料は、各画面を「ユーザーから見て意味のあるUI責務」で分解し、実装時にどの単位でComponent / Fileを分けるかを判断するための指示書である。
 
-本資料のファイル構成・名称は確定仕様ではない。現行実装を確認した結果、責務がさらに複雑である場合は追加分割し、逆に実質的な責務を持たない薄いラッパーになる場合は統合を検討する。
+実装都合から先に境界を決めてはならない。まず画面上の責務を確認し、その後に現行ソースの状態管理・イベント・データ取得・Chart・Table・Dialog等の実装責務と照合する。
 
-## 2. 共通方針
+本資料に記載したFile名は基本案である。現行ソース確認の結果、記載通りに分けると責務が不自然になる場合のみ調整してよい。
 
-### 2.1 分割原則
+---
 
-基本的な考え方は以下とする。
+## 2. 共通原則
+
+### 2.1 分割の優先順位
+
+以下の順序で責務を考える。
 
 ```text
 Screen
-└─ 画面上で意味のある責務領域
+└─ 画面上で意味のある大きな領域
    └─ 独立して変更・修正されるUI単位
       └─ 必要な場合のみ内部責務を追加分割
 ```
 
-全画面を同一のテンプレートへ押し込まない。
-Headline / Search / Details等の名称や階層を共通化すること自体を目的とせず、各画面にとって自然な責務境界を採用する。
+全画面を同じ階層・同じ名称へ無理に揃えない。
 
-### 2.2 コンポーネント分割
+`Headline` / `Search` / `Details` などの名称は、画面の意味に合う場合のみ使用する。
 
-- Cardは原則として1 Card = 1 Component = 1 Fileとする。
-- 領域ComponentとCard Componentは分離する。領域内にCardが1枚しか存在しない場合も、意味上の責務が異なるなら省略しない。
-- Dialogは原則として1 Dialog = 1 Component = 1 Fileとする。
-- Dialog内の入力項目は、業務上・画面上の意味単位でComponent化する。
-- Table、Calendar、Chart等は内部責務や実装量を確認し、必要に応じて追加分割する。
-- ファイル数削減よりも、不具合箇所・変更箇所を人間が自然に特定できることを優先する。
-- Atomic Designを機械的に適用しない。分割可能であること自体を分割理由にしない。
+Atomic Designを機械的に適用しない。
 
-### 2.3 Framework
+### 2.2 Card
 
-責務境界とUX上の意味は共通化するが、Framework固有の実装方法は統一しない。
+原則として **1 Card = 1 Component = 1 File** とする。
 
-対象にはReact、Vue.js、Angular、Svelte、SolidJSが存在する。
-props、hooks、signals、stores等は各Frameworkで自然な方法を採用する。
+ただし、同型Cardを値・表示文言だけ変えて反復する場合は、CardごとにFileを複製せず共通Component 1つを反復利用する。
 
-### 2.4 Chart
+親Componentは以下を担当する。
 
-ApexCharts等を使用するCardでは、以下のどちらを採用するかは実装量を確認して判断する。
+- Cardの並び順
+- Cardの個数
+- Layout
+- responsive時の並び替え
+
+Card Componentは以下を担当する。
+
+- Card 1件の表示
+- Card 1件に閉じた表示ロジック
+
+`v-for`、`map`等で反復していることを理由に、Card Componentを作らず親へ表示責務を詰め込んではならない。
+
+### 2.3 領域ComponentとCard
+
+領域ComponentとCard Componentは責務が異なる場合は分離する。
+
+Cardが1枚しかないことだけを理由に領域Componentを省略しない。
+
+一方、Cardそのものが最上位の意味領域であり、中間Componentに責務がない場合は無意味なWrapperを作らない。
+
+### 2.4 Dialog
+
+原則として **1 Dialog = 1 Component = 1 File** とする。
+
+Dialog内の入力項目も、意味のある入力責務ごとにComponent化する。
+
+目的は再利用性より、不具合修正時の探索範囲を狭めることにある。
+
+入力Componentへ閉じ込めてよい責務は以下。
+
+- 値の表示
+- validation
+- disabled条件
+- 表示条件
+- 入力変更処理
+- 入力項目固有の補助表示
+
+ただし、`VTextField.vue`、`VSelect.vue`のようなUI部品そのものを包むだけの汎用Wrapperを作らない。
+
+Component名には入力項目の意味を反映する。
+
+例:
+
+```text
+ResourceNameField.vue
+ResourceTypeSelect.vue
+BodyPartSelect.vue
+```
+
+### 2.5 Table / Calendar / Chart
+
+Table / Calendar / Chartは、存在するだけで自動的に追加分割しない。
+
+以下のいずれかに該当する場合に追加分割する。
+
+- 親Componentの責務理解を妨げるほど実装量が大きい。
+- 単独で変更される可能性が高い。
+- 独立した状態・イベント・描画責務を持つ。
+- 不具合発生時に独立して切り分けたい。
+
+ApexCharts等のChartも同様とする。
 
 ```text
 Card
-└─ Card内にChart実装を含む
+└─ Chart実装を内包
 ```
 
 または
@@ -58,21 +113,52 @@ Card
 └─ Chart Component
 ```
 
-Chartライブラリを使用しているという理由だけで分割しない。
-Card本来の責務理解を妨げる程度にChart設定・描画処理が肥大化している場合は分離する。
+のどちらかを、現行実装量を確認して判断する。
+
+### 2.6 Framework
+
+責務境界は共通の考え方を使うが、Framework固有の実装方法を統一しない。
+
+対象Framework:
+
+- React
+- Vue.js
+- Angular
+- Svelte
+- SolidJS
+
+props / hooks / signals / stores等は各Frameworkで自然な方法を採用する。
+
+共通化するのは責務の考え方であり、Framework固有APIではない。
+
+---
 
 ## 3. Application Shellとの境界
 
-各画面上部に存在する画面名、パンくず相当情報、説明文等は、新Application ShellのHeaderへ責務を移管する候補とする。
+画面名と説明文はApplication Shell Headerへ移す。
 
-Shell適用後の情報量・利用可能領域を確認して最終判断する。
-画面固有コンテンツの分割は、原則としてShell内部のMain Surfaceに配置されるScreen Contentを対象とする。
+各Screen Component内で旧Headerを残して二重表示しない。
+
+Main Surface内には画面固有UIのみを置く。
+
+以下はScreen側に残す。
+
+- Search
+- Filter
+- Period Selector
+- Session Navigation
+- 作成 / 編集操作
+- 画面固有データ
+
+Shell責務の詳細は `XX_application-shell-design.md` を参照する。
+
+---
 
 ## 4. Dashboard
 
 Framework: React
 
-基本構造:
+### 4.1 基本構造
 
 ```text
 Dashboard
@@ -82,7 +168,7 @@ Dashboard
    └─ Details Card × N
 ```
 
-構成案:
+基本File構成:
 
 ```text
 Dashboard/
@@ -101,24 +187,43 @@ Dashboard/
       └─ RecentWorkoutsCard.tsx
 ```
 
-### Headline
+### 4.2 実装責務
 
-Metric Cardは現状すべて同型であるため、タイトルと表示値を受け取る単一Componentとして扱う。
-各指標ごとに別ファイルは作成しない。
+`Dashboard.tsx`
+- Dashboard画面全体を構成する。
+- HeadlineとDetailsを配置する。
+- 個別Cardの内部表示ロジックを持たない。
 
-Headline側がCard群の並び・配置・レスポンシブを担当し、Metric Cardは1件の表示責務のみを持つ。
+`DashboardHeadline.tsx`
+- Metric Card群の並び・配置を担当する。
+- 指標データを `DashboardMetricCard.tsx` へ渡す。
 
-### Details
+`DashboardMetricCard.tsx`
+- Metric Card 1件を表示する。
+- 同型CardごとにFileを増やさない。
 
-DetailsはCardごとに内容・変更理由が異なるため、1 Card単位で1ファイルとする。
+`DashboardDetails.tsx`
+- Details Card群の配置を担当する。
 
-ApexChartsを使用するCardについては、ChartをCard内に含めるかChart Componentへ分割するかを現行実装確認後に判断する。
+各Details Card
+- Cardごとの固有表示・Chart・データ表現を担当する。
+- 別Cardの表示責務を持たない。
+
+ApexCharts部分は、設定量がCard理解を妨げる場合のみChart Componentへ分離する。
+
+### 4.3 完了確認
+
+- Metric Cardが1つの共通Componentで反復されている。
+- Details CardがCard単位で分離されている。
+- Dashboard親Componentへ個別Card描画が集中していない。
+
+---
 
 ## 5. Analytics
 
 Framework: Svelte
 
-基本構造:
+### 5.1 基本構造
 
 ```text
 Analytics
@@ -130,17 +235,37 @@ Analytics
    └─ Details Card × N
 ```
 
-SearchはCardが1枚のみであっても、Search領域とGlobal Period Cardを分離する。
-Searchは検索・期間指定領域としての配置責務、Global Period Cardは実際の期間表示・条件入力UIを担当する。
+### 5.2 実装責務
 
-Detailsは分析内容ごとに1 Card = 1 Component = 1 Fileとする。
-Chart系Componentの内部構造はDashboardと同じ基準で判断する。
+`Search`
+- 検索・期間指定領域の配置を担当する。
+
+`Global Period Card`
+- 実際の期間表示と条件入力UIを担当する。
+
+Cardが1枚しかなくても、Search領域とGlobal Period Cardは分離する。
+
+`Details`
+- 分析Card群の配置を担当する。
+
+各Details Card
+- 分析内容ごとの表示責務を持つ。
+
+Chart分割判断はDashboardと同じ基準を使用する。
+
+### 5.3 完了確認
+
+- SearchとGlobal Period Cardが別責務として分かれている。
+- Details Cardが分析内容ごとに分離されている。
+- Svelte固有の自然な状態管理を維持している。
+
+---
 
 ## 6. Performance Detail
 
 Framework: Angular
 
-基本構造:
+### 6.1 基本構造
 
 ```text
 Performance Detail
@@ -154,15 +279,32 @@ Performance Detail
    └─ Workout History Card
 ```
 
-Search、Headline、Detailsを意味領域として分割し、それぞれのCard実装と領域Componentを分離する。
+### 6.2 実装責務
 
-Best Weight Progress等のChartについては、Card内包またはChart Component分離を実装量に応じて判断する。
+- Searchは検索対象選択領域を担当する。
+- Search Target Cardは検索条件UIを担当する。
+- HeadlineはMetric Card群の配置を担当する。
+- Metric Cardは1件表示の共通Componentとする。
+- Detailsは詳細Card群の配置を担当する。
+- 3種のDetails Cardは個別Fileへ分ける。
+
+Best Weight ProgressのChartは、Card実装量を確認して内包 / 分離を判断する。
+
+### 6.3 完了確認
+
+- Search / Headline / Detailsが意味領域として分かれている。
+- 3種のDetails Cardが個別責務として追跡できる。
+- AngularのComponent分割が責務境界と一致している。
+
+---
 
 ## 7. Workout Domain
 
 Framework: Vue.js
 
-この画面ではHeadline / Details型へ寄せず、画面機能そのものを以下の3領域として扱う。
+### 7.1 基本構造
+
+この画面はHeadline / Details形式へ寄せず、機能単位で分ける。
 
 ```text
 Workout Domain
@@ -171,7 +313,7 @@ Workout Domain
 └─ List
 ```
 
-構成案:
+基本File構成:
 
 ```text
 workout-domain/
@@ -190,41 +332,95 @@ workout-domain/
       └─ WorkoutListCard.vue
 ```
 
-Calendar内部の日セル、月操作等は現行実装の複雑性を確認して追加分割を判断する。
+### 7.2 実装責務
 
-List内部のTable、Pagination等も同様に、操作責務・実装量が十分に独立している場合は追加分割する。
+`WorkoutDomain.vue`
+- Search / Calendar / Listを配置する。
 
-## 8. Workout Domain - Details
+`WorkoutSearch.vue`
+- 検索領域の配置を担当する。
+
+`WorkoutCalendar.vue`
+- Calendar領域の配置を担当する。
+
+`WorkoutList.vue`
+- 一覧領域の配置を担当する。
+
+各Card
+- 各領域の実表示を担当する。
+
+CalendarHeader / Grid / Day Cell等は、現行Calendar実装の複雑性を確認して必要な場合のみ追加分割する。
+
+Table / Paginationも、Vuetify等との結合度と独立責務を確認して判断する。
+
+### 7.3 完了確認
+
+- Search / Calendar / Listの3責務が親で混在していない。
+- Calendar内部を機械的に細分化していない。
+- List内部のTable / Pagination分割が実装責務と一致している。
+
+---
+
+## 8. Workout Domain Details
 
 Framework: Vue.js
 
-この画面は他画面のHeadline / Details等の名称へ無理に合わせない。
-画面固有の責務境界を優先する。
+### 8.1 基本構造
 
-初期的には以下のような責務が存在する。
+他画面の名称へ無理に揃えない。
 
 ```text
 Workout Domain Details
-├─ Session Overview相当
+├─ Session Overview 相当
 │  ├─ Session識別情報
 │  ├─ Previous / Next
 │  └─ Metric Card × N
-├─ Session Compare相当
+├─ Session Compare 相当
 │  └─ Compare Card
-└─ Workout Detail相当
+└─ Workout Detail 相当
    └─ Machine Detail × N
 ```
 
-名称は仮とする。
+領域名は仮称であり、実装時に既存命名との整合を確認して決定してよい。
 
-Workout Detail内部では、マシン1件ごとの表示ブロックが明確な反復・責務単位となるため、Machine Detailを独立Component候補とする。
-Machine Detail内のSet Table等をさらに分割するかは現行実装確認後に判断する。
+### 8.2 実装責務
+
+Session Overview相当
+- 日付
+- Gym
+- Session識別
+- Previous / Next
+- Metric Card群
+
+Session Compare相当
+- 比較値
+- 差分
+- 追加 / 削除されたMachine情報
+
+Workout Detail相当
+- Machine Detail群の配置
+
+Machine Detail
+- Machine 1件の名称・要約・Performance導線・Set一覧を担当する。
+- Machineごとの反復単位として独立Component化する。
+
+Set Tableは実装量・イベント量が大きい場合のみ追加分割する。
+
+### 8.3 完了確認
+
+- Session識別 / Compare / Machine Detailの責務が混在していない。
+- Machine Detailが1件単位で独立している。
+- Set Tableを必要以上に分割していない。
+
+---
 
 ## 9. Application Settings
 
 Framework: SolidJS
 
-この画面は、各設定カテゴリのCardそのものが意味領域になっているため、中間的なHeadline / Details等の領域Componentを無理に設けない。
+### 9.1 基本構造
+
+各設定Cardそのものを最上位の意味領域として扱う。
 
 ```text
 Application Settings
@@ -237,17 +433,29 @@ Application Settings
 └─ Remote Data Sync Card
 ```
 
-基本方針は設定カテゴリ1つ = Card 1つ = Component 1つ = File 1つ。
+### 9.2 実装責務
 
-Resource Data等、Card内部に明確な反復単位や独立責務があり、実装が肥大化している場合のみ追加分割する。
+設定カテゴリごとに **1 Card = 1 Component = 1 File** とする。
+
+Headline / Details等の中間Wrapperは、独立した配置責務を持たない限り作らない。
+
+Card内部に明確な反復単位があり、実装が肥大化している場合のみ内部Componentを追加する。
+
+### 9.3 完了確認
+
+- 設定カテゴリごとにFileを追跡できる。
+- 無意味な中間Wrapperが増えていない。
+- SolidJSの自然な状態管理を維持している。
+
+---
 
 ## 10. Resource Management
 
 Framework: Vue.js + Vuetify
 
-見た目上は大きな管理Panel 1枚だが、内部に複数の操作責務が存在するため、責務単位で分割する。
+### 10.1 基本構造
 
-初期案:
+見た目上は大きなPanel 1枚だが、操作責務が複数存在するため内部を分ける。
 
 ```text
 ResourceManagement
@@ -262,7 +470,7 @@ ResourceManagement
    └─ その他必要なDialog
 ```
 
-構成案:
+基本File構成:
 
 ```text
 resource-management/
@@ -281,48 +489,119 @@ resource-management/
       └─ 各入力責務Component
 ```
 
-Vuetify DataTable等の機能と強く一体化しており、分離することで不自然な薄いラッパーになる場合は、現行実装を確認した上で境界を調整する。
+### 10.2 Filters
 
-### Dialog内部の入力Component
+`ResourceFilters.vue` は以下の絞り込みUIを一つの表示条件責務として扱う。
 
-Dialog本体だけでなく、VSelect / VTextField等で構成される入力についても意味単位でComponent化する。
+- Master / unresolved reference
+- Machine / Gym
+- Active / Deleted / All
 
-目的は再利用性ではなく、以下を優先するためである。
+Button 1つごとにComponentを作らない。
 
-- 不具合修正時の探索範囲を狭める。
-- 入力項目単位で異常を局所化し、異常検知を容易にする。
-- validation、disabled条件、表示条件、値変更処理等を意味のある入力責務へ閉じ込める。
+### 10.3 Table / Row
 
-ただし、`VTextField.vue` や `VSelect.vue` のようなVuetify Componentそのものを包む汎用ラッパーを作ることは目的としない。
+`ResourceTable.vue`
+- Table全体の列・一覧表示・行反復を担当する。
+
+`ResourceTableRow.vue`
+- Resource 1件の表示と行単位Actionを担当する。
+
+行ごとに編集・削除等のActionが存在するため、Rowは独立Component候補とする。
+
+Vuetify DataTableへ強く統合されており、Row分離が不自然になる場合は現行実装を確認して境界調整してよい。
+
+### 10.4 Pagination
+
+Paginationは独立した責務を持つ場合に `ResourcePagination.vue` とする。
+
+Vuetify DataTable内蔵機能と不可分で、別Fileが薄いWrapperになるだけの場合はTableへ残してよい。
+
+### 10.5 Dialog
+
+DialogはDialog単位でFileを分ける。
 
 例:
 
 ```text
-ResourceNameField.vue
-ResourceTypeSelect.vue
-BodyPartSelect.vue
+ResourceCreateDialog.vue
+ResourceEditDialog.vue
 ```
 
-のように、業務・画面上の意味をComponent名へ反映する。
+「+ New」Buttonだけを独立Componentにしない。意味のある責務単位はCreate Dialogである。
 
-## 11. 実装フェーズでの確認手順
+### 10.6 Dialog内入力
 
-本資料の境界案をそのまま機械的に実装しない。
+入力項目は意味単位でComponent化する。
 
-実装時は以下の順序で確認する。
+例:
 
-1. 本資料の視覚・UX責務ベースの境界案を確認する。
-2. 現行ソースをリバースエンジニアリングする。
-3. 現行実装の状態管理、データ取得、イベント、Chart、Table、Dialog等の責務を確認する。
-4. 視覚上の責務境界と現行実装上の責務を比較する。
-5. Componentが肥大化する場合は追加分割する。
-6. 実質的な責務を持たない薄いComponentになる場合は統合を検討する。
-7. Framework固有の自然な実装方法へ落とし込む。
+```text
+fields/
+├─ ResourceTypeSelect.vue
+├─ ResourceIdField.vue
+├─ ResourceNameField.vue
+└─ BodyPartSelect.vue
+```
 
-Codex等による実装提案で分割粒度に迷う場合は、ファイル数の少なさではなく「不具合・変更箇所を人間が自然に追跡できるか」を優先して判断する。
+入力Componentへvalidation / disabled / 表示条件 / 値変更処理を閉じ込めてよい。
 
-## 12. 現時点の位置付け
+目的は不具合の局所化と探索性向上である。
 
-本資料はv3.0.0の画面コンポーネント再設計における初期素案であり、Production品質の最終設計ではない。
+### 10.7 完了確認
 
-Application Shell適用後の利用可能領域、現行実装の依存関係、各Frameworkの実装特性を確認しながら最終的なComponent境界を決定する。
+- Filters / Table / Dialogの責務をFile名から追跡できる。
+- Row Actionが巨大なTable Componentへ埋もれていない。
+- Dialog入力の不具合箇所を入力項目単位で特定できる。
+- 汎用VTextField Wrapper等が増えていない。
+
+---
+
+## 11. 実装時の確認手順
+
+各画面のリファクタリングは以下の順序で行う。
+
+1. 本資料に記載した画面上の責務境界を確認する。
+2. 対象画面の現行ソースを読み、状態管理・データ取得・イベント・Chart・Table・Dialog等を整理する。
+3. 現行Component / FileがどのUI責務を担当しているか対応付ける。
+4. 1 Componentに複数の独立責務が混在している箇所を抽出する。
+5. 本資料の基本構造へ寄せる。
+6. 実装量が大きい箇所のみ追加分割する。
+7. 薄いWrapperしか残らない場合は統合を検討する。
+8. Framework固有の自然な方法で状態・イベントを接続する。
+9. 既存機能が失われていないことを確認する。
+10. UI上の変更箇所から対象Fileを自然に探せるか確認する。
+
+本資料と現行ソースが大きく矛盾する場合は、機械的に本資料へ合わせず作業を止め、差異と影響範囲を整理する。
+
+---
+
+## 12. 共通の禁止事項
+
+以下を行わない。
+
+- 全画面を同じComponent階層へ無理に揃える。
+- Cardごとの責務差を無視して巨大Componentへまとめる。
+- File数を減らすこと自体を目的にする。
+- Atomic Designを理由にLabel / Button / Iconまで機械的に細分化する。
+- 同一見た目という理由だけでFrameworkを跨いだ共通Componentを作る。
+- Dialog入力を1つの巨大Componentへ詰め込む。
+- Vuetify等のUI部品を包むだけの意味のないWrapperを量産する。
+- 現行仕様を確認せず機能を削除する。
+
+---
+
+## 13. 全体完了条件
+
+対象画面のリファクタリング完了時に、以下を確認する。
+
+- UI責務とFile構造が対応している。
+- 変更したいUI領域から対象Fileを推測できる。
+- 1 Card = 1責務の原則が守られている。
+- 同型反復Cardは共通Component化されている。
+- 意味のないWrapperが増えていない。
+- Framework固有実装が不自然に共通化されていない。
+- 既存機能・遷移・入力・Chart・Table・Dialogが維持されている。
+- Application Shellへ移管したHeader責務が各画面へ残っていない。
+
+これらを満たさない場合は、File数の多少ではなく責務境界を再確認すること。
