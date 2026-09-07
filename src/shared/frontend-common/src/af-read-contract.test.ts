@@ -46,6 +46,7 @@ describe('AF read contract refinement', () => {
   it('keeps build identity as an additive shared Status API field', () => {
     const frontendContract = readSource('src/shared/frontend-common/src/index.ts')
     const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
     const windowsModels = readSource('src/application/windows/Core/AfModels.cs')
     const windowsServices = readSource('src/application/windows/Core/AfServices.cs')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
@@ -54,6 +55,7 @@ describe('AF read contract refinement', () => {
     expect(frontendContract).toContain('variant: string')
     expect(frontendContract).toContain('debug: boolean')
     expect(settings).toContain('buildIdentitySummary')
+    expect(settingsPresentation).toContain('buildIdentitySummary')
     expect(windowsModels).toContain('BuildIdentity')
     expect(windowsServices).toContain('ApplicationBuildIdentity')
     expect(android).toContain('"build": {')
