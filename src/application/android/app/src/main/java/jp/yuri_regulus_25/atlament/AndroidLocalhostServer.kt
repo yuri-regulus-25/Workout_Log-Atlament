@@ -46,6 +46,7 @@ class AndroidLocalhostServer(
     private val configurationStore = AndroidConfigurationStore(configurationFile)
     private val credentialStore = AndroidCredentialStore(context)
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
+    private val runtimeDataStore = AndroidRuntimeDataStore(runtimeDataFile)
     private val recoveryDraftDirectory = File(context.filesDir, "recovery/drafts")
     private val recoveryTemporaryDirectory = File(context.filesDir, "recovery/temporary")
     private val recoveryDraftStore = AndroidRecoveryDraftStore(recoveryDraftDirectory, recoveryTemporaryDirectory)
@@ -236,7 +237,7 @@ class AndroidLocalhostServer(
               "configuration": "${configurationStatus()}",
               "credential": "${credentialStore.componentStatus()}",
               "github": "${githubStatus()}",
-              "runtimeData": "${runtimeDataStatus()}",
+              "runtimeData": "${runtimeDataStore.status()}",
               "hosting": ${hostingStatusJson()}
             },
             "requiredActions": ${requiredActionsJson()}
@@ -252,9 +253,9 @@ class AndroidLocalhostServer(
     }.getOrDefault(JSONObject())
 
     private fun runtimeDataFactsJson(): String {
-        val runtimeStatus = runtimeDataStatus()
+        val runtimeStatus = runtimeDataStore.status()
         val currentAvailable = runtimeStatus != "unavailable"
-        val generatedAt = if (runtimeDataFile.exists()) "\"${Instant.ofEpochMilli(runtimeDataFile.lastModified())}\"" else "null"
+        val generatedAt = if (runtimeDataStore.exists()) "\"${Instant.ofEpochMilli(runtimeDataStore.lastModifiedMillis())}\"" else "null"
         val fallbackActive = (latestRemoteRetrieval == "failed" || latestValidation == "failed") && currentAvailable
         val quarantinedWorkoutResourceCount = quarantinedWorkoutResourceCount()
         return """
@@ -320,14 +321,14 @@ class AndroidLocalhostServer(
     }
 
     private fun applicationStatus(): String =
-        if (configurationStatus() == "available" && runtimeDataStatus() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
+        if (configurationStatus() == "available" && runtimeDataStore.status() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
 
     private fun readinessJson(): String {
         val requiredActions = requiredActionNames().sorted()
         val unavailableComponents = mutableListOf<String>()
         if (configurationStatus() == "unavailable") unavailableComponents.add("configuration")
         if (credentialStore.componentStatus() == "unavailable") unavailableComponents.add("credential")
-        if (runtimeDataStatus() == "unavailable") unavailableComponents.add("runtimeData")
+        if (runtimeDataStore.status() == "unavailable") unavailableComponents.add("runtimeData")
         val degradedComponents = mutableListOf<String>()
         if (githubStatus() == "degraded") degradedComponents.add("github")
         val state = when {
@@ -351,7 +352,7 @@ class AndroidLocalhostServer(
 
     private fun requiredActionNames(): List<String> {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
-        if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
+        if (runtimeDataStore.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
         if (credentialStore.state() == "missing") actions.add(0, "CREDENTIAL_REQUIRED")
         if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
         return actions
@@ -488,7 +489,7 @@ class AndroidLocalhostServer(
             if (build.payload == null) {
                 return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
             }
-            val saveErrors = saveRuntimeDataAtomically(build.payload)
+            val saveErrors = runtimeDataStore.saveAtomically(build.payload)
             if (saveErrors.length() > 0) {
                 return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
             }
@@ -1241,7 +1242,7 @@ class AndroidLocalhostServer(
         if (build.payload == null) {
             return recoveryReflectionJson(false, inspection.optString("health"), build.errors, build.warnings)
         }
-        val saveErrors = saveRuntimeDataAtomically(build.payload)
+        val saveErrors = runtimeDataStore.saveAtomically(build.payload)
         if (saveErrors.length() > 0) {
             return recoveryReflectionJson(false, inspection.optString("health"), saveErrors, build.warnings)
         }
@@ -1296,12 +1297,12 @@ class AndroidLocalhostServer(
     }
 
     private fun sendRuntimeWorkoutData(output: OutputStream) {
-        if (!runtimeDataFile.exists()) {
+        if (!runtimeDataStore.exists()) {
             sendJson(output, 503, failJson("RUNTIME_DATA_UNAVAILABLE", "Runtime Data is unavailable."))
             return
         }
 
-        sendJson(output, 200, runtimeDataFile.readText(StandardCharsets.UTF_8))
+        sendJson(output, 200, runtimeDataStore.readText())
     }
 
     private fun sendManualSync(output: OutputStream) {
@@ -1354,7 +1355,7 @@ class AndroidLocalhostServer(
             if (build.payload == null) {
                 return failedSync(build.errors)
             }
-            val saveErrors = saveRuntimeDataAtomically(build.payload)
+            val saveErrors = runtimeDataStore.saveAtomically(build.payload)
             if (saveErrors.length() > 0) {
                 return failedSync(saveErrors)
             }
@@ -1380,30 +1381,6 @@ class AndroidLocalhostServer(
             val message = ex.message ?: "GitHub sync failed."
             writeLog("WARN", "Remote sync failed: $message")
             failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
-        }
-    }
-
-    private fun saveRuntimeDataAtomically(payload: String): JSONArray {
-        return try {
-            runtimeDataFile.parentFile?.mkdirs()
-            val directory = runtimeDataFile.parentFile ?: throw IllegalStateException("Runtime directory is unavailable.")
-            val temporary = File(directory, runtimeDataFile.name + ".tmp")
-            val backup = File(directory, runtimeDataFile.name + ".bak")
-            temporary.writeText(payload, StandardCharsets.UTF_8)
-            if (backup.exists() && !backup.delete()) {
-                throw IllegalStateException("Existing runtime backup could not be removed.")
-            }
-            if (runtimeDataFile.exists() && !runtimeDataFile.renameTo(backup)) {
-                throw IllegalStateException("Existing runtime data could not be preserved.")
-            }
-            if (!temporary.renameTo(runtimeDataFile)) {
-                if (backup.exists()) backup.renameTo(runtimeDataFile)
-                throw IllegalStateException("Temporary runtime data could not be moved.")
-            }
-            if (backup.exists()) backup.delete()
-            JSONArray()
-        } catch (_: Exception) {
-            errorsArray("RUNTIME_DATA_SAVE_FAILED", "Runtime Data could not be saved.")
         }
     }
 
@@ -1885,15 +1862,7 @@ class AndroidLocalhostServer(
         }
     }
 
-    private fun runtimeDataStatus(): String {
-        if (!runtimeDataFile.exists()) return "unavailable"
-        return if (runtimeDataHasRetainedErrors()) "degraded" else "available"
-    }
-
-    private fun runtimeDataHasRetainedErrors(): Boolean = runCatching {
-        val runtimeData = JSONObject(runtimeDataFile.readText(StandardCharsets.UTF_8))
-        (runtimeData.optJSONArray("errors")?.length() ?: 0) > 0
-    }.getOrDefault(false)
+    private fun runtimeDataHasRetainedErrors(): Boolean = runtimeDataStore.status() == "degraded"
 
     private fun githubStatus(): String = githubComponentStatus
 
