@@ -103,14 +103,14 @@ describe('Phase 9 existing application integration', () => {
 
   it('keeps Portal Maintenance card framework icons source-controlled', () => {
     const registry = readSource('src/shared/frontend-common/src/navigation/application-registry.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
+    const portalCards = readSource('src/frontend/portal/src/portal-application-cards.js')
 
     expect(registry).toContain("frameworkName: 'Vue.js + Vuetify'")
     expect(registry).toContain("frameworkIcons: [")
     expect(registry).toContain("./assets/logo_vuetify.svg")
-    expect(portal).toContain('createFrameworkStackItems')
-    expect(portal).toContain("document.createTextNode(' + ')")
-    expect(portal).toContain("frameworkItem.className = 'framework-item'")
+    expect(portalCards).toContain('createFrameworkStackItems')
+    expect(portalCards).toContain("document.createTextNode(descriptor.text)")
+    expect(portalCards).toContain("frameworkItem.className = 'framework-item'")
   })
 
   it('keeps Portal medium-width cards in a balanced two-column grid', () => {

@@ -3,6 +3,7 @@ import { initializeCharacterEasterEgg } from './frontend-common/easter-egg/index
 import { portalCardApplications } from './frontend-common/navigation/application-registry.js'
 import { initializeStoredTheme } from './frontend-common/theme/index.js'
 import { deriveApplicationReadiness, getAfStatus } from './frontend-common/af-client.js'
+import { renderApplicationCards } from './portal-application-cards.js'
 
 const storedBrandVariant = initializeStoredBrandVariant()
 const storedTheme = initializeStoredTheme()
@@ -18,7 +19,7 @@ let successHideTimer = null
 let noticeState = 'hidden'
 let syncWasRunning = false
 
-renderApplicationCards()
+renderApplicationCards(appGrid, portalCardApplications)
 
 async function refreshStatusNotice() {
   try {
@@ -131,84 +132,5 @@ window.addEventListener('pagehide', () => {
   storedBrandVariant.dispose()
   storedTheme.dispose()
 })
-
-function renderApplicationCards() {
-  if (!appGrid) return
-
-  appGrid.replaceChildren(...portalCardApplications.map(createApplicationCard))
-}
-
-function createApplicationCard(application) {
-  const card = document.createElement('a')
-  card.className = 'app-card'
-  card.href = application.route
-
-  const category = document.createElement('span')
-  category.className = 'app-category'
-  category.textContent = application.portalCategory ?? application.displayName
-
-  const title = document.createElement('strong')
-  title.className = 'app-title'
-  title.textContent = application.displayName
-
-  const pointer = document.createElement('span')
-  pointer.className = 'app-pointer'
-  pointer.textContent = application.portalPointer ?? ''
-
-  const frameworkBadge = document.createElement('small')
-  frameworkBadge.className = 'framework-badge'
-
-  const frameworkLabel = document.createElement('span')
-  frameworkLabel.className = 'framework-label'
-  frameworkLabel.textContent = 'Built with'
-
-  const frameworkStack = document.createElement('span')
-  frameworkStack.className = 'framework-stack'
-  frameworkStack.append(...createFrameworkStackItems(application))
-  frameworkBadge.append(frameworkLabel, frameworkStack)
-
-  card.append(category, title, pointer, frameworkBadge)
-  return card
-}
-
-function createFrameworkStackItems(application) {
-  if (Array.isArray(application.frameworkIcons) && application.frameworkIcons.length > 0) {
-    const frameworkNames = (application.frameworkName ?? '').split(/\s*\+\s*/).filter(Boolean)
-    return application.frameworkIcons.flatMap((frameworkIcon, index) => {
-      const frameworkItem = document.createElement('span')
-      frameworkItem.className = 'framework-item'
-      frameworkItem.append(
-        createFrameworkIcon({
-          frameworkIconHref: frameworkIcon.href,
-          frameworkIconClass: frameworkIcon.className,
-          iconClass: application.iconClass,
-        }),
-        document.createTextNode(frameworkNames[index] ?? ''),
-      )
-
-      return index === 0 ? [frameworkItem] : [document.createTextNode(' + '), frameworkItem]
-    })
-  }
-
-  return [
-    createFrameworkIcon(application),
-    document.createTextNode(application.frameworkName ?? ''),
-  ]
-}
-
-function createFrameworkIcon(application) {
-  if (application.frameworkIconHref) {
-    const icon = document.createElement('img')
-    icon.src = application.frameworkIconHref
-    icon.alt = ''
-    icon.className = 'framework-icon'
-    return icon
-  }
-
-  const icon = document.createElement('span')
-  icon.className = `framework-icon mdi ${application.frameworkIconClass ?? application.iconClass}`
-  icon.setAttribute('aria-hidden', 'true')
-  return icon
-}
 
 
