@@ -2,92 +2,66 @@ export function renderApplicationCards(appGrid, applications) {
   if (!appGrid) return
 
   appGrid.replaceChildren(...applications.map(createApplicationCard))
+
+  const count = document.getElementById('launcher-count')
+  if (count) {
+    count.textContent = `${applications.length} Apps`
+  }
 }
 
 export function createApplicationCard(application) {
   const card = document.createElement('a')
-  card.className = 'app-card'
+  card.className = 'application-card'
   card.href = application.route
 
+  const header = document.createElement('div')
+  header.className = 'application-card-header'
+
+  const applicationIcon = document.createElement('div')
+  applicationIcon.className = 'application-icon'
+  applicationIcon.append(createApplicationIcon(application))
+
+  const arrow = document.createElement('i')
+  arrow.className = 'mdi mdi-arrow-top-right application-arrow'
+  arrow.setAttribute('aria-hidden', 'true')
+  header.append(applicationIcon, arrow)
+
+  const content = document.createElement('div')
+  content.className = 'application-content'
+
   const category = document.createElement('span')
-  category.className = 'app-category'
+  category.className = 'application-category'
   category.textContent = application.portalCategory ?? application.displayName
 
-  const title = document.createElement('strong')
-  title.className = 'app-title'
+  const title = document.createElement('h3')
   title.textContent = application.displayName
 
   const pointer = document.createElement('span')
-  pointer.className = 'app-pointer'
+  pointer.className = 'application-pointer'
   pointer.textContent = application.portalPointer ?? ''
+  content.append(category, title, pointer)
 
-  const frameworkBadge = document.createElement('small')
-  frameworkBadge.className = 'framework-badge'
+  const footer = document.createElement('div')
+  footer.className = 'application-footer'
+  const framework = document.createElement('span')
+  framework.textContent = application.frameworkName ?? ''
+  footer.append(framework)
 
-  const frameworkLabel = document.createElement('span')
-  frameworkLabel.className = 'framework-label'
-  frameworkLabel.textContent = 'Built with'
-
-  const frameworkStack = document.createElement('span')
-  frameworkStack.className = 'framework-stack'
-  frameworkStack.append(...createFrameworkStackItems(application))
-  frameworkBadge.append(frameworkLabel, frameworkStack)
-
-  card.append(category, title, pointer, frameworkBadge)
+  card.append(header, content, footer)
   return card
 }
 
-export function createFrameworkStackDescriptors(application) {
-  if (Array.isArray(application.frameworkIcons) && application.frameworkIcons.length > 0) {
-    const frameworkNames = (application.frameworkName ?? '').split(/\s*\+\s*/).filter(Boolean)
-    return application.frameworkIcons.flatMap((frameworkIcon, index) => {
-      const item = {
-        type: 'framework',
-        name: frameworkNames[index] ?? '',
-        icon: {
-          href: frameworkIcon.href,
-          className: frameworkIcon.className ?? application.iconClass,
-        },
-      }
-
-      return index === 0 ? [item] : [{ type: 'separator', text: ' + ' }, item]
-    })
-  }
-
-  return [{
-    type: 'framework',
-    name: application.frameworkName ?? '',
-    icon: {
-      href: application.frameworkIconHref,
-      className: application.frameworkIconClass ?? application.iconClass,
-    },
-  }]
-}
-
-function createFrameworkStackItems(application) {
-  return createFrameworkStackDescriptors(application).map((descriptor) => {
-    if (descriptor.type === 'separator') {
-      return document.createTextNode(descriptor.text)
-    }
-
-    const frameworkItem = document.createElement('span')
-    frameworkItem.className = 'framework-item'
-    frameworkItem.append(createFrameworkIcon(descriptor.icon), document.createTextNode(descriptor.name))
-    return frameworkItem
-  })
-}
-
-function createFrameworkIcon(iconDescriptor) {
-  if (iconDescriptor.href) {
+function createApplicationIcon(application) {
+  if (application.frameworkIconHref) {
     const icon = document.createElement('img')
-    icon.src = iconDescriptor.href
+    icon.src = application.frameworkIconHref
     icon.alt = ''
-    icon.className = 'framework-icon'
+    icon.className = 'application-favicon'
     return icon
   }
 
-  const icon = document.createElement('span')
-  icon.className = `framework-icon mdi ${iconDescriptor.className}`
+  const icon = document.createElement('i')
+  icon.className = `mdi ${application.iconClass}`
   icon.setAttribute('aria-hidden', 'true')
   return icon
 }

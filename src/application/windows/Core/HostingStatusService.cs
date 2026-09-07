@@ -97,6 +97,11 @@ public sealed class HostingStatusService
 
         if (app != "portal" && IsDefinedMpaRoute(app, sanitized))
         {
+            if (app == "workouts")
+            {
+                return ResolveExact(app, "detail.html") ?? ResolveIndex(app);
+            }
+
             return ResolveIndex(app);
         }
 

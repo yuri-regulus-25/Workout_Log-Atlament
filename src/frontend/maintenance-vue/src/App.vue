@@ -49,7 +49,8 @@
             class="maintenance-table"
             :headers="unresolvedHeaders"
             :items="visibleUnresolved"
-            :loading="loading"
+            :items-per-page-text="'Show Items'"
+            :loading="loading ? 'primary' : false"
             item-value="referenceId"
             no-data-text="データがありません"
             hover

@@ -59,10 +59,7 @@ export const applications = [
     portalCategory: 'Governance',
     portalPointer: '管理 - 資源',
     frameworkName: 'Vue.js + Vuetify',
-    frameworkIcons: [
-      { href: '/workouts/favicon.svg' },
-      { href: './assets/logo_vuetify.svg' },
-    ],
+    frameworkIconHref: '/maintenance/favicon.svg',
   },
   {
     id: 'settings',

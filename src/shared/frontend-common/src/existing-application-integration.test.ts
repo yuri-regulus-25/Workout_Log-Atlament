@@ -105,16 +105,23 @@ describe('Phase 9 existing application integration', () => {
     expect(settings).not.toContain('runRecoveryAction')
   })
 
-  it('keeps Portal Maintenance card framework icons source-controlled', () => {
+  it('keeps Portal cards on hosted application favicons', () => {
     const registry = readSource('src/shared/frontend-common/src/navigation/application-registry.js')
     const portalCards = readSource('src/frontend/portal/src/portal-application-cards.js')
+    const maintenanceHtml = readSource('src/frontend/maintenance-vue/index.html')
+    const maintenanceFavicon = readSource('src/frontend/maintenance-vue/public/favicon.svg')
 
+    for (const id of hostedApplicationIds) {
+      expect(registry).toContain(`frameworkIconHref: '/${id}/favicon.svg'`)
+    }
     expect(registry).toContain("frameworkName: 'Vue.js + Vuetify'")
-    expect(registry).toContain("frameworkIcons: [")
-    expect(registry).toContain("./assets/logo_vuetify.svg")
-    expect(portalCards).toContain('createFrameworkStackItems')
-    expect(portalCards).toContain("document.createTextNode(descriptor.text)")
-    expect(portalCards).toContain("frameworkItem.className = 'framework-item'")
+    expect(registry).toContain("frameworkIconHref: '/maintenance/favicon.svg'")
+    expect(portalCards).toContain('function createApplicationIcon')
+    expect(portalCards).toContain('application.frameworkIconHref')
+    expect(portalCards).toContain("icon.className = 'application-favicon'")
+    expect(maintenanceHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />')
+    expect(maintenanceFavicon).toContain('<svg')
+    expect(maintenanceFavicon).toContain('#1867C0')
   })
 
   it('keeps Portal medium-width cards in a balanced two-column grid', () => {

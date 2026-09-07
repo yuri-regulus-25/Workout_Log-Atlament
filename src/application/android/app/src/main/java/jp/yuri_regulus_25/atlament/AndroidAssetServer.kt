@@ -37,10 +37,15 @@ internal class AndroidAssetServer(private val context: Context) {
             normalized.startsWith("android/") -> normalized
             normalized.startsWith("frontend/") -> normalized
             normalized in appNames -> "frontend/$normalized/index.html"
-            root in appNames && isDefinedMpaRoute(root, normalized.removePrefix("$root/")) -> "frontend/$root/index.html"
+            root in appNames && isDefinedMpaRoute(root, normalized.removePrefix("$root/")) -> definedMpaRouteEntry(root)
             normalized.contains('.') -> "frontend/$normalized"
             else -> null
         }
+    }
+
+    private fun definedMpaRouteEntry(app: String): String = when (app) {
+        "workouts" -> "frontend/workouts/detail.html"
+        else -> "frontend/$app/index.html"
     }
 
     private fun isDefinedMpaRoute(app: String, route: String): Boolean {

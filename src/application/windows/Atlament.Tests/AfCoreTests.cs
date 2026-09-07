@@ -1236,6 +1236,7 @@ public sealed class AfCoreTests
             File.WriteAllText(Path.Combine(paths.FrontendArtifactRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(workoutsRoot, "index.html"), "<html></html>");
+            File.WriteAllText(Path.Combine(workoutsRoot, "detail.html"), "<html></html>");
             File.WriteAllText(Path.Combine(machinesRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "assets", "app.js"), "console.log('ok');");
 
@@ -1250,7 +1251,7 @@ public sealed class AfCoreTests
             Assert.False(staticUnavailable);
             Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile?.PhysicalPath);
             Assert.False(workoutRouteUnavailable);
-            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "index.html"), workoutRouteFile?.PhysicalPath);
+            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "detail.html"), workoutRouteFile?.PhysicalPath);
             Assert.False(machineRouteUnavailable);
             Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "machines", "index.html"), machineRouteFile?.PhysicalPath);
             Assert.False(unknownRouteUnavailable);

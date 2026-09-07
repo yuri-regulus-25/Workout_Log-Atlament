@@ -1,7 +1,14 @@
 <template>
   <v-dialog :model-value="open" max-width="720" persistent @update:model-value="emit('update:open', $event)">
     <v-card>
-      <v-card-title>{{ title }}</v-card-title>
+      <div class="maintenance-dialog-header">
+        <v-btn icon="mdi-close" variant="text" aria-label="閉じる" @click="emit('close')" />
+        <v-card-title>{{ title }}</v-card-title>
+        <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="emit('save')">
+          {{ dialogMode === 'create' ? '作成' : '更新' }}
+        </v-btn>
+      </div>
+      <v-divider />
       <v-card-text>
         <v-form class="record-form" @submit.prevent="emit('save')">
           <template v-if="machineDraft">
@@ -22,13 +29,6 @@
           </template>
         </v-form>
       </v-card-text>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn variant="text" @click="emit('close')">キャンセル</v-btn>
-        <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="emit('save')">
-          {{ dialogMode === 'create' ? '作成' : '更新' }}
-        </v-btn>
-      </v-card-actions>
     </v-card>
   </v-dialog>
 </template>

@@ -3,7 +3,8 @@
     :class="['maintenance-table', 'master-table', type === 'MACHINE_MASTER' ? 'machine-master-table' : 'gym-master-table']"
     :headers="headers"
     :items="records"
-    :loading="loading"
+    :items-per-page-text="'Show Items'"
+    :loading="loading ? 'primary' : false"
     item-value="id"
     no-data-text="データがありません"
     hover

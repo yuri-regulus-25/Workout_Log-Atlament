@@ -7,10 +7,6 @@ export type ApplicationMetadata = {
   portalCategory?: string
   portalPointer?: string
   frameworkName?: string
-  frameworkIcons?: ReadonlyArray<{
-    href?: string
-    className?: string
-  }>
   frameworkIconHref?: string
   frameworkIconClass?: string
 }

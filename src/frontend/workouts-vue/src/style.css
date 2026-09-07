@@ -16,12 +16,12 @@
 
 .field input,
 .field select {
-  min-width: 220px;
+  min-width: 0;
 }
 
 .workout-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
 }
@@ -125,7 +125,7 @@
 
 .calendar-day--trained {
   border-color: var(--wl-primary-soft);
-  background: var(--wl-success-bg);
+  background: color-mix(in srgb, var(--wl-brand) 16%, var(--wl-surface));
   color: var(--wl-text-strong);
 }
 
@@ -438,7 +438,7 @@
   }
 }
 
-@container (max-width: 720px) {
+@container (max-width: 560px) {
   .workout-filters {
     grid-template-columns: 1fr;
   }

@@ -43,7 +43,7 @@ export function initializePortalStatusNotice({ notice, noticeText, noticeIcon, g
       } else if (noticeState === 'success' || noticeState === 'success-fading' || noticeState === 'error') {
         return
       } else {
-        hideStatusNotice()
+        showStatusNotice('データは最新です', 'current', 'mdi-check-circle-outline')
       }
     } catch {
       syncWasRunning = false
@@ -55,7 +55,7 @@ export function initializePortalStatusNotice({ notice, noticeText, noticeIcon, g
     clearSuccessTimers()
     noticeState = state
     noticeText.innerHTML = message
-    notice.classList.remove('loading', 'success', 'warning', 'error', 'fading')
+    notice.classList.remove('loading', 'current', 'success', 'warning', 'error', 'fading')
     notice.classList.add(state)
     noticeIcon.className = `sync-icon mdi ${iconClass}`.trim()
     notice.classList.add('visible')
@@ -78,7 +78,7 @@ export function initializePortalStatusNotice({ notice, noticeText, noticeIcon, g
   function hideStatusNotice() {
     clearSuccessTimers()
     noticeState = 'hidden'
-    notice.classList.remove('visible', 'loading', 'success', 'warning', 'error', 'fading')
+    notice.classList.remove('visible', 'loading', 'current', 'success', 'warning', 'error', 'fading')
     noticeIcon.className = 'sync-icon mdi'
   }
 

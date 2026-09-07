@@ -1,7 +1,7 @@
 <template>
   <div ref="shell" :class="['app-shell', pageTransitionClassName]">
     <div data-application-shell-content>
-      <WorkoutsView />
+      <WorkoutDetailView :date="workoutDate" />
     </div>
   </div>
 </template>
@@ -9,12 +9,21 @@
 <script>
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import WorkoutsView from './views/WorkoutsView.vue'
+import WorkoutDetailView from './views/WorkoutDetailView.vue'
+
+function readWorkoutDate() {
+  const match = window.location.pathname.match(/\/workouts\/(\d{4}-\d{2}-\d{2})\/?$/)
+  return match?.[1] ?? ''
+}
 
 export default {
-  components: { WorkoutsView },
+  components: { WorkoutDetailView },
   data() {
-    return { pageTransitionClassName, navigation: null }
+    return {
+      pageTransitionClassName,
+      navigation: null,
+      workoutDate: readWorkoutDate(),
+    }
   },
   mounted() {
     this.navigation = initializeAppNavigation({
@@ -29,12 +38,12 @@ export default {
   computed: {
     screenHeader() {
       return {
-        eyebrow: 'Atlament / Workout Domain',
-        title: 'Workout Domain',
-        description: '過去のワークアウト記録を確認します',
-        ariaLabel: 'Atlament Workouts',
-      };
+        eyebrow: 'Atlament / Workout Domain / Details',
+        title: 'Workout Domain / Details',
+        description: '特定のワークアウト記録を確認します',
+        ariaLabel: 'Atlament Workout Detail',
+      }
     },
   },
-};
+}
 </script>

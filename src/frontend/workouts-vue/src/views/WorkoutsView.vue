@@ -8,6 +8,9 @@
             <h2>検索対象</h2>
           </div>
         </div>
+        <div class="filter-actions" aria-live="polite">
+          <button type="button" @click="resetFilters">Reset</button>
+        </div>
       </div>
       <div class="panel-content">
         <WorkoutFilters
@@ -20,7 +23,6 @@
           :machine-options="machineOptions"
           :body-part-options="bodyPartOptions"
           :gym-options="gymOptions"
-          @reset="resetFilters"
         />
       </div>
     </section>
@@ -57,7 +59,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import {
@@ -69,7 +71,6 @@ import WorkoutFilters from '../components/WorkoutFilters.vue'
 import WorkoutGrid from '../components/WorkoutGrid.vue'
 import { defaultWorkoutListFilters, filterWorkoutSessions } from '../workout-list-filters'
 
-const router = useRouter()
 const workoutSessions = ref<WorkoutSession[]>([])
 const loadError = ref<string | null>(null)
 
@@ -137,11 +138,15 @@ const filteredSessions = computed(() => {
 })
 
 function openSession(session: WorkoutSession) {
-  router.push({ name: 'workout-detail', params: { date: session.date } })
+  window.location.href = workoutDetailRoute(session.date)
 }
 
 function openDate(date: string) {
-  router.push({ name: 'workout-detail', params: { date } })
+  window.location.href = workoutDetailRoute(date)
+}
+
+function workoutDetailRoute(date: string) {
+  return `${applicationRoutes.workouts}${date}/`
 }
 
 function resetFilters() {

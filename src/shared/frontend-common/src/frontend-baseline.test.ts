@@ -24,6 +24,7 @@ const sourceDocuments = [
   'src/frontend/maintenance-vue/index.html',
   'src/frontend/portal/src/index.html',
   'src/frontend/settings-solid/index.html',
+  'src/frontend/workouts-vue/detail.html',
   'src/frontend/workouts-vue/index.html',
 ] as const
 
@@ -47,7 +48,9 @@ const existingFrontendApps = [
     id: 'workouts',
     sourceFiles: [
       'src/frontend/workouts-vue/src/App.vue',
-      'src/frontend/workouts-vue/src/router.ts',
+      'src/frontend/workouts-vue/src/DetailApp.vue',
+      'src/frontend/workouts-vue/src/main.ts',
+      'src/frontend/workouts-vue/src/main-detail.ts',
       'src/frontend/workouts-vue/src/views/WorkoutsView.vue',
       'src/frontend/workouts-vue/src/views/WorkoutDetailView.vue',
     ],
@@ -209,12 +212,25 @@ describe('cross-frontend test baseline', () => {
     }
   })
 
-  it('keeps Workout Domain route changes focus-restored to the page heading', () => {
-    const source = readSource('src/frontend/workouts-vue/src/App.vue')
+  it('keeps Workout Domain list and detail entry points separated', () => {
+    const listRoot = readSource('src/frontend/workouts-vue/src/App.vue')
+    const detailRoot = readSource('src/frontend/workouts-vue/src/DetailApp.vue')
+    const listMain = readSource('src/frontend/workouts-vue/src/main.ts')
+    const detailMain = readSource('src/frontend/workouts-vue/src/main-detail.ts')
+    const detailHtml = readSource('src/frontend/workouts-vue/detail.html')
+    const preview = readSource('tools/dev-runtime/preview-mpa.mjs')
 
-    expect(source).toContain('"$route.fullPath"')
-    expect(source).toContain('this.navigation?.updateScreen(this.screenHeader)')
-    expect(source).toContain('this.navigation?.focusTitle()')
+    expect(listRoot).toContain('<WorkoutsView />')
+    expect(listRoot).toContain("title: 'Workout Domain'")
+    expect(listRoot).toContain("description: '過去のワークアウト記録を確認します'")
+    expect(listRoot).not.toContain('<RouterView')
+    expect(detailRoot).toContain('<WorkoutDetailView :date="workoutDate" />')
+    expect(detailRoot).toContain("title: 'Workout Domain / Details'")
+    expect(detailRoot).toContain("description: '特定のワークアウト記録を確認します'")
+    expect(detailMain).toContain("import DetailApp from './DetailApp.vue'")
+    expect(listMain).not.toContain('.use(router)')
+    expect(detailHtml).toContain('/src/main-detail.ts')
+    expect(preview).toContain("return 'workouts/detail.html'")
   })
 
   it('keeps Application Shell responsibilities centralized in the shared frontend layer', () => {
@@ -245,19 +261,29 @@ describe('cross-frontend test baseline', () => {
     expect(navigationUi).toContain("portalLink.classList.add('atl-navigation-portal-link')")
     expect(navigationUi).toContain("bottomRegion.append(themeTrigger)")
     expect(navigationUi).not.toContain('createMobileHeader')
-    expect(sharedCss).toContain('background: rgb(204, 251, 241)')
-    expect(sharedCss).toContain('linear-gradient(100deg, rgb(16, 185, 129) 0%, rgb(16, 185, 129) 8%, rgb(15, 118, 110) 100%)')
+    expect(sharedCss).toContain('background: var(--wl-shell-primary-soft)')
+    expect(sharedCss).toContain('linear-gradient(100deg, var(--wl-shell-primary) 0%, var(--wl-shell-primary) 8%, var(--wl-shell-primary-strong) 100%)')
     expect(sharedCss).toContain('height: 60px')
     expect(sharedCss).toContain('margin: 0 16px 16px 0')
     expect(sharedCss).toContain('border-radius: 24px')
     expect(sharedCss).toContain('background: rgb(247, 247, 245)')
     expect(sharedCss).toContain('scrollbar-width: none')
     expect(sharedCss).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
+    expect(sharedCss).toContain('width: 100px')
+    expect(sharedCss).toContain('width: 84px')
+    expect(sharedCss).toContain('height: 62px')
+    expect(sharedCss).toContain('height: 48px')
+    expect(sharedCss).toContain('.atl-theme-trigger-label')
     expect(sharedCss).toContain('.atl-navigation-region-scroll')
     expect(sharedCss).toContain('overscroll-behavior: contain')
     expect(sharedCss).toContain('@media (max-width: 900px)')
     expect(sharedCss).toContain('.atl-navigation-drawer-mobile')
+    expect(sharedCss).toContain('max-width: calc(100vw - 56px)')
+    expect(sharedCss).toContain('justify-content: flex-start')
+    expect(sharedCss).toContain('.atl-navigation-drawer-mobile .atl-theme-trigger.atl-navigation-theme-trigger')
+    expect(sharedCss).toContain('display: inline')
     expect(sharedCss).toContain('display: grid')
+    expect(sharedCss).toContain('background: var(--wl-overlay)')
     expect(hostedSources).not.toContain('class="page-hero"')
     expect(hostedSources).not.toContain('className="page-hero"')
   })

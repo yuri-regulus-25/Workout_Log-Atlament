@@ -300,28 +300,26 @@ export class App implements AfterViewInit, OnDestroy {
 
   private selectMachineIdFromPath() {
     const pathMachineId = this.getPathMachineId();
-    const fallbackMachineId = this.machineOptions()[0]?.machine_id ?? '';
     const hasValidPathMachineId =
       pathMachineId !== undefined &&
       this.machineOptions().some((machine) => machine.machine_id === pathMachineId);
-    const nextMachineId = hasValidPathMachineId && pathMachineId ? pathMachineId : fallbackMachineId;
 
     this.hasInvalidMachineIdParameter.set(pathMachineId !== undefined && !hasValidPathMachineId);
     this.invalidMachineId.set(pathMachineId ?? '');
-    this.selectedMachineId.set(nextMachineId);
-
-    if (nextMachineId && window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
-      window.history.replaceState(null, '', `${applicationRoutes.machines}${nextMachineId}/`);
-    }
+    this.selectedMachineId.set(hasValidPathMachineId && pathMachineId ? pathMachineId : '');
   }
 
   private reconcileSelectedMachineWithFilters() {
     const filtered = this.filteredMachineOptions();
-    if (filtered.length === 0 || filtered.some((machine) => machine.machine_id === this.selectedMachineId())) {
+    if (
+      this.selectedMachineId().length === 0 ||
+      filtered.length === 0 ||
+      filtered.some((machine) => machine.machine_id === this.selectedMachineId())
+    ) {
       return;
     }
 
-    this.selectMachine(filtered[0].machine_id);
+    this.selectedMachineId.set('');
   }
 }
 

@@ -1,7 +1,12 @@
 <template>
   <v-dialog :model-value="open" max-width="720" persistent @update:model-value="emit('update:open', $event)">
     <v-card>
-      <v-card-title>未解決参照の解決</v-card-title>
+      <div class="maintenance-dialog-header">
+        <v-btn icon="mdi-close" variant="text" aria-label="閉じる" @click="emit('update:open', false)" />
+        <v-card-title>未解決参照の解決</v-card-title>
+        <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="emit('resolve')">解決</v-btn>
+      </div>
+      <v-divider />
       <v-card-text>
         <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
           {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトに影響しています。
@@ -20,6 +25,7 @@
           class="maintenance-table compact-table"
           :headers="affectedHeaders"
           :items="selectedUnresolved.affectedWorkouts"
+          :items-per-page-text="'Show Items'"
           density="compact"
         >
           <template #item.message="{ item }">
@@ -30,11 +36,6 @@
           </template>
         </v-data-table>
       </v-card-text>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn variant="text" @click="emit('update:open', false)">キャンセル</v-btn>
-        <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="emit('resolve')">解決</v-btn>
-      </v-card-actions>
     </v-card>
   </v-dialog>
 </template>

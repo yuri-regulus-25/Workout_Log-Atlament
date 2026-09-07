@@ -9,6 +9,9 @@
           <h2>検索対象</h2>
         </div>
       </div>
+      <div class="filter-actions" aria-live="polite">
+        <button type="button" (click)="clearMachineFilters()">Reset</button>
+      </div>
     </div>
     <div class="selector-panel" aria-label="Machine selector filters">
         <label class="field">
@@ -38,6 +41,7 @@
             [disabled]="filteredMachineOptions().length === 0"
             (change)="selectMachine($any($event.target).value)"
           >
+            <option value="">-</option>
             @for (machine of filteredMachineOptions(); track machine.machine_id) {
               <option
                 [value]="machine.machine_id"
@@ -48,10 +52,6 @@
             }
           </select>
         </label>
-
-        <div class="filter-actions" aria-live="polite">
-          <button type="button" (click)="clearMachineFilters()">Reset</button>
-        </div>
     </div>
   </section>
 
@@ -193,6 +193,18 @@
       }
     </div>
   </section>
+  }
+
+  @if (!hasActiveMachineSelection() && !hasInvalidMachineIdParameter() && filteredMachineOptions().length > 0) {
+    <section class="panel information-panel" role="status" aria-live="polite">
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-information" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Information</p>
+          <h2>検索条件を指定してください</h2>
+        </div>
+      </div>
+    </section>
   }
   </div>
 </main>

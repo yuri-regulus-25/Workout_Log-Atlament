@@ -15,6 +15,7 @@ class AndroidAssetServerContractTest {
         assertTrue(assetServer.contains("frontend/404.html"))
         assertTrue(assetServer.contains("frontend/500.html"))
         assertTrue(assetServer.contains("frontend/503.html"))
+        assertTrue(assetServer.contains("\"workouts\" -> \"frontend/workouts/detail.html\""))
         assertTrue(assetServer.contains("\"workouts\" -> normalized.matches"))
         assertTrue(assetServer.contains("\"machines\" -> normalized.matches"))
         assertTrue(assetServer.contains("\"text/css; charset=utf-8\""))

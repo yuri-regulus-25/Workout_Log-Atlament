@@ -121,7 +121,7 @@ function App() {
           mainGymVolumeTrendState={mainGymVolumeTrend.state}
           mainGymVolumeTrendPoints={mainGymVolumeTrendPoints}
         />
-        <DashboardChartSection sessions={sessions} bodyBalanceRows={bodyBalanceRows} />
+        <DashboardChartSection sessions={recent28Sessions} bodyBalanceRows={bodyBalanceRows} />
         <DashboardRecentWorkoutsSection rows={recentRows} />
       </div>
     </main>

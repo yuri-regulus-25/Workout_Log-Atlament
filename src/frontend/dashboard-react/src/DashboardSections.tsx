@@ -5,7 +5,6 @@ import {
   getTotalSets,
   getTotalVolume,
 } from '@workout-lab/workout-core'
-import { getWorkoutListRoute } from './dashboard-navigation'
 import { BodyBalanceChart, MainGymVolumeChart, WorkoutFrequencyChart } from './DashboardCharts'
 import { DashboardMetricCard } from './DashboardMetricCard'
 import { RecentWorkoutsTable } from './RecentWorkoutsTable'
@@ -89,9 +88,6 @@ export function DashboardRecentWorkoutsSection(props: { rows: Parameters<typeof 
     <section className="panel">
       <div className="panel-header">
         <DashboardPanelTitle icon="mdi-history" eyebrow="Recent Workouts" title="最近のワークアウト" />
-        <a className="text-action" href={getWorkoutListRoute()}>
-          <i className="mdi mdi-view-list-outline" aria-hidden="true"></i>Workout List
-        </a>
       </div>
       <RecentWorkoutsTable rows={props.rows} />
     </section>

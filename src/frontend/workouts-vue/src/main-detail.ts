@@ -2,9 +2,9 @@ import { createApp } from 'vue'
 import { initializeStoredBrandVariant } from '@workout-lab/frontend-common/branding'
 import { initializeStoredTheme } from '@workout-lab/frontend-common/theme'
 import './style.css'
-import App from './App.vue'
+import DetailApp from './DetailApp.vue'
 
 initializeStoredBrandVariant()
 initializeStoredTheme()
 
-createApp(App).mount('#app')
+createApp(DetailApp).mount('#app')
