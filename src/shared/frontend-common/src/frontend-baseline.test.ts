@@ -99,7 +99,9 @@ const existingFrontendApps = [
     id: 'maintenance',
     sourceFiles: [
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
       'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
+      'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
     ],
     cssFiles: ['src/frontend/maintenance-vue/src/style.css'],
     stateMarkers: {
@@ -251,7 +253,9 @@ describe('cross-frontend test baseline', () => {
     ])
     const maintenance = readSources([
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
       'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
+      'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
       'src/frontend/maintenance-vue/src/style.css',
     ])
 

@@ -80,38 +80,20 @@
         </v-data-table>
       </section>
 
-      <v-dialog v-model="dialogOpen" max-width="720" persistent>
-        <v-card>
-          <v-card-title>{{ dialogTitle }}</v-card-title>
-          <v-card-text>
-            <v-form class="record-form" @submit.prevent="saveDialog">
-              <template v-if="machineDraft">
-                <v-text-field v-model.trim="machineDraft.machine_id" label="ID" variant="outlined" :error-messages="idError" :disabled="dialogMode === 'edit'" density="compact" />
-                <v-text-field v-model.trim="machineDraft.name" label="名前" variant="outlined" density="compact" />
-                <v-select v-model="machineDraft.body_part" label="部位" variant="outlined" :items="bodyParts" item-title="title" item-value="value" density="compact" />
-                <v-text-field v-model="aliasText" label="別名" variant="outlined" density="compact" />
-                <v-switch v-model="machineDraft.active" label="有効" color="primary" inset density="compact" />
-                <v-chip v-if="machineDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
-              </template>
-              <template v-if="gymDraft">
-                <v-text-field v-model.trim="gymDraft.gym_id" label="ID" variant="outlined" :error-messages="idError" :disabled="dialogMode === 'edit'" density="compact" />
-                <v-text-field v-model.trim="gymDraft.name" label="名前" variant="outlined" density="compact" />
-                <v-text-field v-model.trim="gymDraft.short_name" label="短縮名" variant="outlined" density="compact" />
-                <v-switch v-model="gymDraft.active" label="有効" color="primary" inset density="compact" />
-                <v-chip v-if="gymDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
-                <v-chip v-if="gymDraft.main" color="primary" variant="tonal">メインジム</v-chip>
-              </template>
-            </v-form>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="closeDialog">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="saveDialog">
-              {{ dialogMode === 'create' ? '作成' : '更新' }}
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <MasterRecordEditorDialog
+        v-model:open="dialogOpen"
+        v-model:alias-text="aliasText"
+        :title="dialogTitle"
+        :dialog-mode="dialogMode"
+        :machine-draft="machineDraft"
+        :gym-draft="gymDraft"
+        :body-parts="bodyParts"
+        :id-error="idError"
+        :saving="saving"
+        :can-save="Boolean(canSave)"
+        @close="closeDialog"
+        @save="saveDialog"
+      />
 
       <v-dialog v-model="discardOpen" max-width="420">
         <v-card>
@@ -136,43 +118,14 @@
         </v-card>
       </v-dialog>
 
-      <v-dialog v-model="resolveOpen" max-width="720" persistent>
-        <v-card>
-          <v-card-title>未解決参照の解決</v-card-title>
-          <v-card-text>
-            <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
-              {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトに影響しています。
-            </v-alert>
-            <v-select
-              v-model="resolveTargetId"
-              label="解決先の登録情報"
-              variant="outlined"
-              :items="resolveOptions"
-              item-title="title"
-              item-value="value"
-            />
-            <v-data-table
-              v-if="selectedUnresolved"
-              class="maintenance-table compact-table"
-              :headers="affectedHeaders"
-              :items="selectedUnresolved.affectedWorkouts"
-              density="compact"
-            >
-              <template #item.message="{ item }">
-                <div class="affected-message">
-                  <span>{{ item.message }}</span>
-                  <span>メンテナンスを行う必要があります。</span>
-                </div>
-              </template>
-            </v-data-table>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="resolveOpen = false">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="resolveToExisting">解決</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <UnresolvedReferenceResolutionDialog
+        v-model:open="resolveOpen"
+        v-model:resolve-target-id="resolveTargetId"
+        :selected-unresolved="selectedUnresolved"
+        :resolve-options="resolveOptions"
+        :saving="saving"
+        @resolve="resolveToExisting"
+      />
     </main>
   </v-app>
 </template>
@@ -183,8 +136,10 @@ import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { formatBodyPart } from '@workout-lab/workout-core'
+import MasterRecordEditorDialog from './MasterRecordEditorDialog.vue'
 import MasterRecordsTable from './MasterRecordsTable.vue'
 import RecoveryPanel from './RecoveryPanel.vue'
+import UnresolvedReferenceResolutionDialog from './UnresolvedReferenceResolutionDialog.vue'
 import {
   cloneRecordDraft,
   cloneGymRecord,
@@ -313,12 +268,6 @@ const unresolvedHeaders = [
   { title: '参照ID', key: 'referenceId' },
   { title: '影響', key: 'affected', sortable: false },
   { title: '', key: 'actions', sortable: false, width: 128 },
-]
-
-const affectedHeaders = [
-  { title: 'ワークアウト', key: 'filePath' },
-  { title: '行', key: 'line' },
-  { title: 'メッセージ', key: 'message' },
 ]
 
 const idError = computed(() => {
