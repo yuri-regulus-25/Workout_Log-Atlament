@@ -30,7 +30,11 @@ const sourceDocuments = [
 const existingFrontendApps = [
   {
     id: 'dashboard',
-    sourceFiles: ['src/frontend/dashboard-react/src/App.tsx'],
+    sourceFiles: [
+      'src/frontend/dashboard-react/src/App.tsx',
+      'src/frontend/dashboard-react/src/DashboardCharts.tsx',
+      'src/frontend/dashboard-react/src/DashboardSections.tsx',
+    ],
     cssFiles: ['src/frontend/dashboard-react/src/App.css', 'src/frontend/dashboard-react/src/index.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
@@ -222,7 +226,11 @@ describe('cross-frontend test baseline', () => {
   })
 
   it('keeps Round 3 reviewed frontend presentation contracts', () => {
-    const dashboard = readSource('src/frontend/dashboard-react/src/App.tsx')
+    const dashboard = readSources([
+      'src/frontend/dashboard-react/src/App.tsx',
+      'src/frontend/dashboard-react/src/DashboardCharts.tsx',
+      'src/frontend/dashboard-react/src/DashboardSections.tsx',
+    ])
     const machines = readSources([
       'src/frontend/machines-angular/src/app/app.ts',
       'src/frontend/machines-angular/src/app/app.html',

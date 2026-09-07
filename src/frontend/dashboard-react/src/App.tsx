@@ -1,20 +1,15 @@
-import ReactApexChart from 'react-apexcharts'
-import type { ApexOptions } from 'apexcharts'
 import { useEffect, useRef, useState } from 'react'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
-import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
+import { observeThemeChanges } from '@workout-lab/design-tokens'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import {
-  formatBodyPart,
   formatDisplayDate,
   getCurrentLocalYearMonth,
-  getBodyPartSummary,
   getMainGymMonthlyVolumeMetric,
   getMainGymVolumeTrendMetric,
-  getGymDisplayName,
   getNumericDelta,
   getMonthlySessions,
   getRecentSessions,
@@ -22,12 +17,16 @@ import {
   resolvePreviousMonthRange,
   filterSessionsByDateRange,
   getTotalSets,
-  getTotalVolume,
   toWorkoutRows,
 } from '@workout-lab/workout-core'
-import { getUniqueWorkoutDateRoute,  getWorkoutListRoute } from './dashboard-navigation'
-import { DashboardMetricCard } from './DashboardMetricCard'
-import { RecentWorkoutsTable } from './RecentWorkoutsTable'
+import { getDashboardBodyBalanceRows } from './dashboard-body-balance'
+import {
+  DashboardChartSection,
+  DashboardLoadWarning,
+  DashboardMetricSection,
+  DashboardPrimarySection,
+  DashboardRecentWorkoutsSection,
+} from './DashboardSections'
 import './App.css'
 
 function App() {
@@ -100,155 +99,17 @@ function App() {
   const recent28Sessions = getRecentSessions(sessions, 28)
   const mainGymVolumeTrend = getMainGymVolumeTrendMetric(mainGymContext, recent28Sessions)
   const mainGymVolumeTrendPoints = mainGymVolumeTrend.state === 'available' ? mainGymVolumeTrend.value : []
-  const chartTheme = getChartTheme()
-
-  const volumeChartOptions: ApexOptions = {
-    chart: {
-      type: 'area',
-      height: 320,
-      background: 'transparent',
-      foreColor: chartTheme.textMuted,
-      toolbar: { show: false },
-      zoom: { enabled: false },
-    },
-    colors: [chartTheme.primary],
-    dataLabels: { enabled: false },
-    fill: {
-      gradient: {
-        opacityFrom: chartTheme.mode === 'dark' ? 0.34 : 0.28,
-        opacityTo: chartTheme.mode === 'dark' ? 0.04 : 0.02,
-      },
-      type: 'gradient',
-    },
-    grid: { borderColor: chartTheme.grid },
-    stroke: { curve: 'smooth', width: 3 },
-    theme: { mode: chartTheme.mode },
-    xaxis: {
-      categories: mainGymVolumeTrendPoints.map((point) => formatDisplayDate(point.date)),
-      axisBorder: { color: chartTheme.border },
-      axisTicks: { color: chartTheme.border },
-      labels: { show: false, style: { colors: chartTheme.textMuted } },
-    },
-    yaxis: {
-      labels: {
-        formatter: (value) => `${Math.round(value).toLocaleString()} kg`,
-        style: { colors: chartTheme.textMuted },
-      },
-    },
-    tooltip: {
-      theme: chartTheme.mode,
-      y: {
-        formatter: (value) => `${value.toLocaleString()} kg`,
-      },
-    },
-  }
-
-  const volumeChartSeries = [
-    {
-      name: 'Main Gym Total Weight',
-      data: mainGymVolumeTrendPoints.map((point) => point.volume),
-    },
+  const monthlySummaryMetrics = [
+    { label: 'Monthly workouts', value: `${monthlySessions.length} Sessions` },
+    { label: 'Monthly sets', value: `${totalSets} Sets` },
+    { label: 'Main Gym volume', value: formatMainGymMetric(monthlyVolume) },
+    { label: 'Latest workout', value: latestWorkout ? formatDisplayDate(latestWorkout.date) : '—' },
   ]
-  const volumeChartKey = mainGymVolumeTrendPoints.map((point) => point.sessionId).join('|')
-
-  const frequencyChartOptions: ApexOptions = {
-    chart: {
-      background: 'transparent',
-      events: {
-        dataPointSelection: (_event, _chartContext, config) => {
-          const dataPointIndex = config?.dataPointIndex
-          if (typeof dataPointIndex !== 'number') {
-            return
-          }
-
-          const route = getUniqueWorkoutDateRoute(sessions, dataPointIndex)
-          if (route) {
-            window.location.assign(route)
-          }
-        },
-      },
-      foreColor: chartTheme.textMuted,
-      toolbar: { show: false },
-    },
-    colors: [chartTheme.accent],
-    dataLabels: { enabled: false },
-    grid: { borderColor: chartTheme.grid },
-    plotOptions: {
-      bar: {
-        borderRadius: 8,
-        columnWidth: '42%',
-      },
-    },
-    xaxis: {
-      categories: sessions.map((session) => formatDisplayDate(session.date).slice(5)),
-      axisBorder: { color: chartTheme.border },
-      axisTicks: { color: chartTheme.border },
-      labels: { show: false, style: { colors: chartTheme.textMuted } },
-    },
-    yaxis: {
-      min: 0,
-      labels: {
-        formatter: (value) => `${Math.round(value)} sets`,
-        style: { colors: chartTheme.textMuted },
-      },
-    },
-    theme: { mode: chartTheme.mode },
-    tooltip: { theme: chartTheme.mode },
-  }
-
-  const frequencyChartSeries = [
-    {
-      name: 'Sets',
-      data: sessions.map((session) => getTotalSets(session)),
-    },
-  ]
-
-  const bodyBalanceChartOptions: ApexOptions = {
-    chart: {
-      background: 'transparent',
-      foreColor: chartTheme.textMuted,
-      toolbar: { show: false },
-    },
-    colors: [chartTheme.primary],
-    dataLabels: {
-      enabled: false,
-    },
-    grid: { show: false },
-    plotOptions: {
-      bar: {
-        borderRadius: 8,
-        barHeight: '62%',
-        horizontal: true,
-      },
-    },
-    tooltip: {
-      theme: chartTheme.mode,
-      y: {
-        formatter: (value) => `${Math.round(Number(value))} sets`,
-      },
-    },
-    xaxis: {
-      categories: bodyBalanceRows.map((row) => row.label),
-      labels: { show: false },
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-    },
-    yaxis: {
-      labels: {
-        style: {
-          colors: chartTheme.textMuted,
-          fontWeight: 800,
-        },
-      },
-    },
-    theme: { mode: chartTheme.mode },
-  }
-
-  const bodyBalanceChartSeries = [
-    {
-      name: 'Sets',
-      data: bodyBalanceRows.map((row) => row.sets),
-    },
+  const previousMonthMetrics = [
+    { label: 'Workout delta', value: formatDelta(monthlyWorkoutDelta.absolute, 'Sessions') },
+    { label: 'Set delta', value: formatDelta(monthlySetDelta.absolute, 'Sets') },
+    { label: 'Previous month workouts', value: `${previousMonthSessions.length} Sessions` },
+    { label: 'Previous month period', value: previousMonthRange.startDate.slice(0, 7).replace('-', '/') },
   ]
 
   return (
@@ -266,141 +127,16 @@ function App() {
         </p>
       </header>
 
-      <section className="metric-grid" aria-label="Monthly summary">
-        <DashboardMetricCard label="Monthly workouts" value={`${monthlySessions.length} Sessions`} />
-        <DashboardMetricCard label="Monthly sets" value={`${totalSets} Sets`} />
-        <DashboardMetricCard label="Main Gym volume" value={formatMainGymMetric(monthlyVolume)} />
-        <DashboardMetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
-      </section>
-
-      <section className="metric-grid" aria-label="Previous month comparison">
-        <DashboardMetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
-        <DashboardMetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
-        <DashboardMetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
-        <DashboardMetricCard label="Previous month period" value={previousMonthRange.startDate.slice(0, 7).replace('-', '/')} />
-      </section>
-
-      {loadError ? (
-        <section className="panel">
-          <p className="eyebrow">Data Load Warning</p>
-          <h2>データ取得異常</h2>
-          <p className="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
-        </section>
-      ) : null}
-
-      <section className="dashboard-grid">
-        <article className="panel wide">
-          <div className="panel-header">
-            <div className="card-heading">
-              <div className="card-heading__icon"><i className="mdi mdi-chart-areaspline" aria-hidden="true"></i></div>
-              <div className="card-heading__text">
-                <p className="eyebrow">Volume Trends - Main Gym</p>
-                <h2>ボリューム推移 - メインジム</h2>
-              </div>
-            </div>
-          </div>
-          {mainGymVolumeTrend.state === 'available' && mainGymVolumeTrendPoints.length > 0 ? (
-            <ReactApexChart
-              key={volumeChartKey}
-              type="area"
-              height={320}
-              options={volumeChartOptions}
-              series={volumeChartSeries}
-            />
-          ) : (
-            <p className="muted">データがありません</p>
-          )}
-        </article>
-
-        {latestWorkout ? (
-        <article className="panel latest-workout-empty">
-          <div className="panel-header">
-            <div className="card-heading">
-              <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
-              <div className="card-heading__text">
-                <p className="eyebrow">Latest Workout</p>
-                <h2>{latestWorkout ? formatDisplayDate(latestWorkout.date) : 'No workout'}</h2>
-              </div>
-            </div>
-          </div>
-          <>
-              <p className="large-number">{getTotalVolume(latestWorkout).toLocaleString()} kg</p>
-              <p className="muted">
-                {getGymDisplayName(latestWorkout.gym)}<br />
-                {getTotalSets(latestWorkout)} sets<br />
-                {latestWorkout.machines.length} machines
-              </p>
-          </>
-        </article>
-        ) : (
-        <article className="panel latest-workout-empty">
-          <div className="panel-header">
-            <div className="card-heading">
-              <div className="card-heading__icon"><i className="mdi mdi-calendar-blank-outline" aria-hidden="true"></i></div>
-              <div className="card-heading__text">
-                <p className="eyebrow">Latest Workout</p>
-                <h2>No workout</h2>
-              </div>
-            </div>
-          </div>
-          <p className="muted">データがありません</p>
-        </article>
-        )}
-      </section>
-
-      <section className="dashboard-grid">
-        <article className="panel">
-          <div className="panel-header">
-            <div className="card-heading">
-              <div className="card-heading__icon"><i className="mdi mdi-chart-bar" aria-hidden="true"></i></div>
-              <div className="card-heading__text">
-                <p className="eyebrow">Set Count Trends</p>
-                <h2>セット数推移</h2>
-              </div>
-            </div>
-          </div>
-          <ReactApexChart
-            type="bar"
-            height={300}
-            options={frequencyChartOptions}
-            series={frequencyChartSeries}
-          />
-        </article>
-
-        <article className="panel">
-          <div className="panel-header">
-            <div className="card-heading">
-              <div className="card-heading__icon"><i className="mdi mdi-scale-balance" aria-hidden="true"></i></div>
-              <div className="card-heading__text">
-                <p className="eyebrow">Training Balance</p>
-                <h2>トレーニングバランス</h2>
-              </div>
-            </div>
-          </div>
-          <ReactApexChart
-            type="bar"
-            height={300}
-            options={bodyBalanceChartOptions}
-            series={bodyBalanceChartSeries}
-          />
-        </article>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div className="card-heading">
-            <div className="card-heading__icon"><i className="mdi mdi-history" aria-hidden="true"></i></div>
-            <div className="card-heading__text">
-              <p className="eyebrow">Recent Workouts</p>
-              <h2>最近のワークアウト</h2>
-            </div>
-          </div>
-          <a className="text-action" href={getWorkoutListRoute()}>
-            <i className="mdi mdi-view-list-outline" aria-hidden="true"></i>Workout List
-          </a>
-        </div>
-        <RecentWorkoutsTable rows={recentRows} />
-      </section>
+      <DashboardMetricSection label="Monthly summary" metrics={monthlySummaryMetrics} />
+      <DashboardMetricSection label="Previous month comparison" metrics={previousMonthMetrics} />
+      <DashboardLoadWarning loadError={loadError} />
+      <DashboardPrimarySection
+        latestWorkout={latestWorkout}
+        mainGymVolumeTrendState={mainGymVolumeTrend.state}
+        mainGymVolumeTrendPoints={mainGymVolumeTrendPoints}
+      />
+      <DashboardChartSection sessions={sessions} bodyBalanceRows={bodyBalanceRows} />
+      <DashboardRecentWorkoutsSection rows={recentRows} />
     </main>
   )
 }
@@ -424,31 +160,6 @@ function formatMainGymMetricState(metric: { state: string }): string {
   }
 
   return 'No Data'
-}
-
-const dashboardBodyPartOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs']
-
-function getDashboardBodyBalanceRows(monthlySessions: WorkoutSession[]) {
-  const summaryByBodyPart = new Map(
-    getBodyPartSummary(monthlySessions)
-      .filter((item) => item.bodyPart !== 'cardio')
-      .map((item) => [item.bodyPart, item.sets]),
-  )
-  const orderedRows = dashboardBodyPartOrder.map((bodyPart) => ({
-    bodyPart,
-    label: formatBodyPart(bodyPart),
-    sets: summaryByBodyPart.get(bodyPart) ?? 0,
-  }))
-  const knownBodyParts = new Set(dashboardBodyPartOrder)
-  const additionalRows = Array.from(summaryByBodyPart.entries())
-    .filter(([bodyPart]) => !knownBodyParts.has(bodyPart))
-    .map(([bodyPart, sets]) => ({
-      bodyPart,
-      label: formatBodyPart(bodyPart),
-      sets,
-    }))
-
-  return [...orderedRows, ...additionalRows]
 }
 
 export default App
