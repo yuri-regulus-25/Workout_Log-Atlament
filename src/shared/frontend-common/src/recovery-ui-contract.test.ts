@@ -56,6 +56,19 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('confirmCommitOpen')
   })
 
+  it('keeps Recovery write conflict visible instead of emptying the commit confirmation dialog', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const commitDraft = recovery.slice(recovery.indexOf('async function commitDraft'))
+    const catchBlock = commitDraft.slice(commitDraft.indexOf('} catch (error) {'), commitDraft.indexOf('} finally {'))
+    const writeConflictBlock = catchBlock.slice(catchBlock.indexOf("code === 'RECOVERY_WRITE_CONFLICT'"), catchBlock.indexOf("code === 'RECOVERY_DRAFT_CONFLICT'"))
+
+    expect(catchBlock).toContain("code === 'RECOVERY_WRITE_CONFLICT'")
+    expect(writeConflictBlock).toContain('confirmCommitOpen.value = false')
+    expect(writeConflictBlock).toContain('validationInvalidated.value = true')
+    expect(writeConflictBlock).not.toContain('reloadDetail')
+    expect(recovery).toContain('再読み込みで最新状態を確認し、必要な場合は下書きを作り直してください')
+  })
+
   it('sends only expected revisions to the Recovery commit API', async () => {
     const fetchMock = vi.fn(async (_path: string, init?: RequestInit) => ({
       ok: true,

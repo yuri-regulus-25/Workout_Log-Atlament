@@ -512,8 +512,18 @@ async function commitDraft() {
     emit('message', { type: 'warning', text: '保存済み・反映失敗。修復内容は保存されましたが、アプリへの反映を完了できませんでした。' })
   } catch (error) {
     const code = firstAfErrorCode(error)
-    errorText.value = toUserFacingRecoveryError(error)
-    if (code === 'RECOVERY_WRITE_CONFLICT' || code === 'RECOVERY_DRAFT_CONFLICT') void reloadDetail()
+    const message = toUserFacingRecoveryError(error)
+    errorText.value = message
+    if (code === 'RECOVERY_WRITE_CONFLICT') {
+      confirmCommitOpen.value = false
+      validationInvalidated.value = true
+      return
+    }
+    if (code === 'RECOVERY_DRAFT_CONFLICT') {
+      confirmCommitOpen.value = false
+      await reloadDetail()
+      errorText.value = message
+    }
   } finally {
     committing.value = false
   }
@@ -658,7 +668,7 @@ function toUserFacingRecoveryError(error: unknown) {
     RECOVERY_DRAFT_CORRUPTED: '下書きを読み込めません。',
     RECOVERY_DRAFT_SAVE_FAILED: '下書きを保存できませんでした。',
     RECOVERY_VALIDATION_FAILED: 'まだ修復できない項目があります。',
-    RECOVERY_WRITE_CONFLICT: '元データが更新されたため、この内容では修復を確定できません。最新の状態を確認してください。',
+    RECOVERY_WRITE_CONFLICT: '元データが更新されたため、この内容では修復を確定できません。再読み込みで最新状態を確認し、必要な場合は下書きを作り直してください。',
     RECOVERY_WRITE_FAILED: '修復内容を保存できませんでした。時間をおいて再度実行してください。',
     RECOVERY_REFLECTION_FAILED: '保存済み・反映失敗。修復内容は保存されましたが、アプリへの反映を完了できませんでした。',
     GITHUB_UNAUTHORIZED: 'GitHub Tokenを確認してください。',
