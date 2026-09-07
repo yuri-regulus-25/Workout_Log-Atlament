@@ -88,7 +88,7 @@ describe('Phase 9 existing application integration', () => {
   it('keeps runtime status presentation bound to AF readiness and runtimeData facts', () => {
     const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
+    const portal = readSource('src/frontend/portal/src/portal-status-notice.js')
     const settings = [
       readSource('src/frontend/settings-solid/src/App.tsx'),
       readSource('src/frontend/settings-solid/src/SettingsSetupAssistant.tsx'),

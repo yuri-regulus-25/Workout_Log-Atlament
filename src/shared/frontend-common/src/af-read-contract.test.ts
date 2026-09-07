@@ -205,7 +205,7 @@ describe('AF read contract refinement', () => {
   it('keeps frontend fallback presentation bound to runtimeData facts', () => {
     const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
+    const portal = readSource('src/frontend/portal/src/portal-status-notice.js')
 
     expect(typedPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')
     expect(browserPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')
