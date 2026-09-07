@@ -51,17 +51,6 @@ export const applications = [
     frameworkIconHref: '/analytics/favicon.svg',
   },
   {
-    id: 'settings',
-    route: '/settings/',
-    displayName: 'Application Settings',
-    iconClass: 'mdi-cog-outline',
-    drawer: true,
-    portalCategory: 'Configuration',
-    portalPointer: '管理 - 設定',
-    frameworkName: 'SolidJS',
-    frameworkIconHref: '/settings/favicon.svg',
-  },
-  {
     id: 'maintenance',
     route: '/maintenance/',
     displayName: 'Resource Management',
@@ -74,6 +63,17 @@ export const applications = [
       { href: '/workouts/favicon.svg' },
       { href: './assets/logo_vuetify.svg' },
     ],
+  },
+  {
+    id: 'settings',
+    route: '/settings/',
+    displayName: 'Application Settings',
+    iconClass: 'mdi-cog-outline',
+    drawer: true,
+    portalCategory: 'Configuration',
+    portalPointer: '管理 - 設定',
+    frameworkName: 'SolidJS',
+    frameworkIconHref: '/settings/favicon.svg',
   },
 ]
 

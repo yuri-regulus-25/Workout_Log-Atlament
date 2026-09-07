@@ -34,6 +34,14 @@
   let sessions: WorkoutSession[] = []
   let masterData: WorkoutMasterData | undefined
   let selectedPeriod: PeriodPreset = '28d'
+  const periodOptions: Array<{ value: PeriodPreset; label: string }> = [
+    { value: '7d', label: '7 Days' },
+    { value: '28d', label: '28 Days' },
+    { value: 'month', label: 'Current Month' },
+    { value: '3m', label: '3 Months' },
+    { value: '6m', label: '6 Months' },
+    { value: 'all', label: 'Entire Period' },
+  ]
   let loadError: string | null = null
   $: periodRange = resolvePeriodRange(selectedPeriod, sessions)
   $: filteredSessions = filterSessionsByDateRange(sessions, periodRange)
@@ -315,12 +323,9 @@
       <label class="field period-field">
         <span>Period</span>
         <select bind:value={selectedPeriod}>
-          <option value="7d">7d</option>
-          <option value="28d">28d</option>
-          <option value="month">Month</option>
-          <option value="3m">3m</option>
-          <option value="6m">6m</option>
-          <option value="all">All</option>
+          {#each periodOptions as option}
+            <option value={option.value}>{option.label}</option>
+          {/each}
         </select>
       </label>
     </div>

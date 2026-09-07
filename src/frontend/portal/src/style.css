@@ -205,11 +205,20 @@ p {
     visibility 0s linear 180ms;
 }
 
-.app-card:hover .app-pointer {
+.app-card:hover .app-pointer,
+.app-card:focus-visible .app-pointer {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
   transition-delay: 0s;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .app-pointer {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
 }
 
 .app-category,

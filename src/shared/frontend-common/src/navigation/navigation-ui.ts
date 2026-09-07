@@ -15,6 +15,9 @@ export type AppNavigationController = {
 
 const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 const logoBasePath = '/frontend-common/branding/assets/'
+const swipeEdgeWidth = 24
+const swipeOpenDistance = 72
+const swipeMaxVerticalDrift = 48
 
 export function initializeAppNavigation(options: AppNavigationOptions): AppNavigationController {
   const shell = options.shell ?? document.querySelector<HTMLElement>('.app-shell')
@@ -88,9 +91,44 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
     setOpen(false)
   }
 
+  let swipeStart: { x: number; y: number } | null = null
+
+  function handleTouchStart(event: TouchEvent) {
+    if (open || event.touches.length !== 1) {
+      swipeStart = null
+      return
+    }
+
+    const touch = event.touches[0]
+    swipeStart = touch.clientX <= swipeEdgeWidth ? { x: touch.clientX, y: touch.clientY } : null
+  }
+
+  function handleTouchMove(event: TouchEvent) {
+    if (!swipeStart || event.touches.length !== 1) {
+      return
+    }
+
+    const touch = event.touches[0]
+    const deltaX = touch.clientX - swipeStart.x
+    const deltaY = Math.abs(touch.clientY - swipeStart.y)
+    if (deltaX >= swipeOpenDistance && deltaY <= swipeMaxVerticalDrift) {
+      setOpen(true)
+      swipeStart = null
+    } else if (deltaY > swipeMaxVerticalDrift) {
+      swipeStart = null
+    }
+  }
+
+  function handleTouchEnd() {
+    swipeStart = null
+  }
+
   mobileHeader.menuButton.addEventListener('click', openDrawer)
   overlay.addEventListener('click', closeDrawer)
   mobileDrawer.element.addEventListener('click', handleNavigationClick)
+  document.addEventListener('touchstart', handleTouchStart, { passive: true })
+  document.addEventListener('touchmove', handleTouchMove, { passive: true })
+  document.addEventListener('touchend', handleTouchEnd)
   setOpen(false)
 
   return {
@@ -98,6 +136,9 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
       mobileHeader.menuButton.removeEventListener('click', openDrawer)
       overlay.removeEventListener('click', closeDrawer)
       mobileDrawer.element.removeEventListener('click', handleNavigationClick)
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
       brandingControllers.forEach((controller) => controller.dispose())
       drawer.element.remove()
       mobileHeader.element.remove()

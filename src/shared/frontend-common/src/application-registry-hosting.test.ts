@@ -9,7 +9,7 @@ function readSource(relativePath: string): string {
   return readFileSync(join(repoRoot, relativePath), 'utf8')
 }
 
-const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'] as const
+const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
 
 describe('application registry and hosting integration', () => {
   it('keeps the shared application registry limited to current v2.0.0 applications', () => {

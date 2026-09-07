@@ -117,7 +117,7 @@
 
       <v-dialog v-model="dialogOpen" max-width="720" persistent>
         <v-card>
-          <v-card-title>{{ dialogMode === 'create' ? '新規作成' : '編集' }} {{ masterTypeLabel(selectedType) }}</v-card-title>
+          <v-card-title>{{ dialogTitle }}</v-card-title>
           <v-card-text>
             <v-form class="record-form" @submit.prevent="saveDialog">
               <template v-if="machineDraft">
@@ -303,6 +303,12 @@ watch(aliasText, (value) => {
 })
 
 const activeDraft = computed<RecordDraft | null>(() => machineDraft.value ?? gymDraft.value)
+const dialogTitle = computed(() => `${dialogActionLabel.value} - ${masterTypeLabel(selectedType.value)}情報`)
+const dialogActionLabel = computed(() => {
+  if (dialogMode.value === 'edit') return '編集'
+  return originalDraftWasCopied.value ? '別名保存' : '新規作成'
+})
+const originalDraftWasCopied = ref(false)
 
 const confirmTitle = computed(() => {
   if (!pendingOperation.value) return ''
@@ -402,6 +408,7 @@ async function loadUnresolved() {
 
 function openCreate() {
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = false
   machineDraft.value = selectedType.value === 'MACHINE_MASTER'
     ? { machine_id: '', source_ids: [], name: '', body_part: 'other', aliases: [], active: true, deleted: false }
     : null
@@ -415,6 +422,7 @@ function openCreate() {
 
 function openEdit(record: RecordDraft) {
   dialogMode.value = 'edit'
+  originalDraftWasCopied.value = false
   machineDraft.value = isMachine(record) ? cloneMachineRecord(record) : null
   gymDraft.value = isGym(record) ? cloneGymRecord(record) : null
   aliasText.value = machineDraft.value ? machineDraft.value.aliases.join(', ') : ''
@@ -424,6 +432,7 @@ function openEdit(record: RecordDraft) {
 
 function openCopy(record: RecordDraft) {
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = true
   if (isMachine(record)) {
     machineDraft.value = cloneMachineRecord(record)
     gymDraft.value = null
@@ -461,6 +470,7 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
   selectedType.value = item.type
   viewMode.value = 'masters'
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = false
   if (item.type === 'MACHINE_MASTER') {
     machineDraft.value = { machine_id: item.referenceId, source_ids: [], name: item.referenceId, body_part: 'other', aliases: [], active: true, deleted: false }
     gymDraft.value = null
@@ -544,6 +554,7 @@ function resetDialog() {
   machineDraft.value = null
   gymDraft.value = null
   originalDraft.value = ''
+  originalDraftWasCopied.value = false
   aliasText.value = ''
 }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { applicationRoutes, applications, drawerApplications, portalCardApplications } from './navigation/application-registry.js'
 
 const repoRoot = process.cwd()
-const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'] as const
+const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
 const excludedApplicationIds = ['training-map', 'compare', 'report', 'data-explorer', 'about', 'developer-mode'] as const
 
 function readSource(relativePath: string): string {
@@ -17,7 +17,7 @@ describe('Phase 9 existing application integration', () => {
     expect(portalCardApplications.map((application) => application.id)).toEqual([...hostedApplicationIds])
     expect(drawerApplications.map((application) => application.id)).toEqual(['portal', ...hostedApplicationIds])
     expect(portalCardApplications[2]?.id).toBe('machines')
-    expect(portalCardApplications[5]?.id).toBe('maintenance')
+    expect(portalCardApplications[4]?.id).toBe('maintenance')
 
     for (const application of applications) {
       expect(application.route).toBe(applicationRoutes[application.id])
