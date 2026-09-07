@@ -1,7 +1,7 @@
 import ReactApexChart from 'react-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useEffect, useRef, useState } from 'react'
-import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
+import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
@@ -26,6 +26,8 @@ import {
   toWorkoutRows,
 } from '@workout-lab/workout-core'
 import { getUniqueWorkoutDateRoute,  getWorkoutListRoute } from './dashboard-navigation'
+import { DashboardMetricCard } from './DashboardMetricCard'
+import { RecentWorkoutsTable } from './RecentWorkoutsTable'
 import './App.css'
 
 function App() {
@@ -265,17 +267,17 @@ function App() {
       </header>
 
       <section className="metric-grid" aria-label="Monthly summary">
-        <MetricCard label="Monthly workouts" value={`${monthlySessions.length} Sessions`} />
-        <MetricCard label="Monthly sets" value={`${totalSets} Sets`} />
-        <MetricCard label="Main Gym volume" value={formatMainGymMetric(monthlyVolume)} />
-        <MetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
+        <DashboardMetricCard label="Monthly workouts" value={`${monthlySessions.length} Sessions`} />
+        <DashboardMetricCard label="Monthly sets" value={`${totalSets} Sets`} />
+        <DashboardMetricCard label="Main Gym volume" value={formatMainGymMetric(monthlyVolume)} />
+        <DashboardMetricCard label="Latest workout" value={latestWorkout ? formatDisplayDate(latestWorkout.date) : '—'} />
       </section>
 
       <section className="metric-grid" aria-label="Previous month comparison">
-        <MetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
-        <MetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
-        <MetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
-        <MetricCard label="Previous month period" value={previousMonthRange.startDate.slice(0, 7).replace('-', '/')} />
+        <DashboardMetricCard label="Workout delta" value={formatDelta(monthlyWorkoutDelta.absolute, 'Sessions')} />
+        <DashboardMetricCard label="Set delta" value={formatDelta(monthlySetDelta.absolute, 'Sets')} />
+        <DashboardMetricCard label="Previous month workouts" value={`${previousMonthSessions.length} Sessions`} />
+        <DashboardMetricCard label="Previous month period" value={previousMonthRange.startDate.slice(0, 7).replace('-', '/')} />
       </section>
 
       {loadError ? (
@@ -397,35 +399,9 @@ function App() {
             <i className="mdi mdi-view-list-outline" aria-hidden="true"></i>Workout List
           </a>
         </div>
-        <div className="recent-table dashboard-recent-table">
-          <div className="recent-row header">
-            <span className="date-cell">Date</span>
-            <span className="gym-cell">Gym</span>
-            <span className="machines-cell">Machines</span>
-            <span className="sets-cell">Sets</span>
-            <span className="volume-cell">Volume</span>
-          </div>
-          {recentRows.map((row) => (
-            <a key={row.sessionId} className="recent-row" href={`${applicationRoutes.workouts}${row.date}/`}>
-              <span className="date-cell">{formatDisplayDate(row.date)}</span>
-              <span className="gym-cell">{row.gym}</span>
-              <span className="machines-cell">{row.machineCount}</span>
-              <span className="sets-cell">{row.totalSets}</span>
-              <span className="volume-cell">{row.totalVolume.toLocaleString()} kg</span>
-            </a>
-          ))}
-        </div>
+        <RecentWorkoutsTable rows={recentRows} />
       </section>
     </main>
-  )
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
   )
 }
 
