@@ -11,13 +11,10 @@ import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
-import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.URL
 import java.net.URLDecoder
-import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.security.MessageDigest
@@ -38,11 +35,10 @@ class AndroidLocalhostServer(
         val gymMaster: RuntimeSourceFile?
     )
     private data class RecoveryResource(val source: RuntimeSourceFile, val resourceKey: String, val inspection: JSONObject)
-    private data class RecoveryGitWriteResult(val replacementPath: String, val replacementRevision: String, val commitRevision: String)
     private data class MasterWriteTarget(val type: String, val path: String)
-    private data class GithubContent(val revision: String, val content: String)
     private val assetServer = AndroidAssetServer(context)
     private val runtimeDataBuilder = AndroidRuntimeDataBuilder()
+    private val githubClient = AndroidGithubClient { credentialStore.readToken() }
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -476,12 +472,12 @@ class AndroidLocalhostServer(
                 return SyncResponse(400, responseJson(false, "null", validationErrors), false)
             }
 
-            val remote = readGithubContentFile(configuration, fullPath)
+            val remote = githubClient.readContentFile(configuration, fullPath)
             if (remote.revision != current.revision) {
                 return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving."), false)
             }
 
-            val savedRevision = writeGithubContentFile(configuration, fullPath, current.revision, nextContent, masterCommitMessage(target))
+            val savedRevision = githubClient.writeContentFile(configuration, fullPath, current.revision, nextContent, masterCommitMessage(target))
             val confirmedDocuments = replaceLocalMasterDocument(localDocuments, type, nextContent, savedRevision)
             val workoutFiles = fetchConfiguredWorkoutResources(configuration)
             val machineMaster = selectLocalMasterDocument(confirmedDocuments, "MACHINE_MASTER")
@@ -560,7 +556,7 @@ class AndroidLocalhostServer(
             ?: throw AfException("MASTER_WRITE_INVALID", "Master write target is not allowed.")
         val repository = configuration.getJSONObject("repository")
         val fullPath = combineRemote(repository.optString("rootPath"), target.path)
-        val content = readGithubContentFile(configuration, fullPath)
+        val content = githubClient.readContentFile(configuration, fullPath)
         return MasterDocument(target.type, target.path, content.revision, content.content)
     }
 
@@ -602,61 +598,6 @@ class AndroidLocalhostServer(
         .put("path", document.path)
         .put("revision", document.revision)
         .put("content", document.content)
-
-    private fun readGithubContentFile(configuration: JSONObject, path: String): GithubContent {
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
-        val response = JSONObject(httpGet(url, credentialStore.readToken(), timeoutSec, path))
-        val revision = response.optString("sha").trim()
-        val encoded = response.optString("content").replace("\\s".toRegex(), "")
-        if (revision.isBlank() || encoded.isBlank()) {
-            throw AfException("GITHUB_SERVER_ERROR", "GitHub contents response is invalid.")
-        }
-        val content = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
-        return GithubContent(revision, content)
-    }
-
-    private fun writeGithubContentFile(configuration: JSONObject, path: String, revision: String, content: String, commitMessage: String): String {
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val payload = JSONObject()
-            .put("message", commitMessage)
-            .put("content", Base64.encodeToString(content.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP))
-            .put("sha", revision)
-            .put("branch", ref)
-            .toString()
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}"
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "PUT"
-            connectTimeout = timeoutSec * 1000
-            readTimeout = timeoutSec * 1000
-            doOutput = true
-            setRequestProperty("User-Agent", "Atlament-Android-AF")
-            setRequestProperty("Content-Type", "application/json")
-            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
-        }
-        return try {
-            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                if (status == 409) throw AfException("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving.")
-                throw androidMapGithubError(status, path)
-            }
-            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-            val savedRevision = JSONObject(response).optJSONObject("content")?.optString("sha").orEmpty().trim()
-            if (savedRevision.isBlank()) throw AfException("MASTER_WRITE_FAILED", "GitHub write result is ambiguous.")
-            savedRevision
-        } finally {
-            connection.disconnect()
-        }
-    }
 
     private fun validateMasterWrite(type: String, currentContent: String, nextContent: String, otherContent: String): JSONArray {
         val errors = JSONArray()
@@ -1196,49 +1137,8 @@ class AndroidLocalhostServer(
         path: String,
         expectedSourceRevision: String,
         replacementContent: String
-    ): RecoveryGitWriteResult {
-        val source = readGithubContentFile(configuration, path)
-        if (contentRevision(source.content) != expectedSourceRevision) {
-            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
-        }
-
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val payload = JSONObject()
-            .put("message", "Recover workout resource")
-            .put("content", Base64.encodeToString(replacementContent.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP))
-            .put("sha", source.revision)
-            .put("branch", ref)
-            .toString()
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}"
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "PUT"
-            connectTimeout = timeoutSec * 1000
-            readTimeout = timeoutSec * 1000
-            doOutput = true
-            setRequestProperty("User-Agent", "Atlament-Android-AF")
-            setRequestProperty("Content-Type", "application/json")
-            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
-        }
-        return try {
-            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                if (status == 409) throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
-                throw androidMapGithubError(status, path)
-            }
-            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-            val json = JSONObject(response)
-            val commitRevision = json.optJSONObject("commit")?.optString("sha").orEmpty().trim()
-            if (commitRevision.isBlank()) throw AfException("RECOVERY_WRITE_FAILED", "GitHub write result is ambiguous.")
-            RecoveryGitWriteResult(path, contentRevision(replacementContent), commitRevision)
-        } finally {
-            connection.disconnect()
-        }
-    }
+    ): RecoveryGitWriteResult =
+        githubClient.writeRecoveryContentFile(configuration, path, expectedSourceRevision, replacementContent)
 
     private fun pushRecoveryRelocation(
         configuration: JSONObject,
@@ -1247,33 +1147,21 @@ class AndroidLocalhostServer(
         replacementPath: String,
         replacementContent: String
     ): RecoveryGitWriteResult {
-        val source = readGithubContentFile(configuration, sourcePath)
+        val source = githubClient.readContentFile(configuration, sourcePath)
         if (contentRevision(source.content) != expectedSourceRevision) {
             throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
         }
 
         try {
-            readGithubContentFile(configuration, replacementPath)
+            githubClient.readContentFile(configuration, replacementPath)
             throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery destination already exists.")
         } catch (ex: AfException) {
             if (ex.code != "GITHUB_RESOURCE_NOT_FOUND") throw ex
         }
 
-        val headSha = readBranchHead(configuration)
+        val headSha = githubClient.readBranchHead(configuration)
         val commitSha = createRecoveryRelocationCommit(configuration, headSha, sourcePath, replacementPath, replacementContent)
         return RecoveryGitWriteResult(replacementPath, contentRevision(replacementContent), commitSha)
-    }
-
-    private fun readBranchHead(configuration: JSONObject): String {
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = androidNormalizeGitBranchRef(repository.optString("ref", "main"))
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/git/ref/${escapeRemotePath(ref)}"
-        val sha = JSONObject(httpGet(url, credentialStore.readToken(), timeoutSec, ref)).optJSONObject("object")?.optString("sha").orEmpty().trim()
-        if (sha.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub ref response is invalid.")
-        return sha
     }
 
     private fun createRecoveryRelocationCommit(
@@ -1309,7 +1197,7 @@ class AndroidLocalhostServer(
             """.trimIndent())
             .put("variables", JSONObject().put("input", input))
             .toString()
-        val response = postGithubGraphql(configuration, payload)
+        val response = githubClient.postGraphql(configuration, payload)
         val errors = response.optJSONArray("errors")
         if (errors != null && errors.length() > 0) {
             val message = errors.optJSONObject(0)?.optString("message").orEmpty()
@@ -2035,7 +1923,6 @@ class AndroidLocalhostServer(
         val repo = repository.optString("repository").trim()
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val token = credentialStore.readToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
         val resources = configuration.getJSONArray("resources")
 
@@ -2048,9 +1935,9 @@ class AndroidLocalhostServer(
             val emptyAllowed = resource.optBoolean("emptyAllowed", false)
             val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
             val fetched = if (kind == "directory") {
-                fetchDirectoryFiles(owner, repo, ref, fullPath, token, timeoutSec)
+                githubClient.fetchDirectoryFiles(owner, repo, ref, fullPath, timeoutSec)
             } else {
-                listOf(fetchRawRuntimeFile(owner, repo, ref, fullPath, token, timeoutSec))
+                listOf(githubClient.fetchRawRuntimeFile(owner, repo, ref, fullPath, timeoutSec))
             }
 
             if (!emptyAllowed && fetched.isEmpty()) {
@@ -2074,7 +1961,6 @@ class AndroidLocalhostServer(
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
 
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val token = credentialStore.readToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
         var machineMaster: RuntimeSourceFile? = null
         var gymMaster: RuntimeSourceFile? = null
@@ -2091,9 +1977,9 @@ class AndroidLocalhostServer(
             // Resource entries can point at files or directories. Directory mode expands to JSON
             // files before type-specific master/workout classification.
             val fetched = if (kind == "directory") {
-                fetchDirectoryFiles(owner, repo, ref, fullPath, token, timeoutSec)
+                githubClient.fetchDirectoryFiles(owner, repo, ref, fullPath, timeoutSec)
             } else {
-                listOf(fetchRawRuntimeFile(owner, repo, ref, fullPath, token, timeoutSec))
+                listOf(githubClient.fetchRawRuntimeFile(owner, repo, ref, fullPath, timeoutSec))
             }
 
             if (!emptyAllowed && fetched.isEmpty()) {
@@ -2122,103 +2008,11 @@ class AndroidLocalhostServer(
         return result
     }
 
-    private fun fetchDirectoryFiles(
-        owner: String,
-        repo: String,
-        ref: String,
-        directoryPath: String,
-        token: String?,
-        timeoutSec: Int
-    ): List<RuntimeSourceFile> {
-        val escapedPath = escapeRemotePath(directoryPath)
-        val contentsPath = if (escapedPath.isEmpty()) "" else "/$escapedPath"
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents$contentsPath?ref=${urlPath(ref)}"
-        val entries = JSONArray(httpGet(url, token, timeoutSec, directoryPath))
-        val files = mutableListOf<RuntimeSourceFile>()
-
-        for (index in 0 until entries.length()) {
-            val entry = entries.getJSONObject(index)
-            val type = entry.optString("type")
-            val path = entry.optString("path")
-            if (type == "dir") {
-                files.addAll(fetchDirectoryFiles(owner, repo, ref, path, token, timeoutSec))
-            } else if (type == "file" && isJsonRuntimePath(path)) {
-                files.add(fetchRawRuntimeFile(owner, repo, ref, path, token, timeoutSec))
-            }
-        }
-
-        return files
-    }
-
-    private fun fetchRawRuntimeFile(
-        owner: String,
-        repo: String,
-        ref: String,
-        path: String,
-        token: String?,
-        timeoutSec: Int
-    ): RuntimeSourceFile {
-        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
-        val response = JSONObject(httpGet(url, token, timeoutSec, path))
-        val encoded = response.optString("content").replace("\\s".toRegex(), "")
-        if (encoded.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub contents response is invalid.")
-        val content = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
-        return RuntimeSourceFile(path, content, contentRevision(content))
-    }
-
-    private fun httpGet(url: String, token: String?, timeoutSec: Int, pathForError: String): String {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = timeoutSec * 1000
-            readTimeout = timeoutSec * 1000
-            setRequestProperty("User-Agent", "Atlament-Android-AF")
-            if (!token.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $token")
-        }
-
-        return try {
-            val status = connection.responseCode
-            if (status !in 200..299) throw androidMapGithubError(status, pathForError)
-            connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun postGithubGraphql(configuration: JSONObject, payload: String): JSONObject {
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val url = "https://api.github.com/graphql"
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = timeoutSec * 1000
-            readTimeout = timeoutSec * 1000
-            doOutput = true
-            setRequestProperty("User-Agent", "Atlament-Android-AF")
-            setRequestProperty("Content-Type", "application/json")
-            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
-        }
-        return try {
-            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                throw androidMapGithubError(status, "graphql")
-            }
-            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-            JSONObject(response)
-        } finally {
-            connection.disconnect()
-        }
-    }
-
     private fun combineRemote(rootPath: String, path: String): String =
         listOf(rootPath, path)
             .map { it.trim().trim('/') }
             .filter { it.isNotBlank() }
             .joinToString("/")
-
-    private fun escapeRemotePath(path: String): String =
-        path.trim('/').split('/').filter { it.isNotBlank() }.joinToString("/") { urlPath(it) }
-
-    private fun urlPath(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
     private fun contentRevision(content: String): String = "content-sha256-${sha256Hex(content)}"
 
