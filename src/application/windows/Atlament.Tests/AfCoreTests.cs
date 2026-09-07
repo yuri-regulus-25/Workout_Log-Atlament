@@ -642,6 +642,54 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void RecoveryFallbackDoesNotRequireOptionalConditionOrNotes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new RecoveryService(new RecoveryDraftStore(new WindowsPathProvider(root)));
+            var configuration = Configuration("data");
+            var files = new[] { new RuntimeSourceFile("workouts/b.json", "{", "broken-revision") };
+            var key = Assert.Single(service.ListBrokenResources(configuration, files, MachineMaster, GymMaster)).ResourceKey;
+            var created = service.CreateDraft(configuration, key, files, MachineMaster, GymMaster).Snapshot.Draft!;
+            Assert.Contains(created.Fields, field =>
+                field["fieldPath"]?.GetValue<string>() == "/condition" &&
+                field["state"]?.GetValue<string>() == "recovered" &&
+                !field.ContainsKey("value"));
+            Assert.Contains(created.Fields, field =>
+                field["fieldPath"]?.GetValue<string>() == "/notes" &&
+                field["state"]?.GetValue<string>() == "recovered" &&
+                !field.ContainsKey("value"));
+            Assert.DoesNotContain(created.Fields, field =>
+                field["fieldPath"]?.GetValue<string>() is "/condition" or "/notes" &&
+                field["state"]?.GetValue<string>() == "unresolved");
+            var fields = new[]
+            {
+                ConfirmedField("/schema_version", JsonValue.Create(1)),
+                ConfirmedField("/session_id", JsonValue.Create("fallback-required-only")),
+                ConfirmedField("/date", JsonValue.Create("2026-08-24")),
+                ConfirmedField("/status", JsonValue.Create("complete")),
+                ConfirmedField("/gym_id", JsonValue.Create("known-gym")),
+                ConfirmedField("/machines", JsonNode.Parse("""[{"machine_id":"known-machine","sets":[{"set":1,"weight_kg":20,"reps":10}]}]"""))
+            };
+            Assert.Empty(service.UpdateDraft(configuration, key, new RecoveryDraftUpdate(created.DraftRevision, fields), files, MachineMaster, GymMaster).Errors);
+
+            var (result, errors) = service.ValidateDraft(configuration, key, files, MachineMaster, GymMaster);
+
+            Assert.Empty(errors);
+            Assert.NotNull(result);
+            Assert.Equal("healthy", result!.Health);
+            Assert.True(result.CommitAllowed);
+            Assert.DoesNotContain("\"condition\"", result.ReplacementContent);
+            Assert.DoesNotContain("\"notes\"", result.ReplacementContent);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void RecoveryValidationAllowsDegradedCandidateButBlocksDuplicateSession()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));

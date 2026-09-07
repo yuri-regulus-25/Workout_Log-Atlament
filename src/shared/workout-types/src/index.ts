@@ -226,7 +226,7 @@ export type RecoveryField =
       fieldPath: string
       state: 'recovered' | 'confirmed'
       source: RecoveryFieldSource
-      value: unknown
+      value?: unknown
     }
 
 export type RecoverySuggestion = {

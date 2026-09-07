@@ -1080,8 +1080,17 @@ public sealed class RecoveryService
     }
 
     private static IEnumerable<JsonObject> UnresolvedWorkoutFields(string prefix) =>
-        new[] { "/schema_version", "/session_id", "/date", "/status", "/gym_id", "/condition", "/machines", "/notes" }
-            .Select(path => UnresolvedField(prefix + path));
+        new[]
+        {
+            UnresolvedField($"{prefix}/schema_version"),
+            UnresolvedField($"{prefix}/session_id"),
+            UnresolvedField($"{prefix}/date"),
+            UnresolvedField($"{prefix}/status"),
+            UnresolvedField($"{prefix}/gym_id"),
+            UnresolvedField($"{prefix}/machines"),
+            RecoveredAbsentField($"{prefix}/condition"),
+            RecoveredAbsentField($"{prefix}/notes")
+        };
 
     private static JsonObject RecoverableField(JsonObject source, string fieldPath, string key, JsonValueKind kind, bool optional = false)
     {

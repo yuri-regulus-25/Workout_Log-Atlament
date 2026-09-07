@@ -1099,20 +1099,24 @@ function extractWorkoutObjectFields(value: unknown, prefix: string): RecoveryFie
 }
 
 function unresolvedWorkoutFields(prefix: string): RecoveryField[] {
-  return [
+  const required = [
     '/schema_version',
     '/session_id',
     '/date',
     '/status',
     '/gym_id',
-    '/condition',
     '/machines',
-    '/notes',
   ].map((fieldPath) => ({
     fieldPath: `${prefix}${fieldPath}`,
     state: 'unresolved',
     source: 'original',
-  }))
+  } satisfies RecoveryField))
+  const optional = ['/condition', '/notes'].map((fieldPath) => ({
+    fieldPath: `${prefix}${fieldPath}`,
+    state: 'recovered',
+    source: 'original',
+  } satisfies RecoveryField))
+  return [...required, ...optional]
 }
 
 function recoverableField(
@@ -1124,7 +1128,7 @@ function recoverableField(
 ): RecoveryField {
   if (!(key in record)) {
     return optional
-      ? { fieldPath, state: 'recovered', source: 'original', value: null }
+      ? { fieldPath, state: 'recovered', source: 'original' }
       : { fieldPath, state: 'unresolved', source: 'original' }
   }
 

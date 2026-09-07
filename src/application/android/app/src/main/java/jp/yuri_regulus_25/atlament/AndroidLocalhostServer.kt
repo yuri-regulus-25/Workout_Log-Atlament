@@ -2205,8 +2205,10 @@ class AndroidLocalhostServer(
 
     private fun unresolvedWorkoutFields(prefix: String): JSONArray {
         val fields = JSONArray()
-        listOf("/schema_version", "/session_id", "/date", "/status", "/gym_id", "/condition", "/machines", "/notes")
+        listOf("/schema_version", "/session_id", "/date", "/status", "/gym_id", "/machines")
             .forEach { fields.put(JSONObject().put("fieldPath", prefix + it).put("state", "unresolved").put("source", "original")) }
+        listOf("/condition", "/notes")
+            .forEach { fields.put(JSONObject().put("fieldPath", prefix + it).put("state", "recovered").put("source", "original")) }
         return fields
     }
 

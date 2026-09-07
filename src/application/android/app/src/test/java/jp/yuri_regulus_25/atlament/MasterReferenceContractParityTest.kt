@@ -53,6 +53,21 @@ class MasterReferenceContractParityTest {
     }
 
     @Test
+    fun keepsRecoveryFallbackUnresolvedFieldsLimitedToRequiredWorkoutSchemaFields() {
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+            .readText()
+        val fallback = source
+            .substringAfter("private fun unresolvedWorkoutFields")
+            .substringBefore("private fun recoverableField")
+
+        assertTrue(fallback.contains("\"/schema_version\", \"/session_id\", \"/date\", \"/status\", \"/gym_id\", \"/machines\""))
+        assertTrue(fallback.contains("\"/condition\", \"/notes\""))
+        assertTrue(fallback.contains(".put(\"state\", \"unresolved\")"))
+        assertTrue(fallback.contains(".put(\"state\", \"recovered\")"))
+        assertTrue(fallback.indexOf("\"/condition\", \"/notes\"") > fallback.indexOf(".put(\"state\", \"unresolved\")"))
+    }
+
+    @Test
     fun recoveryCommitClassifiesOldRevisionResourceKeyAsWriteConflictBeforeNotFound() {
         val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
             .readText()

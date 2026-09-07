@@ -383,7 +383,7 @@ export type RecoveryField =
       fieldPath: string
       state: 'recovered' | 'confirmed'
       source: 'original' | 'user' | 'suggestion'
-      value: unknown
+      value?: unknown
     }
 
 export type RecoverySuggestion = {

@@ -627,13 +627,18 @@ describe('workout-data', () => {
       { fieldPath: '/session_id', state: 'recovered', source: 'original', value: 'broken' },
       { fieldPath: '/condition', state: 'recovered', source: 'original', value: null },
       { fieldPath: '/machines', state: 'unresolved', source: 'original' },
+      { fieldPath: '/notes', state: 'recovered', source: 'original' },
     ]))
   })
 
-  it('keeps parse-impossible recovery draft fields unresolved without inventing values', () => {
+  it('keeps only schema-required parse-impossible recovery draft fields unresolved', () => {
     const draft = createWorkoutRecoveryDraft('workouts/unreadable.json', 'rev-a', '{')
 
     expect(draft.fields).toContainEqual({ fieldPath: '/date', state: 'unresolved', source: 'original' })
+    expect(draft.fields).toContainEqual({ fieldPath: '/condition', state: 'recovered', source: 'original' })
+    expect(draft.fields).toContainEqual({ fieldPath: '/notes', state: 'recovered', source: 'original' })
+    expect(draft.fields).not.toContainEqual({ fieldPath: '/condition', state: 'unresolved', source: 'original' })
+    expect(draft.fields).not.toContainEqual({ fieldPath: '/notes', state: 'unresolved', source: 'original' })
     expect(draft.fields.some((field) => 'value' in field)).toBe(false)
   })
 
