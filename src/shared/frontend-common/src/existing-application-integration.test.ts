@@ -49,7 +49,7 @@ describe('Phase 9 existing application integration', () => {
   })
 
   it('keeps Windows and Android hosting reachable for the same existing applications and direct routes', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/HostingStatusService.cs')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
     const buildRegistry = readSource('tools/application-registry.mjs')
 
@@ -90,11 +90,12 @@ describe('Phase 9 existing application integration', () => {
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
     const portal = readSource('src/frontend/portal/src/main.js')
     const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
 
     expect(typedPolicy).toContain('runtimeData?.fallbackActive ?? false')
     expect(browserPolicy).toContain('runtimeData?.fallbackActive ?? false')
     expect(portal).toContain('status?.runtimeData?.fallbackActive === true')
-    expect(settings).toContain("status.runtimeData.currentAvailable ? '利用可能' : '利用不可'")
+    expect(settingsPresentation).toContain("status.runtimeData.currentAvailable ? '利用可能' : '利用不可'")
     expect(settings).toContain('requiredActionLabel')
     expect(settings).not.toContain('deriveApplicationAccessPolicy')
     expect(settings).not.toContain('runRecoveryAction')

@@ -41,7 +41,7 @@ describe('application registry and hosting integration', () => {
   })
 
   it('keeps platform hosting status aware of every hosted application', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/HostingStatusService.cs')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
 
     for (const id of currentHostedApplicationIds) {

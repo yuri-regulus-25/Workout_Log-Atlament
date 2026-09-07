@@ -226,7 +226,10 @@ describe('cross-frontend test baseline', () => {
     ])
     const analytics = readSource('src/frontend/analytics-svelte/src/App.svelte')
     const workoutFilters = readSource('src/frontend/workouts-vue/src/components/WorkoutFilters.vue')
-    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settings = readSources([
+      'src/frontend/settings-solid/src/App.tsx',
+      'src/frontend/settings-solid/src/settings-status-presentation.ts',
+    ])
     const maintenance = readSources([
       'src/frontend/maintenance-vue/src/App.vue',
       'src/frontend/maintenance-vue/src/style.css',
