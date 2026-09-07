@@ -31,7 +31,7 @@
 | Runtime Unavailable | 安全に利用できるRuntimeがない状態。 | Application利用に影響する。 |
 | Missing | 期待されるResourceや参照先が存在しない状態。 | Broken、Deleted、Invalidとは理由を区別する。 |
 | Deleted | Master Recordが論理削除されている状態。 | Historical Workout参照のためID自体は保持する。 |
-| Invalid / Excluded | Master内に存在したが検証に通らずRuntime採用から除外されたRecord。 | v2.3.0以降の内部区別。Missingと同一視しない。 |
+| Invalid / Excluded | Master内に存在したが検証に通らずRuntime採用から除外されたRecord。 | v2.2.0以降の内部区別。Missingと同一視しない。 |
 
 ## Recovery
 

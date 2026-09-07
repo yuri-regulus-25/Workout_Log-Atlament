@@ -43,7 +43,7 @@
 - v2.1.0ではBroken Workout ResourceをResource全体で隔離し、他のWorkout Resourceは利用可能な場合がある。
 - Broken Workoutの隔離と、Runtime全体のLKG代替利用は別状態。
 - Broken Master Resourceは新Runtime採用を止め、whole-runtime LKGがあれば代替利用し、なければRuntime利用不可。
-- v2.3.0では構造解析後のinvalid Master Recordだけを隔離できる設計へ拡張可能。Recoveryの置換単位はResource全体のまま。
+- v2.2.0では構造解析後のinvalid Master Recordだけを隔離できる設計へ拡張可能。Recoveryの置換単位はResource全体のまま。
 
 ### Data Recovery
 

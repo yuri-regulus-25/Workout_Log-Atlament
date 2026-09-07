@@ -1,42 +1,39 @@
-# v2.2.0 — Empty / Initial State Support
+# v2.2.0 — Master Runtime Resilience
 
-Planning branch: `release-2.2.0-plan`
+Planning branch: `release-2.3.0-plan`
 
 ## Purpose
 
-Empty / initial data statesを異常・破損・Recovery対象として扱わず、正常な製品状態として一貫して表現する。
+Master Resource内の一部Recordがinvalidでも、独立してvalidなRecordをRuntimeで継続利用できるようにする。
+
+v2.0.0のunresolved Master semantics、v2.1.0のRecovery、v2.2.0のEmpty Stateを前提に、Master record-level partial acceptanceを導入する。
 
 ## Scope
 
-- Workout Log 0 entries
-- Gym Master 0 records
-- Machine Master 0 records
-- Workout Resource 0件を正常な初期状態として扱う
+- Master record-level validation / isolation
+- valid record partial acceptance
+- invalid / excluded Master reference semantics
+- Recoveryとの連携
+- Runtime rebuildによる再解決
+- Windows / Android parity
 
 ## Out of Scope
 
-- 空の Workout file を正常な空状態の表現として導入すること
-- 0 byte / 0 line JSONL、`{}`、`[]` 等を Empty Workout Resource として新たに有効化すること
-- Gym Master file missing
-- Machine Master file missing
-- Invalid / malformed Resource recovery (v2.1.0)
-- Master record-level partial acceptance (v2.3.0)
+- Broken Master Resource自体のRecovery（v2.1.0）
+- Workout Resource partial acceptance
+- invalid Master recordの自動修復・推測
+- validation bypass
 
-## Common Contract
+## Core Contract
 
-- EmptyはValidation Errorではない。
-- Workout の canonical な空状態は Workout Resource 0件で表現する。
-- 存在する Workout Resource は少なくとも1 Sessionを含む。JSONは1 Session、JSONLは1行1 Sessionという既存形式を維持する。
-- Emptyだけを理由にfallback / degraded / unavailableへ遷移しない。
-- Emptyだけを理由にBroken / Recovery対象へ遷移しない。
-- UIはError/Recoveryではなく正常な初期状態として表現する。
-- 集計・一覧・期間表示等は0件を正常入力として処理する。
-- Windows / Androidで同一Contractとする。
-- missing Resource、Workout Resource 0件、invalid / malformed Resourceを混同しない。
-- Resource の存在要件や空状態の扱いは Domain Contract とし、利用者設定の `required` / `emptyAllowed` では変更しない。
+- Resourceとしてparse可能かつrecord collectionを解釈可能な場合、Recordごとにvalidationする。
+- invalid RecordのみRuntime採用対象から除外し、valid Recordは利用可能とする。
+- invalid/excluded RecordへのWorkout referenceはv2.0.0 unresolved semantics (`? + WARN + original xxx_id`) に従う。
+- invalid Recordの存在だけを理由にResource全体をRuntimeから排除しない。
+- Recoveryではv2.1.0のReplacement Resource方式を使用し、Raw直接編集しない。
+- 修復後のsync / Runtime rebuildで通常解決へ復帰する。
 
 ## Work Units / Issues
 
-1. `01_empty_runtime_contract.md` — Empty Runtime Contract — Issue #91
-2. `02_empty_master_state.md` — Empty Master State — Issue #92
-3. `03_empty_workout_state.md` — Empty Workout State — Issue #93
+1. `01_record_isolation_contract.md` — Master Record Isolation Contract — Issue #94
+2. `02_partial_acceptance_runtime.md` — Master Partial Acceptance Runtime — Issue #134

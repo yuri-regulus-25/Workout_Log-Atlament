@@ -105,7 +105,7 @@ deleted
 missing
 ```
 
-v2.3.0 Master partial acceptance ではさらに、Master 内に存在したが validation により除外された record を `invalid/excluded` として内部的に区別可能にする。
+v2.2.0 Master partial acceptance ではさらに、Master 内に存在したが validation により除外された record を `invalid/excluded` として内部的に区別可能にする。
 
 `missing`、`deleted`、`invalid/excluded` が UI 上同じ `? + warning` 表現になることは許容するが、内部 reason を潰さない。
 
@@ -115,7 +115,7 @@ v2.3.0 Master partial acceptance ではさらに、Master 内に存在したが 
 
 v2.1.0 では structurally Broken な Master Resource は新 Runtime adoption を停止する。whole-runtime LKG があれば fallback、なければ unavailable。
 
-v2.3.0 で Master partial acceptance を導入する場合:
+v2.2.0 で Master partial acceptance を導入する場合:
 
 - Resource 自体を構造的に解釈できない場合は whole Resource Broken のまま。
 - 構造を安全に解釈できる場合、Record 単位 validation を行える。
@@ -125,7 +125,7 @@ v2.3.0 で Master partial acceptance を導入する場合:
 
 つまり **Runtime isolation unit と Recovery write unit は同じである必要はない。**
 
-Workout Resource の partial acceptance はこの v2.3.0 方針には含めない。
+Workout Resource の partial acceptance はこの v2.2.0 方針には含めない。
 
 ## Main Gym Metrics
 
