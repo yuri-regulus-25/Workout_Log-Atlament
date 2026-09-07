@@ -1,84 +1,76 @@
 <template>
   <v-app>
     <main ref="shell" :class="['app-shell', 'maintenance-shell', pageTransitionClassName]">
-      <header class="page-hero">
-        <div class="hero-top">
-          <div class="atl-brand-row" aria-label="Atlament Resource Management">
-            <p ref="characterTriggerElement" class="eyebrow atl-character-trigger">Atlament / Resource Management</p>
+      <div data-application-shell-content>
+        <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
+          {{ message.text }}
+        </v-alert>
+
+        <section class="panel wide maintenance-panel">
+          <div class="maintenance-toolbar">
+            <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
+              <v-btn value="masters">マスター</v-btn>
+              <v-btn value="unresolved">未解決参照</v-btn>
+              <v-btn value="recovery">修復が必要なデータ</v-btn>
+            </v-btn-toggle>
+            <v-btn-toggle v-if="viewMode !== 'recovery'" v-model="selectedType" mandatory density="comfortable" variant="outlined">
+              <v-btn value="MACHINE_MASTER">マシン</v-btn>
+              <v-btn value="GYM_MASTER">ジム</v-btn>
+            </v-btn-toggle>
+            <v-btn-toggle v-if="viewMode === 'masters'" v-model="displayMode" mandatory density="comfortable" variant="outlined">
+              <v-btn value="active">有効</v-btn>
+              <v-btn value="deleted">削除済み</v-btn>
+              <v-btn value="all">すべて</v-btn>
+            </v-btn-toggle>
+            <v-spacer />
+            <v-btn v-if="viewMode === 'masters'" class="accent-create-button" variant="flat" prepend-icon="mdi-plus-thick" @click="openCreate" >新規作成</v-btn>
           </div>
-        </div>
-        <h1 ref="pageHeading" tabindex="-1">Resource Management</h1>
-        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認します</p>
-      </header>
 
-      <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
-        {{ message.text }}
-      </v-alert>
+          <RecoveryPanel v-if="viewMode === 'recovery'" @message="message = $event" />
 
-      <section class="panel wide maintenance-panel">
-        <div class="maintenance-toolbar">
-          <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
-            <v-btn value="masters">マスター</v-btn>
-            <v-btn value="unresolved">未解決参照</v-btn>
-            <v-btn value="recovery">修復が必要なデータ</v-btn>
-          </v-btn-toggle>
-          <v-btn-toggle v-if="viewMode !== 'recovery'" v-model="selectedType" mandatory density="comfortable" variant="outlined">
-            <v-btn value="MACHINE_MASTER">マシン</v-btn>
-            <v-btn value="GYM_MASTER">ジム</v-btn>
-          </v-btn-toggle>
-          <v-btn-toggle v-if="viewMode === 'masters'" v-model="displayMode" mandatory density="comfortable" variant="outlined">
-            <v-btn value="active">有効</v-btn>
-            <v-btn value="deleted">削除済み</v-btn>
-            <v-btn value="all">すべて</v-btn>
-          </v-btn-toggle>
-          <v-spacer />
-          <v-btn v-if="viewMode === 'masters'" class="accent-create-button" variant="flat" prepend-icon="mdi-plus-thick" @click="openCreate" >新規作成</v-btn>
-        </div>
+          <p v-if="viewMode === 'unresolved'" class="maintenance-description">
+            ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
+          </p>
 
-        <RecoveryPanel v-if="viewMode === 'recovery'" @message="message = $event" />
+          <MasterRecordsTable
+            v-if="viewMode === 'masters'"
+            :type="selectedType"
+            :headers="tableHeaders"
+            :records="visibleRecords"
+            :loading="loading"
+            @row-click="onRowClick"
+            @copy="openCopy"
+            @request-lifecycle-toggle="requestLifecycleToggle"
+            @request-main-gym="requestMainGym"
+          />
 
-        <p v-if="viewMode === 'unresolved'" class="maintenance-description">
-          ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
-        </p>
-
-        <MasterRecordsTable
-          v-if="viewMode === 'masters'"
-          :type="selectedType"
-          :headers="tableHeaders"
-          :records="visibleRecords"
-          :loading="loading"
-          @row-click="onRowClick"
-          @copy="openCopy"
-          @request-lifecycle-toggle="requestLifecycleToggle"
-          @request-main-gym="requestMainGym"
-        />
-
-        <v-data-table
-          v-else-if="viewMode === 'unresolved'"
-          class="maintenance-table"
-          :headers="unresolvedHeaders"
-          :items="visibleUnresolved"
-          :loading="loading"
-          item-value="referenceId"
-          no-data-text="データがありません"
-          hover
-          density="comfortable"
-        >
-          <template #item.type="{ item }">
-            <v-chip size="small" variant="tonal">{{ masterTypeLabel(item.type) }}</v-chip>
-          </template>
-          <template #item.affected="{ item }">
-            <v-chip size="small" variant="tonal">{{ item.affectedWorkouts.length }}</v-chip>
-          </template>
-          <template #item.actions="{ item }">
-            <div class="row-actions" @click.stop>
-            <v-btn icon="mdi-eye-outline" variant="text" size="small" aria-label="確認" @click.stop="inspectUnresolved(item)" />
-            <v-btn icon="mdi-link-variant" variant="text" size="small" aria-label="既存マスターへ解決" @click.stop="openResolve(item)" />
-            <v-btn icon="mdi-plus" variant="text" size="small" aria-label="新規作成" @click.stop="createFromUnresolved(item)" />
-            </div>
-          </template>
-        </v-data-table>
-      </section>
+          <v-data-table
+            v-else-if="viewMode === 'unresolved'"
+            class="maintenance-table"
+            :headers="unresolvedHeaders"
+            :items="visibleUnresolved"
+            :loading="loading"
+            item-value="referenceId"
+            no-data-text="データがありません"
+            hover
+            density="comfortable"
+          >
+            <template #item.type="{ item }">
+              <v-chip size="small" variant="tonal">{{ masterTypeLabel(item.type) }}</v-chip>
+            </template>
+            <template #item.affected="{ item }">
+              <v-chip size="small" variant="tonal">{{ item.affectedWorkouts.length }}</v-chip>
+            </template>
+            <template #item.actions="{ item }">
+              <div class="row-actions" @click.stop>
+              <v-btn icon="mdi-eye-outline" variant="text" size="small" aria-label="確認" @click.stop="inspectUnresolved(item)" />
+              <v-btn icon="mdi-link-variant" variant="text" size="small" aria-label="既存マスターへ解決" @click.stop="openResolve(item)" />
+              <v-btn icon="mdi-plus" variant="text" size="small" aria-label="新規作成" @click.stop="createFromUnresolved(item)" />
+              </div>
+            </template>
+          </v-data-table>
+        </section>
+      </div>
 
       <MasterRecordEditorDialog
         v-model:open="dialogOpen"
@@ -134,7 +126,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { formatBodyPart } from '@workout-lab/workout-core'
 import MasterRecordEditorDialog from './MasterRecordEditorDialog.vue'
 import MasterRecordsTable from './MasterRecordsTable.vue'
@@ -188,25 +179,27 @@ const originalDraft = ref('')
 const aliasText = ref('')
 const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
 const shell = ref<HTMLElement | null>(null)
-const pageHeading = ref<HTMLElement | null>(null)
-const characterTriggerElement = ref<HTMLParagraphElement | null>(null)
 let navigation: { dispose: () => void } | null = null
-let characterEasterEgg: { dispose: () => void } | null = null
+let shellNavigation: { dispose: () => void; focusTitle: () => void } | null = null
 
 onMounted(() => {
-  navigation = initializeAppNavigation({ currentRouteId: 'maintenance', shell: shell.value ?? document.body })
-  characterEasterEgg = initializeCharacterEasterEgg({
-    trigger: characterTriggerElement.value ?? undefined,
-    host: document.body,
-    assetBasePath: '/frontend-common/easter-egg/assets/',
+  shellNavigation = initializeAppNavigation({
+    currentRouteId: 'maintenance',
+    shell: shell.value ?? document.body,
+    screen: {
+      eyebrow: 'Atlament / Resource Management',
+      title: 'Resource Management',
+      description: ['リソース情報を管理する', '登録情報の変更や、未解決の参照を確認します'],
+      ariaLabel: 'Atlament Resource Management',
+    },
   })
-  pageHeading.value?.focus()
+  navigation = shellNavigation
+  shellNavigation.focusTitle()
   void loadAll()
 })
 
 onBeforeUnmount(() => {
-  navigation?.dispose()
-  characterEasterEgg?.dispose()
+  shellNavigation?.dispose()
 })
 
 watch(aliasText, (value) => {

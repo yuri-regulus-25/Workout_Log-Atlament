@@ -3,7 +3,7 @@ export const applications = [
     id: 'portal',
     route: '/',
     displayName: 'Portal',
-    iconClass: 'mdi-crop-portrait',
+    iconClass: 'mdi-bulletin-board',
     drawer: false,
   },
   {
@@ -43,7 +43,7 @@ export const applications = [
     id: 'analytics',
     route: '/analytics/',
     displayName: 'Analytics',
-    iconClass: 'mdi-poll',
+    iconClass: 'mdi-chart-box-outline',
     drawer: true,
     portalCategory: 'Insights',
     portalPointer: '分析 - 全体',

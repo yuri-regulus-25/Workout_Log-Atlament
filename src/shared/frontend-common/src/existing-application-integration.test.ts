@@ -72,7 +72,8 @@ describe('Phase 9 existing application integration', () => {
 
     expect(maintenance).toContain("currentRouteId: 'maintenance'")
     expect(maintenance).toContain('app-shell')
-    expect(maintenance).toContain('page-hero')
+    expect(maintenance).toContain('data-application-shell-content')
+    expect(maintenance).toContain("title: 'Resource Management'")
     expect(maintenance).toContain('pageTransitionClassName')
     expect(maintenance).not.toContain('aria-label="Refresh"')
     expect(maintenanceCss).toContain('@import "@workout-lab/shared-styles/css"')

@@ -1,50 +1,34 @@
 <template>
   <div ref="shell" :class="['app-shell', pageTransitionClassName]">
-    <header class="page-hero">
-      <div class="hero-top">
-        <div class="atl-brand-row" aria-label="Atlament Workouts">
-          <p ref="characterTrigger" class="eyebrow atl-character-trigger">Atlament / {{ pageTitle }}</p>
-        </div>
-      </div>
-      <h1 ref="pageHeading" tabindex="-1">{{ pageTitle }}</h1>
-      <p class="lead">
-        これまでの記録を辿る<br />
-        過去のワークアウト記録を確認します
-      </p>
-    </header>
-
-    <RouterView />
+    <div data-application-shell-content>
+      <RouterView />
+    </div>
   </div>
 </template>
 
 <script>
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 
 export default {
   data() {
-    return { pageTransitionClassName, navigation: null, characterEasterEgg: null }
+    return { pageTransitionClassName, navigation: null }
   },
   mounted() {
     this.navigation = initializeAppNavigation({
       currentRouteId: 'workouts',
       shell: this.$refs.shell,
-    })
-    this.characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: this.$refs.characterTrigger,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: this.screenHeader,
     })
   },
   beforeUnmount() {
     this.navigation?.dispose()
-    this.characterEasterEgg?.dispose()
   },
   watch: {
     "$route.fullPath"() {
       this.$nextTick(() => {
-        this.$refs.pageHeading?.focus()
+        this.navigation?.updateScreen(this.screenHeader)
+        this.navigation?.focusTitle()
       })
     },
   },
@@ -54,6 +38,14 @@ export default {
     },
     pageTitle() {
       return this.$route.name === "workouts" ? "Workout Domain" : "Workout Domain - Details";
+    },
+    screenHeader() {
+      return {
+        eyebrow: `Atlament / ${this.pageTitle}`,
+        title: this.pageTitle,
+        description: ['これまでの記録を辿る', '過去のワークアウト記録を確認します'],
+        ariaLabel: 'Atlament Workouts',
+      };
     },
   },
 };

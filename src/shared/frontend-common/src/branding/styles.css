@@ -42,10 +42,7 @@
 }
 
 .atl-theme-trigger.atl-navigation-theme-trigger {
-  bottom: 4px;
-  left: 4px;
   margin: 0;
-  position: absolute;
 }
 
 .atl-theme-trigger:hover {

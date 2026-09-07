@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { observeThemeChanges } from '@workout-lab/design-tokens'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import type { WorkoutSession } from '@workout-lab/workout-types'
@@ -37,22 +36,21 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [, setThemeRevision] = useState(0)
   const shellRef = useRef<HTMLElement | null>(null)
-  const characterTriggerRef = useRef<HTMLParagraphElement | null>(null)
 
   useEffect(() => {
     const navigation = initializeAppNavigation({
       currentRouteId: 'dashboard',
       shell: shellRef.current,
-    })
-    const characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: characterTriggerRef.current,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: {
+        eyebrow: 'Atlament / Dashboard',
+        title: 'Dashboard',
+        description: ['今のトレーニングを知る', '現在のトレーニング状況を確認します'],
+        ariaLabel: 'Atlament Dashboard',
+      },
     })
 
     return () => {
       navigation.dispose()
-      characterEasterEgg.dispose()
     }
   }, [])
 
@@ -114,29 +112,18 @@ function App() {
 
   return (
     <main ref={shellRef} className={`app-shell ${pageTransitionClassName}`}>
-      <header className="page-hero">
-        <div className="hero-top">
-          <div className="atl-brand-row" aria-label="Atlament Dashboard">
-            <p ref={characterTriggerRef} className="eyebrow atl-character-trigger">Atlament / Dashboard</p>
-          </div>
-        </div>
-        <h1>Dashboard</h1>
-        <p className="lead">
-          今のトレーニングを知る<br />
-          現在のトレーニング状況を確認します
-        </p>
-      </header>
-
-      <DashboardMetricSection label="Monthly summary" metrics={monthlySummaryMetrics} />
-      <DashboardMetricSection label="Previous month comparison" metrics={previousMonthMetrics} />
-      <DashboardLoadWarning loadError={loadError} />
-      <DashboardPrimarySection
-        latestWorkout={latestWorkout}
-        mainGymVolumeTrendState={mainGymVolumeTrend.state}
-        mainGymVolumeTrendPoints={mainGymVolumeTrendPoints}
-      />
-      <DashboardChartSection sessions={sessions} bodyBalanceRows={bodyBalanceRows} />
-      <DashboardRecentWorkoutsSection rows={recentRows} />
+      <div data-application-shell-content>
+        <DashboardMetricSection label="Monthly summary" metrics={monthlySummaryMetrics} />
+        <DashboardMetricSection label="Previous month comparison" metrics={previousMonthMetrics} />
+        <DashboardLoadWarning loadError={loadError} />
+        <DashboardPrimarySection
+          latestWorkout={latestWorkout}
+          mainGymVolumeTrendState={mainGymVolumeTrend.state}
+          mainGymVolumeTrendPoints={mainGymVolumeTrendPoints}
+        />
+        <DashboardChartSection sessions={sessions} bodyBalanceRows={bodyBalanceRows} />
+        <DashboardRecentWorkoutsSection rows={recentRows} />
+      </div>
     </main>
   )
 }

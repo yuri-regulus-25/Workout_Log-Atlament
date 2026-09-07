@@ -2,7 +2,6 @@
   import { onDestroy, onMount } from 'svelte'
   import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-  import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutMasterData, WorkoutSession } from '@workout-lab/workout-types'
   import AnalyticsCharts from './AnalyticsCharts.svelte'
@@ -58,19 +57,18 @@
   $: bodyPartSetRows = orderByBodyPartDisplayOrder(getSetsByBodyPart(filteredSessions))
 
   let shellElement: HTMLElement
-  let characterTriggerElement: HTMLParagraphElement
   let navigation: { dispose: () => void } | null = null
-  let characterEasterEgg: { dispose: () => void } | null = null
 
   onMount(async () => {
     navigation = initializeAppNavigation({
       currentRouteId: 'analytics',
       shell: shellElement,
-    })
-    characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: characterTriggerElement,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: {
+        eyebrow: 'Atlament / Analytics',
+        title: 'Analytics',
+        description: ['データから傾向を見つける', 'ワークアウトデータをさまざまな視点から分析します'],
+        ariaLabel: 'Atlament Analytics',
+      },
     })
     try {
       const result = await loadRuntimeWorkoutSessions()
@@ -85,7 +83,6 @@
 
   onDestroy(() => {
     navigation?.dispose()
-    characterEasterEgg?.dispose()
   })
 
   const bodyPartDisplayOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs'] as const
@@ -120,49 +117,38 @@
 </script>
 
 <main bind:this={shellElement} class={`app-shell ${pageTransitionClassName}`}>
-  <header class="page-hero">
-    <div class="hero-top">
-      <div class="atl-brand-row" aria-label="Atlament Analytics">
-        <p bind:this={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Analytics</p>
-      </div>
-    </div>
-    <h1>Analytics</h1>
-    <p class="lead">
-      データから傾向を見つける<br />
-      ワークアウトデータをさまざまな視点から分析します
-    </p>
-  </header>
+  <div data-application-shell-content>
+    <AnalyticsSummary
+      filteredSessionCount={filteredSessions.length}
+      {totalSets}
+      mainGymWeight={formatMainGymMetric(totalVolume)}
+      {averageInterval}
+    />
 
-  <AnalyticsSummary
-    filteredSessionCount={filteredSessions.length}
-    {totalSets}
-    mainGymWeight={formatMainGymMetric(totalVolume)}
-    {averageInterval}
-  />
+    {#if loadError}
+      <section class="panel">
+        <p class="eyebrow">Data Load Warning</p>
+        <h2>データ取得異常</h2>
+        <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
+      </section>
+    {/if}
 
-  {#if loadError}
-    <section class="panel">
-      <p class="eyebrow">Data Load Warning</p>
-      <h2>データ取得異常</h2>
-      <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
-    </section>
-  {/if}
+    <AnalyticsPeriodPanel bind:selectedPeriod {periodRange} />
 
-  <AnalyticsPeriodPanel bind:selectedPeriod {periodRange} />
+    <AnalyticsCharts
+      trendPoints={mainGymVolumeTrendPoints}
+      {bodyPartSummaryRows}
+    />
 
-  <AnalyticsCharts
-    trendPoints={mainGymVolumeTrendPoints}
-    {bodyPartSummaryRows}
-  />
-
-  <AnalyticsTables
-    {trainingFrequencyPerWeek}
-    {machineVarietyRows}
-    {mainGymBodyPartSummaryRows}
-    {bodyPartShareRows}
-    {bodyPartLastTrainedRows}
-    {machineFrequencyRows}
-    {gymRows}
-    {bodyPartSetRows}
-  />
+    <AnalyticsTables
+      {trainingFrequencyPerWeek}
+      {machineVarietyRows}
+      {mainGymBodyPartSummaryRows}
+      {bodyPartShareRows}
+      {bodyPartLastTrainedRows}
+      {machineFrequencyRows}
+      {gymRows}
+      {bodyPartSetRows}
+    />
+  </div>
 </main>

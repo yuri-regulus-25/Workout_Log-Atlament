@@ -15,7 +15,6 @@ import {
   type ResourceConfiguration,
   type TimeoutConfiguration,
 } from '@workout-lab/frontend-common'
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import type { JSX } from 'solid-js'
 import {
   credentialExpiryPresets,
@@ -65,7 +64,6 @@ function App() {
   const [busy, setBusy] = createSignal<string | null>(null)
   const [message, setMessage] = createSignal<Message | null>(null)
   let shellElement: HTMLElement | undefined
-  let characterTriggerElement: HTMLParagraphElement | undefined
 
   const canOperate = createMemo(() => !loading() && busy() === null)
   const expiryDescription = createMemo(() => describeCredentialExpiry(credential()))
@@ -80,15 +78,15 @@ function App() {
     const navigation = initializeAppNavigation({
       currentRouteId: 'settings',
       shell: shellElement,
-    })
-    const characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: characterTriggerElement,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: {
+        eyebrow: 'Atlament / Application Settings',
+        title: 'Application Settings',
+        description: ['アプリケーションを設定する', '接続先や同期など、アプリケーションの動作を設定します'],
+        ariaLabel: 'Atlament Settings',
+      },
     })
     onCleanup(() => {
       navigation.dispose()
-      characterEasterEgg.dispose()
     })
 
     void refresh()
@@ -267,21 +265,12 @@ function App() {
         </Portal>
       </Show>
 
-      <header class="page-hero">
-        <div class="hero-top">
-          <div class="atl-brand-row" aria-label="Atlament Settings">
-            <p ref={characterTriggerElement} class="eyebrow atl-character-trigger">Atlament / Application Settings</p>
-          </div>
-        </div>
-        <h1>Application Settings</h1>
-        <p class="lead">アプリケーションを設定する<br />接続先や同期など、アプリケーションの動作を設定します</p>
-      </header>
+      <div data-application-shell-content>
+        <Show when={message()}>
+          {(current) => <section class={`message ${current().tone}`}>{current().text}</section>}
+        </Show>
 
-      <Show when={message()}>
-        {(current) => <section class={`message ${current().tone}`}>{current().text}</section>}
-      </Show>
-
-      <section class="settings-grid">
+        <section class="settings-grid">
         <SettingsSetupAssistant
           status={status()}
           steps={setupSteps()}
@@ -441,7 +430,8 @@ function App() {
           </div>
           <p class="muted">GitHubから最新データを取得します。</p>
         </section>
-      </section>
+        </section>
+      </div>
     </main>
   )
 }

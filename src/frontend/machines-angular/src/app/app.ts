@@ -14,7 +14,6 @@ import type {
 } from 'ng-apexcharts';
 import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation';
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition';
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg';
 import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
 import type { BodyPart, WorkoutMachine, WorkoutSession } from '@workout-lab/workout-types';
@@ -44,12 +43,10 @@ import {
 })
 export class App implements AfterViewInit, OnDestroy {
   @ViewChild('shell') private readonly shellRef?: ElementRef<HTMLElement>;
-  @ViewChild('characterTrigger') private readonly characterTriggerRef?: ElementRef<HTMLParagraphElement>;
 
   protected readonly applicationRoutes = applicationRoutes;
   protected readonly pageTransitionClassName = pageTransitionClassName;
   private navigation: { dispose(): void } | null = null;
-  private characterEasterEgg: { dispose(): void } | null = null;
   private disposeThemeObserver: (() => void) | null = null;
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly mainGymContext = signal<ReturnType<typeof resolveMainGymContext>>({ state: 'unconfigured' });
@@ -89,11 +86,12 @@ export class App implements AfterViewInit, OnDestroy {
     this.navigation = initializeAppNavigation({
       currentRouteId: 'machines',
       shell: this.shellRef?.nativeElement,
-    });
-    this.characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: this.characterTriggerRef?.nativeElement,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: {
+        eyebrow: 'Atlament / Performance Detail',
+        title: 'Performance Detail',
+        description: ['種目ごとの変化を追う', '種目ごとの記録と推移を確認します'],
+        ariaLabel: 'Atlament Machines',
+      },
     });
     this.disposeThemeObserver = observeThemeChanges(() => {
       this.themeRevision.update((revision) => revision + 1);
@@ -102,7 +100,6 @@ export class App implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.navigation?.dispose();
-    this.characterEasterEgg?.dispose();
     this.disposeThemeObserver?.();
   }
 
