@@ -83,6 +83,14 @@ Windows は `/api/v1/common/master-write/*` を Resource Management 用に公開
 
 Write は Local Master snapshot revision と request `expectedRevision` の一致、candidate whole-master validation、Remote revision metadata の一致、GitHub Contents API PUT、Local Runtime Data rebuild を適用する。Runtime Data が参照中の Gym/Machine logical delete は許可し、Workout/raw/general Git write endpoint は公開しない。
 
+## Recovery API
+
+Windows は `/api/v1/common/recovery/*` を Maintenance Recovery UI 用に公開する。Recovery inventory/detail/source/draft/validate/commit は Workout Broken Resource を対象に、AF-local draft store、whole Resource validation、GitHub optimistic concurrency、same-path Contents API write、path relocation の atomic Git Data API commit を通す。
+
+Successful Recovery commit 後は sync/reinspect/runtime rebuild/reflection を試行し、draft を削除する。Git commit 成功後に runtime reflection が失敗した場合は rollback や blind recommit を行わず、`RECOVERY_REFLECTION_FAILED` と reflection result で区別する。
+
+Status は `runtimeData.quarantinedWorkoutResourceCount` と `recovery.*` facts を公開する。Workout quarantine は Runtime usable + readiness degraded であり、whole-runtime LKG fallback の `fallbackActive` とは別事象である。
+
 ## Configuration and Credential
 
 Configuration は JSON であり non-secret である。

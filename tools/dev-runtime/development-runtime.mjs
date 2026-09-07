@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { extname, join, relative } from 'node:path'
+import { dirname, extname, join, relative } from 'node:path'
 import {
   loadMasterDataFromDirectory,
   loadWorkoutSessionsFromDirectory,
@@ -12,6 +13,26 @@ const masterDirectory = join(repoRoot, 'data', 'master')
 const workoutsDirectory = join(repoRoot, 'data', 'workouts')
 const versionFile = join(repoRoot, 'src', 'version.json')
 const port = Number(process.env.DEVELOPMENT_RUNTIME_PORT ?? 5180)
+const recoveryRoutePrefix = '/api/v1/common/recovery/resources'
+const recoveryDraftDirectory = join(tmpdir(), `atlament-dev-recovery-${sha256Hex(repoRoot)}`)
+const recoveryErrorCodes = new Set([
+  'RECOVERY_RESOURCE_NOT_FOUND',
+  'RECOVERY_RESOURCE_NOT_BROKEN',
+  'RECOVERY_UNAVAILABLE',
+  'RECOVERY_SOURCE_UNAVAILABLE',
+  'RECOVERY_SOURCE_VIEW_TOO_LARGE',
+  'RECOVERY_SCHEMA_UNSUPPORTED',
+  'RECOVERY_DRAFT_REQUIRED',
+  'RECOVERY_DRAFT_CONFLICT',
+  'RECOVERY_DRAFT_STALE',
+  'RECOVERY_DRAFT_INCOMPATIBLE',
+  'RECOVERY_DRAFT_CORRUPTED',
+  'RECOVERY_DRAFT_SAVE_FAILED',
+  'RECOVERY_VALIDATION_FAILED',
+  'RECOVERY_WRITE_CONFLICT',
+  'RECOVERY_WRITE_FAILED',
+  'RECOVERY_REFLECTION_FAILED',
+])
 
 const apiRoutes = new Set([
   '/api/v1/common/status',
@@ -26,7 +47,7 @@ const apiRoutes = new Set([
 createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 
-  if (!apiRoutes.has(url.pathname)) {
+  if (!apiRoutes.has(url.pathname) && !url.pathname.startsWith(recoveryRoutePrefix)) {
     writeJson(response, 404, fail('COMMON_NOT_FOUND', 'Development Runtime API route is not found.', true))
     return
   }
@@ -57,6 +78,11 @@ createServer(async (request, response) => {
       return
     }
 
+    if (url.pathname.startsWith(recoveryRoutePrefix)) {
+      await respondRecovery(request, response, url.pathname)
+      return
+    }
+
     await respondLegacyWorkoutData(response)
   } catch (error) {
     writeJson(response, 500, fail(
@@ -73,6 +99,12 @@ createServer(async (request, response) => {
   console.log('  GET /api/v1/common/master-write/unresolved')
   console.log('  GET|PUT /api/v1/common/master-write/documents/MACHINE_MASTER')
   console.log('  GET|PUT /api/v1/common/master-write/documents/GYM_MASTER')
+  console.log('  GET|POST|PUT|DELETE /api/v1/common/recovery/resources/{resourceKey}/draft')
+  console.log('  GET /api/v1/common/recovery/resources')
+  console.log('  GET /api/v1/common/recovery/resources/{resourceKey}')
+  console.log('  GET /api/v1/common/recovery/resources/{resourceKey}/source')
+  console.log('  POST /api/v1/common/recovery/resources/{resourceKey}/validate')
+  console.log('  POST /api/v1/common/recovery/resources/{resourceKey}/commit (unsupported)')
   console.log('  GET /api/v1/common/runtime/workouts')
   console.log('  GET /api/workout-data')
 })
@@ -81,16 +113,17 @@ async function respondStatus(response) {
   const runtime = await loadRuntimeWorkoutData()
   const versions = await loadVersions()
   const runtimeAvailable = runtime.success
+  const runtimeDegraded = runtimeAvailable && runtime.errors.length > 0
 
   writeJson(response, 200, ok({
     versions,
     readiness: readinessJson({
-      applicationStatus: runtimeAvailable ? 'ready' : 'degraded',
+      applicationStatus: runtimeDegraded || !runtimeAvailable ? 'degraded' : 'ready',
       acceptingRequests: true,
       configurationStatus: 'unknown',
       credentialStatus: 'unknown',
       githubStatus: 'unknown',
-      runtimeDataStatus: runtimeAvailable ? 'available' : 'unavailable',
+      runtimeDataStatus: runtimeDegraded ? 'degraded' : runtimeAvailable ? 'available' : 'unavailable',
       requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
     }),
     runtimeData: {
@@ -99,10 +132,18 @@ async function respondStatus(response) {
       latestRemoteRetrieval: 'skipped',
       latestValidation: runtimeAvailable ? 'succeeded' : 'failed',
       fallbackActive: false,
+      quarantinedWorkoutResourceCount: countQuarantinedWorkoutResources(runtime.errors),
+    },
+    recovery: {
+      brokenResourceCount: countQuarantinedWorkoutResources(runtime.errors),
+      brokenWorkoutResourceCount: countQuarantinedWorkoutResources(runtime.errors),
+      brokenMasterResourceCount: 0,
+      recoverableResourceCount: countQuarantinedWorkoutResources(runtime.errors),
+      activeDraftCount: await activeRecoveryDraftCount(),
     },
     application: {
-      status: runtimeAvailable ? 'ready' : 'degraded',
-      degraded: !runtimeAvailable,
+      status: runtimeDegraded || !runtimeAvailable ? 'degraded' : 'ready',
+      degraded: runtimeDegraded || !runtimeAvailable,
       acceptingRequests: true,
     },
     operations: {
@@ -116,7 +157,7 @@ async function respondStatus(response) {
       configuration: 'unknown',
       credential: 'unknown',
       github: 'unknown',
-      runtimeData: runtimeAvailable ? 'available' : 'unavailable',
+      runtimeData: runtimeDegraded ? 'degraded' : runtimeAvailable ? 'available' : 'unavailable',
       hosting: {
         portal: 'unknown',
         dashboard: 'unknown',
@@ -129,6 +170,27 @@ async function respondStatus(response) {
     },
     requiredActions: runtimeAvailable ? [] : ['RUNTIME_DATA_REQUIRED'],
   }, runtime.errors, runtime.warnings))
+}
+
+function countQuarantinedWorkoutResources(errors) {
+  return new Set((errors ?? [])
+    .map((error) => String(error.message ?? '').split(':')[0].trim())
+    .filter((path) => path.endsWith('.json') || path.endsWith('.jsonl'))).size
+}
+
+async function activeRecoveryDraftCount() {
+  try {
+    const entries = await readdir(recoveryDraftDirectory, { withFileTypes: true })
+    let count = 0
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const draft = JSON.parse(await readFile(join(recoveryDraftDirectory, entry.name), 'utf8'))
+      if (draft?.schemaVersion === 1) count += 1
+    }
+    return count
+  } catch {
+    return 0
+  }
 }
 
 function readinessJson(status) {
@@ -342,6 +404,258 @@ async function respondUnresolvedMasterReferences(response) {
   )))
 }
 
+async function respondRecovery(request, response, path) {
+  const context = await loadRecoveryContext()
+  const suffix = path.slice(recoveryRoutePrefix.length).replace(/^\/+/, '')
+  const parts = suffix.length === 0 ? [] : suffix.split('/')
+
+  if (parts.length === 0) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET is supported.', true))
+      return
+    }
+
+    writeJson(response, 200, ok(await listBrokenRecoveryResources(context)))
+    return
+  }
+
+  const resourceKey = decodeURIComponent(parts[0])
+  const resource = await resolveRecoveryResource(context, resourceKey)
+  if (!resource) {
+    writeJson(response, 404, fail('RECOVERY_RESOURCE_NOT_FOUND', 'Recovery Resource was not found.', true))
+    return
+  }
+
+  if (parts.length === 1) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET is supported.', true))
+      return
+    }
+
+    const draft = await loadRecoveryDraft(resource.source.path, resource.source.revision)
+    writeJson(response, 200, ok({
+      resourceKey,
+      inspection: resource.inspection,
+      eligibility: {
+        eligible: resource.inspection.health === 'broken',
+        reasonCode: resource.inspection.health === 'broken' ? null : 'RECOVERY_RESOURCE_NOT_BROKEN',
+      },
+      capabilities: {
+        sourceView: true,
+        draft: resource.inspection.health === 'broken',
+        validate: resource.inspection.health === 'broken',
+        commit: false,
+      },
+      draft,
+    }))
+    return
+  }
+
+  if (parts[1] === 'source') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET is supported.', true))
+      return
+    }
+
+    if (Buffer.byteLength(resource.source.content, 'utf8') > 256 * 1024) {
+      writeJson(response, 413, fail('RECOVERY_SOURCE_VIEW_TOO_LARGE', 'Recovery source view is too large.', true))
+      return
+    }
+
+    writeJson(response, 200, ok({
+      resourceKey,
+      path: resource.source.path,
+      revision: resource.source.revision,
+      resourceType: 'WORKOUT',
+      content: resource.source.content,
+      readOnly: true,
+    }))
+    return
+  }
+
+  if (parts[1] === 'draft') {
+    await respondRecoveryDraft(request, response, resource)
+    return
+  }
+
+  if (parts[1] === 'validate') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only POST is supported.', true))
+      return
+    }
+
+    await respondRecoveryValidation(response, context, resource)
+    return
+  }
+
+  if (parts[1] === 'commit') {
+    const payload = request.method === 'POST' ? JSON.parse(await readRequestBody(request) || '{}') : {}
+    payload.expectedSourceRevision
+    payload.expectedDraftRevision
+    writeJson(response, 503, fail('RECOVERY_UNAVAILABLE', 'Development Runtime does not perform Recovery Git commits.', true))
+    return
+  }
+
+  writeJson(response, 404, fail('COMMON_NOT_FOUND', 'Development Runtime API route is not found.', true))
+}
+
+async function respondRecoveryDraft(request, response, resource) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, ok(await loadRecoveryDraft(resource.source.path, resource.source.revision)))
+    return
+  }
+
+  if (request.method === 'DELETE') {
+    await rm(recoveryDraftPath(resource.source.path, resource.source.revision), { force: true })
+    writeJson(response, 200, ok({ state: 'none', draft: null }))
+    return
+  }
+
+  if (request.method === 'POST') {
+    if (resource.inspection.health !== 'broken') {
+      writeJson(response, 409, fail('RECOVERY_RESOURCE_NOT_BROKEN', 'Recovery Draft requires a Broken Resource.', true))
+      return
+    }
+
+    const existing = await loadRecoveryDraft(resource.source.path, resource.source.revision)
+    if (existing.state === 'active') {
+      writeJson(response, 200, ok(existing))
+      return
+    }
+
+    const draft = {
+      schemaVersion: 1,
+      sourcePath: resource.source.path,
+      sourceRevision: resource.source.revision,
+      resourceType: 'WORKOUT',
+      inspectionVersion: 1,
+      draftRevision: 1,
+      fields: extractRecoveryFields(resource.source.path, resource.source.content),
+      suggestions: [],
+    }
+    await saveRecoveryDraft(draft)
+    writeJson(response, 200, ok({ state: 'active', draft }))
+    return
+  }
+
+  if (request.method === 'PUT') {
+    const existing = await loadRecoveryDraft(resource.source.path, resource.source.revision)
+    if (existing.state !== 'active' || !existing.draft) {
+      writeJson(response, 409, fail('RECOVERY_DRAFT_REQUIRED', 'Recovery Draft is required.', true))
+      return
+    }
+
+    const update = JSON.parse(await readRequestBody(request))
+    if (update.expectedDraftRevision !== existing.draft.draftRevision) {
+      writeJson(response, 409, fail('RECOVERY_DRAFT_CONFLICT', 'Recovery Draft was updated elsewhere.', true))
+      return
+    }
+
+    const draft = {
+      ...existing.draft,
+      draftRevision: existing.draft.draftRevision + 1,
+      fields: Array.isArray(update.fields) ? update.fields : existing.draft.fields,
+    }
+    await saveRecoveryDraft(draft)
+    writeJson(response, 200, ok({ state: 'active', draft }))
+    return
+  }
+
+  writeJson(response, 405, fail('METHOD_NOT_ALLOWED', 'Only GET, POST, PUT and DELETE are supported.', true))
+}
+
+async function respondRecoveryValidation(response, context, resource) {
+  const snapshot = await loadRecoveryDraft(resource.source.path, resource.source.revision)
+  if (snapshot.state !== 'active' || !snapshot.draft) {
+    writeJson(response, 409, fail('RECOVERY_DRAFT_REQUIRED', 'Recovery Draft is required.', true))
+    return
+  }
+
+  const unresolved = snapshot.draft.fields
+    .filter((field) => field?.state === 'unresolved')
+    .map((field) => ({
+      code: 'RECOVERY_FIELD_UNRESOLVED',
+      severity: 'broken',
+      message: 'Recovery field is unresolved.',
+      location: { line: null, recordId: null, sessionId: null, fieldPath: field.fieldPath ?? null },
+      details: null,
+    }))
+  if (unresolved.length > 0) {
+    writeJson(response, 200, ok({
+      sourceRevision: snapshot.draft.sourceRevision,
+      draftRevision: snapshot.draft.draftRevision,
+      health: 'broken',
+      issues: unresolved,
+      commitAllowed: false,
+      replacementPath: snapshot.draft.sourcePath,
+      replacementContent: null,
+      changeSummary: [],
+      pathChange: null,
+    }))
+    return
+  }
+
+  if (!context.masterData) {
+    writeJson(response, 200, ok({
+      sourceRevision: snapshot.draft.sourceRevision,
+      draftRevision: snapshot.draft.draftRevision,
+      health: 'broken',
+      issues: context.masterIssues.map((error) => ({
+        code: error.code,
+        severity: 'broken',
+        message: error.message,
+        location: null,
+        details: null,
+      })),
+      commitAllowed: false,
+      replacementPath: snapshot.draft.sourcePath,
+      replacementContent: null,
+      changeSummary: [],
+      pathChange: null,
+    }))
+    return
+  }
+
+  const replacementContent = buildRecoveryCandidate(snapshot.draft)
+  const candidate = { ...resource.source, content: replacementContent }
+  const candidateBuild = await buildSingleWorkout(candidate, context.masterData)
+  const otherBuilds = await Promise.all(context.sources
+    .filter((source) => source.path !== resource.source.path)
+    .map((source) => buildSingleWorkout(source, context.masterData)))
+  const otherSessionIds = new Set(otherBuilds.flatMap((build) => build.sessions.map((session) => session.sessionId)))
+  const issues = [
+    ...candidateBuild.errors.map((error) => ({
+      code: error.code,
+      severity: 'broken',
+      message: error.message,
+      location: null,
+      details: null,
+    })),
+    ...candidateBuild.warnings.map(resourceIssueFromWarning),
+    ...candidateBuild.sessions
+      .filter((session) => otherSessionIds.has(session.sessionId))
+      .map((session) => ({
+        code: 'RECOVERY_DUPLICATE_SESSION_ID',
+        severity: 'broken',
+        message: `Duplicate session_id: ${session.sessionId}.`,
+        location: { line: null, recordId: null, sessionId: session.sessionId, fieldPath: '/session_id' },
+        details: null,
+      })),
+  ]
+  const health = issues.some((issue) => issue.severity === 'broken') ? 'broken' : issues.length > 0 ? 'degraded' : 'healthy'
+  writeJson(response, 200, ok({
+    sourceRevision: snapshot.draft.sourceRevision,
+    draftRevision: snapshot.draft.draftRevision,
+    health,
+    issues,
+    commitAllowed: health === 'healthy' || health === 'degraded',
+    replacementPath: snapshot.draft.sourcePath,
+    replacementContent,
+    changeSummary: ['replacement candidate generated'],
+    pathChange: null,
+  }))
+}
+
 async function respondLegacyWorkoutData(response) {
   const runtime = await loadLegacyWorkoutData()
 
@@ -398,21 +712,230 @@ async function loadRuntimeWorkoutData() {
   const workoutResult = await loadWorkoutSessionsFromDirectory(workoutsDirectory, masterResult.masterData)
   const errors = workoutResult.issues.map(toAfError)
 
-  if (errors.length > 0) {
-    return {
-      success: false,
-      sessions: [],
-      errors,
-      warnings: workoutResult.warnings ?? [],
-    }
-  }
-
   return {
     success: true,
     sessions: workoutResult.sessions,
     errors,
     warnings: workoutResult.warnings ?? [],
   }
+}
+
+async function loadRecoveryContext() {
+  const masterResult = await loadMasterDataFromDirectory(masterDirectory)
+  const sources = await collectWorkoutSources()
+  const runtime = masterResult.masterData
+    ? await loadRuntimeWorkoutData()
+    : { success: false, sessions: [], errors: masterResult.issues.map(toAfError), warnings: [] }
+  return {
+    sources,
+    masterData: masterResult.masterData,
+    masterIssues: masterResult.issues.map(toAfError),
+    runtime,
+  }
+}
+
+async function collectWorkoutSources() {
+  const files = await collectWorkoutFiles(workoutsDirectory)
+  return Promise.all(files.map(async (filePath) => ({
+    path: normalizePath(relative(join(repoRoot, 'data'), filePath)),
+    content: await readFile(filePath, 'utf8'),
+    revision: await localRevision(filePath),
+  })))
+}
+
+async function listBrokenRecoveryResources(context) {
+  const resources = await Promise.all(context.sources.map((source) => inspectRecoveryResource(context, source)))
+  return Promise.all(resources
+    .filter((resource) => resource.inspection.health === 'broken')
+    .sort((left, right) => left.source.path.localeCompare(right.source.path))
+    .map(async (resource) => ({
+      resourceKey: resource.resourceKey,
+      path: resource.source.path,
+      revision: resource.source.revision,
+      resourceType: 'WORKOUT',
+      health: 'broken',
+      issues: resource.inspection.issues,
+      recoveryEligible: true,
+      hasDraft: (await loadRecoveryDraft(resource.source.path, resource.source.revision)).state === 'active',
+    })))
+}
+
+async function resolveRecoveryResource(context, resourceKey) {
+  for (const source of context.sources) {
+    const resource = await inspectRecoveryResource(context, source)
+    if (resource.resourceKey === resourceKey) return resource
+  }
+  return null
+}
+
+async function inspectRecoveryResource(context, source) {
+  const build = context.masterData
+    ? await buildSingleWorkout(source, context.masterData)
+    : { sessions: [], errors: context.masterIssues, warnings: [] }
+  const issues = [
+    ...build.errors.map((error) => ({
+      code: error.code,
+      severity: 'broken',
+      message: error.message,
+      location: null,
+      details: null,
+    })),
+    ...build.warnings.map(resourceIssueFromWarning),
+  ]
+  const health = issues.some((issue) => issue.severity === 'broken') ? 'broken' : issues.length > 0 ? 'degraded' : 'healthy'
+  return {
+    source,
+    resourceKey: recoveryResourceKey(source.path, source.revision),
+    inspection: {
+      path: source.path,
+      revision: source.revision,
+      resourceType: 'WORKOUT',
+      inspectionVersion: 1,
+      health,
+      issues,
+    },
+  }
+}
+
+async function buildSingleWorkout(source, masterData) {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'atlament-dev-recovery-build-'))
+  try {
+    const workoutRoot = join(tempRoot, 'workouts')
+    const relativeWorkoutPath = source.path.startsWith('workouts/')
+      ? source.path.slice('workouts/'.length)
+      : source.path
+    const target = join(workoutRoot, relativeWorkoutPath)
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, source.content, 'utf8')
+    const result = await loadWorkoutSessionsFromDirectory(workoutRoot, masterData)
+    return {
+      sessions: result.sessions ?? [],
+      errors: (result.issues ?? []).map(toAfError),
+      warnings: result.warnings ?? [],
+    }
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+}
+
+function resourceIssueFromWarning(warning) {
+  return {
+    code: warning.code,
+    severity: 'warning',
+    message: warning.message,
+    location: {
+      line: warning.line ?? null,
+      recordId: null,
+      sessionId: warning.sessionId ?? null,
+      fieldPath: null,
+    },
+    details: {
+      referenceKind: warning.referenceKind,
+      resolutionState: warning.resolutionState,
+      originalId: warning.originalId,
+      resolvedId: warning.resolvedId ?? null,
+    },
+  }
+}
+
+async function loadRecoveryDraft(sourcePath, sourceRevision) {
+  try {
+    const draft = JSON.parse(await readFile(recoveryDraftPath(sourcePath, sourceRevision), 'utf8'))
+    return draft?.schemaVersion === 1
+      ? { state: 'active', draft }
+      : { state: 'incompatible', draft: null }
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { state: 'none', draft: null }
+    return { state: 'corrupted', draft: null }
+  }
+}
+
+async function saveRecoveryDraft(draft) {
+  await mkdir(recoveryDraftDirectory, { recursive: true })
+  await writeFile(recoveryDraftPath(draft.sourcePath, draft.sourceRevision), JSON.stringify(draft, null, 2), 'utf8')
+}
+
+function recoveryDraftPath(sourcePath, sourceRevision) {
+  return join(recoveryDraftDirectory, `${sha256Hex(`${sourcePath}|${sourceRevision}`)}.json`)
+}
+
+function extractRecoveryFields(path, content) {
+  const lines = content.split(/\r?\n/).map((line, index) => ({ line, index })).filter(({ line }) => line.trim() !== '')
+  if (path.toLowerCase().endsWith('.jsonl')) {
+    return lines.flatMap(({ line, index }) => extractObjectFields(parseJsonObject(line), `/sessions/${index}`))
+  }
+
+  return extractObjectFields(parseJsonObject(content), '')
+}
+
+function extractObjectFields(source, prefix) {
+  if (!source || Array.isArray(source) || typeof source !== 'object') {
+    return ['/schema_version', '/session_id', '/date', '/status', '/gym_id', '/condition', '/machines', '/notes']
+      .map((fieldPath) => unresolvedField(prefix + fieldPath))
+  }
+
+  return [
+    recoverableField(source, `${prefix}/schema_version`, 'schema_version', 'number'),
+    recoverableField(source, `${prefix}/session_id`, 'session_id', 'string'),
+    recoverableField(source, `${prefix}/date`, 'date', 'string'),
+    recoverableField(source, `${prefix}/status`, 'status', 'string'),
+    recoverableField(source, `${prefix}/gym_id`, 'gym_id', 'string'),
+    recoverableField(source, `${prefix}/condition`, 'condition', 'object', true),
+    recoverableField(source, `${prefix}/machines`, 'machines', 'array'),
+    recoverableField(source, `${prefix}/notes`, 'notes', 'array', true),
+  ]
+}
+
+function recoverableField(source, fieldPath, key, kind, optional = false) {
+  if (!(key in source)) return optional ? recoveredField(fieldPath, null) : unresolvedField(fieldPath)
+  const value = source[key]
+  const actual = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value
+  return actual === kind || (optional && key === 'condition' && actual === 'null')
+    ? recoveredField(fieldPath, value)
+    : unresolvedField(fieldPath)
+}
+
+function recoveredField(fieldPath, value) {
+  return { fieldPath, state: 'recovered', source: 'original', value }
+}
+
+function unresolvedField(fieldPath) {
+  return { fieldPath, state: 'unresolved', source: 'original' }
+}
+
+function parseJsonObject(content) {
+  try {
+    return JSON.parse(content)
+  } catch {
+    return null
+  }
+}
+
+function buildRecoveryCandidate(draft) {
+  const fields = draft.fields.filter((field) => ['recovered', 'confirmed'].includes(field.state) && 'value' in field)
+  const jsonlPrefixes = Array.from(new Set(fields
+    .map((field) => /^\/sessions\/([^/]+)\//.exec(field.fieldPath)?.[1])
+    .filter(Boolean)))
+  if (jsonlPrefixes.length > 0) {
+    return jsonlPrefixes
+      .sort((left, right) => Number(left) - Number(right))
+      .map((index) => JSON.stringify(objectFromFields(fields, `/sessions/${index}`)))
+      .join('\n') + '\n'
+  }
+
+  return JSON.stringify(objectFromFields(fields, ''), null, 2) + '\n'
+}
+
+function objectFromFields(fields, prefix) {
+  const result = {}
+  for (const field of fields.sort((left, right) => left.fieldPath.localeCompare(right.fieldPath))) {
+    const key = prefix.length === 0
+      ? field.fieldPath.replace(/^\//, '')
+      : field.fieldPath.slice(prefix.length + 1)
+    if (!key || key.includes('/')) continue
+    result[key] = field.value
+  }
+  return result
 }
 
 async function loadMasterData(directory) {
@@ -520,4 +1043,18 @@ function writeJson(response, status, payload) {
 
 function normalizePath(path) {
   return path.replaceAll('\\\\', '/')
+}
+
+function recoveryResourceKey(sourcePath, sourceRevision) {
+  return base64Url(createHash('sha256')
+    .update(['dev', repoRoot, 'WORKOUT', sourcePath, sourceRevision].join('|'))
+    .digest())
+}
+
+function sha256Hex(value) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function base64Url(buffer) {
+  return buffer.toString('base64').replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_')
 }

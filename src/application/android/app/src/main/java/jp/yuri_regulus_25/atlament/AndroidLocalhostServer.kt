@@ -24,6 +24,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.time.LocalDate
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -44,11 +45,44 @@ internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted:
 internal fun androidMasterReferenceWarningCode(deleted: Boolean): String =
     if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
 
+internal fun androidNormalizeGitBranchRef(ref: String): String {
+    val trimmed = ref.trim().trim('/')
+    return when {
+        trimmed.isBlank() -> "heads/main"
+        trimmed.startsWith("refs/") -> trimmed.removePrefix("refs/")
+        trimmed.startsWith("heads/") || trimmed.startsWith("tags/") -> trimmed
+        else -> "heads/$trimmed"
+    }
+}
+
+internal data class AndroidRecoveryFileAddition(val path: String, val contents: String)
+internal data class AndroidRecoveryFileDeletion(val path: String)
+
+internal fun androidRecoveryRelocationAddition(replacementPath: String, replacementContent: String): AndroidRecoveryFileAddition =
+    AndroidRecoveryFileAddition(
+        replacementPath.trim('/'),
+        java.util.Base64.getEncoder().encodeToString(replacementContent.toByteArray(StandardCharsets.UTF_8))
+    )
+
+internal fun androidRecoveryRelocationDeletion(sourcePath: String): AndroidRecoveryFileDeletion =
+    AndroidRecoveryFileDeletion(sourcePath.trim('/'))
+
+internal val androidRecoveryWorkoutFieldOrder = listOf(
+    "schema_version",
+    "session_id",
+    "date",
+    "status",
+    "gym_id",
+    "condition",
+    "machines",
+    "notes"
+)
+
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
 ) : Closeable {
-    private data class RuntimeSourceFile(val path: String, val content: String)
+    private data class RuntimeSourceFile(val path: String, val content: String, val revision: String? = null)
     private data class SyncResponse(val status: Int, val body: String, val success: Boolean)
     private data class RuntimeBuildResult(val payload: String?, val errors: JSONArray, val warnings: JSONArray)
     private data class RuntimeFetchedResources(
@@ -56,6 +90,8 @@ class AndroidLocalhostServer(
         val machineMaster: RuntimeSourceFile?,
         val gymMaster: RuntimeSourceFile?
     )
+    private data class RecoveryResource(val source: RuntimeSourceFile, val resourceKey: String, val inspection: JSONObject)
+    private data class RecoveryGitWriteResult(val replacementPath: String, val replacementRevision: String, val commitRevision: String)
     private data class MasterWriteTarget(val type: String, val path: String)
     private data class MasterDocument(val type: String, val path: String, val revision: String, val content: String)
     private data class GithubContent(val revision: String, val content: String)
@@ -73,12 +109,15 @@ class AndroidLocalhostServer(
     private val credentialIvKey = "github_token_iv"
     private val credentialLimitDateKey = "github_token_limit_date"
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
+    private val recoveryDraftDirectory = File(context.filesDir, "recovery/drafts")
+    private val recoveryTemporaryDirectory = File(context.filesDir, "recovery/temporary")
     private val logDatabaseFile = File(context.filesDir, "log/atlament-log.sqlite")
     private val operationLock = Object()
     @Volatile private var startupSyncStatus = "idle"
     @Volatile private var manualSyncStatus = "idle"
     @Volatile private var configurationUpdateStatus = "idle"
     @Volatile private var credentialUpdateStatus = "idle"
+    @Volatile private var recoveryCommitRunning = false
     @Volatile private var shutdownStatus = "idle"
     @Volatile private var githubComponentStatus = "unknown"
     @Volatile private var latestRemoteRetrieval = "unknown"
@@ -186,6 +225,11 @@ class AndroidLocalhostServer(
             method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
             method == "GET" && route == "/master-write/unresolved" -> sendUnresolvedMasterReferences(output)
             method == "GET" && route.startsWith("/master-write/documents/") -> sendMasterDocument(output, route.substringAfterLast('/'))
+            method == "GET" && route == "/recovery/resources" -> sendRecoveryResources(output)
+            method == "GET" && route.startsWith("/recovery/resources/") -> handleRecoveryResourceRoute(output, method, route, body)
+            method == "POST" && route.startsWith("/recovery/resources/") -> handleRecoveryResourceRoute(output, method, route, body)
+            method == "PUT" && route.startsWith("/recovery/resources/") -> handleRecoveryResourceRoute(output, method, route, body)
+            method == "DELETE" && route.startsWith("/recovery/resources/") -> handleRecoveryResourceRoute(output, method, route, body)
             method == "GET" && route == "/runtime/workouts" -> sendRuntimeWorkoutData(output)
             method == "POST" && route == "/configuration" -> sendConfigurationUpdate(output, body)
             method == "POST" && route == "/credential" -> sendCredentialUpdate(output, body)
@@ -276,6 +320,7 @@ class AndroidLocalhostServer(
             },
             "readiness": ${readinessJson()},
             "runtimeData": ${runtimeDataFactsJson()},
+            "recovery": ${recoveryStatusFactsJson()},
             "application": {
               "status": "${applicationStatus()}",
               "degraded": ${applicationStatus() == "degraded"},
@@ -308,19 +353,56 @@ class AndroidLocalhostServer(
     }.getOrDefault(JSONObject())
 
     private fun runtimeDataFactsJson(): String {
-        val currentAvailable = runtimeDataStatus() == "available"
+        val runtimeStatus = runtimeDataStatus()
+        val currentAvailable = runtimeStatus != "unavailable"
         val generatedAt = if (runtimeDataFile.exists()) "\"${Instant.ofEpochMilli(runtimeDataFile.lastModified())}\"" else "null"
         val fallbackActive = (latestRemoteRetrieval == "failed" || latestValidation == "failed") && currentAvailable
+        val quarantinedWorkoutResourceCount = quarantinedWorkoutResourceCount()
         return """
             {
               "currentAvailable": $currentAvailable,
               "currentGeneratedAt": $generatedAt,
               "latestRemoteRetrieval": "$latestRemoteRetrieval",
               "latestValidation": "$latestValidation",
-              "fallbackActive": $fallbackActive
+              "fallbackActive": $fallbackActive,
+              "quarantinedWorkoutResourceCount": $quarantinedWorkoutResourceCount
             }
         """.trimIndent()
     }
+
+    private fun recoveryStatusFactsJson(): String {
+        val brokenWorkoutCount = quarantinedWorkoutResourceCount()
+        return JSONObject()
+            .put("brokenResourceCount", brokenWorkoutCount)
+            .put("brokenWorkoutResourceCount", brokenWorkoutCount)
+            .put("brokenMasterResourceCount", 0)
+            .put("recoverableResourceCount", brokenWorkoutCount)
+            .put("activeDraftCount", activeRecoveryDraftCount())
+            .toString()
+    }
+
+    private fun quarantinedWorkoutResourceCount(): Int = runCatching {
+        if (!runtimeDataFile.exists()) return 0
+        val runtime = JSONObject(runtimeDataFile.readText(StandardCharsets.UTF_8))
+        val paths = linkedSetOf<String>()
+        val errors = runtime.optJSONArray("errors") ?: return 0
+        for (index in 0 until errors.length()) {
+            val message = errors.optJSONObject(index)?.optString("message").orEmpty()
+            val path = message.substringBefore(':').trim()
+            if (path.endsWith(".json", ignoreCase = true) || path.endsWith(".jsonl", ignoreCase = true)) {
+                paths.add(path)
+            }
+        }
+        paths.size
+    }.getOrDefault(0)
+
+    private fun activeRecoveryDraftCount(): Int = runCatching {
+        recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
+            ?.count { file ->
+                val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
+                envelope.optJSONObject("draft")?.optInt("schemaVersion", -1) == 1
+            } ?: 0
+    }.getOrDefault(0)
 
     private fun hostingStatusJson(): String = """
         {
@@ -516,7 +598,7 @@ class AndroidLocalhostServer(
             val gymMaster = selectLocalMasterDocument(confirmedDocuments, "GYM_MASTER")
                 ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
             val build = buildRuntimeDataPayload(workoutFiles, machineMaster, gymMaster)
-            if (build.errors.length() > 0 || build.payload == null) {
+            if (build.payload == null) {
                 return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
             }
             val saveErrors = saveRuntimeDataAtomically(build.payload)
@@ -952,6 +1034,469 @@ class AndroidLocalhostServer(
             errorsArray("GITHUB_CONNECTION_FAILED", ex.message ?: "GitHub configuration check failed.")
         }
     }
+
+    private fun handleRecoveryResourceRoute(output: OutputStream, method: String, route: String, body: String) {
+        val suffix = route.removePrefix("/recovery/resources/").trim('/')
+        val resourceKey = suffix.substringBefore('/').takeIf { it.isNotBlank() }
+        val action = suffix.substringAfter('/', "")
+        if (resourceKey == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+
+        when {
+            method == "GET" && action.isEmpty() -> sendRecoveryResourceDetail(output, resourceKey)
+            method == "GET" && action == "source" -> sendRecoverySource(output, resourceKey)
+            method == "GET" && action == "draft" -> sendRecoveryDraft(output, resourceKey)
+            method == "POST" && action == "draft" -> sendRecoveryDraftCreate(output, resourceKey)
+            method == "PUT" && action == "draft" -> sendRecoveryDraftUpdate(output, resourceKey, body)
+            method == "DELETE" && action == "draft" -> sendRecoveryDraftDelete(output, resourceKey)
+            method == "POST" && action == "validate" -> sendRecoveryValidation(output, resourceKey)
+            method == "POST" && action == "commit" -> sendRecoveryCommit(output, resourceKey, body)
+            else -> sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
+        }
+    }
+
+    private fun sendRecoveryResources(output: OutputStream) {
+        try {
+            val resources = inspectWorkoutRecoveryResources()
+                .filter { it.inspection.optString("health") == "broken" }
+                .sortedBy { it.source.path }
+            val array = JSONArray()
+            resources.forEach { resource ->
+                val revision = sourceRevision(resource.source)
+                val draft = loadRecoveryDraft("WORKOUT", resource.source.path, revision)
+                array.put(JSONObject()
+                    .put("resourceKey", resource.resourceKey)
+                    .put("path", resource.source.path)
+                    .put("revision", revision)
+                    .put("resourceType", "WORKOUT")
+                    .put("health", "broken")
+                    .put("issues", resource.inspection.optJSONArray("issues") ?: JSONArray())
+                    .put("recoveryEligible", true)
+                    .put("hasDraft", draft.optString("state") == "active"))
+            }
+            sendJson(output, 200, okJson(array.toString()))
+        } catch (ex: AfException) {
+            sendJson(output, recoveryStatusCode(ex.code), failJson(ex.code, ex.message))
+        } catch (ex: Exception) {
+            sendJson(output, 503, failJson("RECOVERY_UNAVAILABLE", ex.message ?: "Recovery is unavailable."))
+        }
+    }
+
+    private fun sendRecoveryResourceDetail(output: OutputStream, resourceKey: String) {
+        val resolved = resolveRecoveryResourceForRead(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        val eligible = resolved.inspection.optString("health") == "broken"
+        val detail = JSONObject()
+            .put("resourceKey", resolved.resourceKey)
+            .put("inspection", resolved.inspection)
+            .put("eligibility", JSONObject()
+                .put("eligible", eligible)
+                .put("reasonCode", if (eligible) JSONObject.NULL else "RECOVERY_RESOURCE_NOT_BROKEN"))
+            .put("capabilities", recoveryCapabilitiesJson(eligible))
+            .put("draft", loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source)))
+        sendJson(output, 200, okJson(detail.toString()))
+    }
+
+    private fun sendRecoverySource(output: OutputStream, resourceKey: String) {
+        val resolved = resolveRecoveryResourceForRead(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        if (resolved.source.content.toByteArray(StandardCharsets.UTF_8).size > 256 * 1024) {
+            sendJson(output, 413, failJson("RECOVERY_SOURCE_VIEW_TOO_LARGE", "Recovery source view is too large."))
+            return
+        }
+        val source = JSONObject()
+            .put("resourceKey", resolved.resourceKey)
+            .put("path", resolved.source.path)
+            .put("revision", sourceRevision(resolved.source))
+            .put("resourceType", "WORKOUT")
+            .put("content", resolved.source.content)
+            .put("readOnly", true)
+        sendJson(output, 200, okJson(source.toString()))
+    }
+
+    private fun sendRecoveryDraft(output: OutputStream, resourceKey: String) {
+        val resolved = resolveRecoveryResourceForRead(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        sendJson(output, 200, okJson(loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source)).toString()))
+    }
+
+    private fun sendRecoveryDraftCreate(output: OutputStream, resourceKey: String) {
+        val resolved = resolveRecoveryResource(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        val snapshot = createWorkoutRecoveryDraft(resolved.source, resolved.inspection.optString("health") == "broken")
+        val errors = snapshot.optJSONArray("errors") ?: JSONArray()
+        if (errors.length() > 0) {
+            val first = errors.getJSONObject(0)
+            sendJson(output, recoveryStatusCode(first.optString("code")), responseJson(false, "null", errors))
+        } else {
+            sendJson(output, 200, okJson(snapshot.remove("errors").let { snapshot.toString() }))
+        }
+    }
+
+    private fun sendRecoveryDraftUpdate(output: OutputStream, resourceKey: String, body: String) {
+        val resolved = resolveRecoveryResource(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        val request = runCatching { JSONObject(body.ifBlank { "{}" }) }.getOrElse {
+            sendJson(output, 400, failJson("COMMON_INVALID_REQUEST", "Recovery Draft update request is invalid."))
+            return
+        }
+        val existing = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        val draft = existing.optJSONObject("draft")
+        if (existing.optString("state") != "active" || draft == null) {
+            sendJson(output, 409, failJson("RECOVERY_DRAFT_CORRUPTED", "Active Recovery Draft is unavailable."))
+            return
+        }
+        val expected = if (request.has("expectedDraftRevision")) request.optInt("expectedDraftRevision") else Int.MIN_VALUE
+        if (expected != draft.optInt("draftRevision")) {
+            sendJson(output, 409, responseJson(false, existing.toString(), errorsArray("RECOVERY_DRAFT_CONFLICT", "Recovery Draft was updated elsewhere.")))
+            return
+        }
+        val next = JSONObject(draft.toString())
+            .put("draftRevision", draft.optInt("draftRevision") + 1)
+            .put("fields", request.optJSONArray("fields") ?: draft.optJSONArray("fields") ?: JSONArray())
+        val errors = saveRecoveryDraft(next)
+        if (errors.length() > 0) {
+            sendJson(output, 503, responseJson(false, existing.toString(), errors))
+            return
+        }
+        sendJson(output, 200, okJson(JSONObject().put("state", "active").put("draft", next).toString()))
+    }
+
+    private fun sendRecoveryDraftDelete(output: OutputStream, resourceKey: String) {
+        val resolved = resolveRecoveryResource(resourceKey)
+        if (resolved == null) {
+            sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+            return
+        }
+        deleteRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        sendJson(output, 200, okJson(JSONObject().put("state", "none").put("draft", JSONObject.NULL).toString()))
+    }
+
+    private fun sendRecoveryValidation(output: OutputStream, resourceKey: String) {
+        val result = validateRecoveryDraft(resourceKey)
+        val errors = result.optJSONArray("errors") ?: JSONArray()
+        if (errors.length() > 0) {
+            val first = errors.getJSONObject(0)
+            sendJson(output, recoveryStatusCode(first.optString("code")), responseJson(false, "null", errors))
+        } else {
+            sendJson(output, 200, okJson(result.getJSONObject("data").toString()))
+        }
+    }
+
+    private fun sendRecoveryCommit(output: OutputStream, resourceKey: String, body: String) {
+        if (!tryStartOperation("recoveryCommit")) {
+            sendJson(output, 409, failJson("OPERATION_ALREADY_RUNNING", "Recovery commit is already running."))
+            return
+        }
+
+        var success = false
+        try {
+            val request = runCatching { JSONObject(body.ifBlank { "{}" }) }.getOrElse {
+                sendJson(output, 400, failJson("RECOVERY_WRITE_FAILED", "Recovery commit request is invalid."))
+                return
+            }
+            val expectedSourceRevision = request.optString("expectedSourceRevision").trim()
+            val expectedDraftRevision = if (request.has("expectedDraftRevision")) request.optInt("expectedDraftRevision") else Int.MIN_VALUE
+            if (expectedSourceRevision.isBlank() || expectedDraftRevision == Int.MIN_VALUE) {
+                sendJson(output, 400, failJson("RECOVERY_WRITE_FAILED", "Recovery commit request is invalid."))
+                return
+            }
+
+            val configuration = JSONObject(loadConfigurationJson())
+            val resources = inspectWorkoutRecoveryResources()
+            val resolved = resources.firstOrNull { it.resourceKey == resourceKey }
+            if (resolved == null) {
+                val staleSource = resources.firstOrNull {
+                    recoveryResourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey
+                }
+                if (staleSource != null && sourceRevision(staleSource.source) != expectedSourceRevision) {
+                    sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale."))
+                    return
+                }
+
+                sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+                return
+            }
+            if (resolved.inspection.optString("health") != "broken") {
+                sendJson(output, 409, failJson("RECOVERY_RESOURCE_NOT_BROKEN", "Recovery target is not Broken."))
+                return
+            }
+            if (sourceRevision(resolved.source) != expectedSourceRevision) {
+                sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale."))
+                return
+            }
+
+            val snapshot = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+            val draft = snapshot.optJSONObject("draft")
+            if (snapshot.optString("state") != "active" || draft == null) {
+                sendJson(output, 409, failJson("RECOVERY_DRAFT_REQUIRED", "Recovery Draft is required."))
+                return
+            }
+            if (draft.optInt("draftRevision") != expectedDraftRevision) {
+                sendJson(output, 409, failJson("RECOVERY_DRAFT_CONFLICT", "Recovery Draft was updated elsewhere."))
+                return
+            }
+
+            val validationResult = validateRecoveryDraft(resourceKey)
+            val validationErrors = validationResult.optJSONArray("errors") ?: JSONArray()
+            if (validationErrors.length() > 0) {
+                val first = validationErrors.getJSONObject(0)
+                sendJson(output, recoveryStatusCode(first.optString("code")), responseJson(false, "null", validationErrors))
+                return
+            }
+            val validation = validationResult.getJSONObject("data")
+            if (!validation.optBoolean("commitAllowed")) {
+                sendJson(output, 409, failJson("RECOVERY_VALIDATION_FAILED", "Recovery candidate is not committable."))
+                return
+            }
+
+            val replacementContent = buildRecoveryCandidateContent(draft)
+            val replacementPath = validation.optString("replacementPath")
+            if (!isAllowedRecoveryWorkoutPath(configuration, resolved.source.path) || !isAllowedRecoveryWorkoutPath(configuration, replacementPath)) {
+                sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery path is outside the configured resource boundary."))
+                return
+            }
+            val push = pushRecoveryReplacement(configuration, resolved.source.path, expectedSourceRevision, replacementPath, replacementContent)
+            val reflection = reflectRecoveryCommit(configuration, push.replacementPath, push.replacementRevision, push.commitRevision)
+            val result = JSONObject()
+                .put("committed", true)
+                .put("sourcePath", resolved.source.path)
+                .put("sourceRevision", sourceRevision(resolved.source))
+                .put("replacementPath", push.replacementPath)
+                .put("replacementRevision", push.replacementRevision)
+                .put("commitRevision", push.commitRevision)
+                .put("pathChange", validation.opt("pathChange") ?: JSONObject.NULL)
+                .put("reflection", reflection)
+
+            if (reflection.optBoolean("succeeded")) {
+                deleteRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+                success = true
+                sendJson(output, 200, okJson(result.toString()))
+                return
+            }
+
+            val errors = errorsArray("RECOVERY_REFLECTION_FAILED", "Recovery commit succeeded but runtime reflection failed.")
+            appendJsonArray(errors, reflection.optJSONArray("errors") ?: JSONArray())
+            sendJson(output, 200, responseJson(true, result.toString(), errors, reflection.optJSONArray("warnings") ?: JSONArray()))
+        } catch (ex: AfException) {
+            sendJson(output, recoveryStatusCode(ex.code), failJson(ex.code, ex.message))
+        } catch (_: Exception) {
+            sendJson(output, 500, failJson("COMMON_INTERNAL_ERROR", "Recovery commit failed."))
+        } finally {
+            completeOperation("recoveryCommit", success)
+        }
+    }
+
+    private fun pushRecoveryReplacement(
+        configuration: JSONObject,
+        sourcePath: String,
+        expectedSourceRevision: String,
+        replacementPath: String,
+        replacementContent: String
+    ): RecoveryGitWriteResult =
+        if (sourcePath == replacementPath) {
+            pushRecoverySamePath(configuration, sourcePath, expectedSourceRevision, replacementContent)
+        } else {
+            pushRecoveryRelocation(configuration, sourcePath, expectedSourceRevision, replacementPath, replacementContent)
+        }
+
+    private fun pushRecoverySamePath(
+        configuration: JSONObject,
+        path: String,
+        expectedSourceRevision: String,
+        replacementContent: String
+    ): RecoveryGitWriteResult {
+        val source = readGithubContentFile(configuration, path)
+        if (contentRevision(source.content) != expectedSourceRevision) {
+            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
+        }
+
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val payload = JSONObject()
+            .put("message", "Recover workout resource")
+            .put("content", Base64.encodeToString(replacementContent.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP))
+            .put("sha", source.revision)
+            .put("branch", ref)
+            .toString()
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "PUT"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            doOutput = true
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            setRequestProperty("Content-Type", "application/json")
+            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        return try {
+            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                if (status == 409) throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
+                throw mapGithubError(status, path)
+            }
+            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            val json = JSONObject(response)
+            val commitRevision = json.optJSONObject("commit")?.optString("sha").orEmpty().trim()
+            if (commitRevision.isBlank()) throw AfException("RECOVERY_WRITE_FAILED", "GitHub write result is ambiguous.")
+            RecoveryGitWriteResult(path, contentRevision(replacementContent), commitRevision)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun pushRecoveryRelocation(
+        configuration: JSONObject,
+        sourcePath: String,
+        expectedSourceRevision: String,
+        replacementPath: String,
+        replacementContent: String
+    ): RecoveryGitWriteResult {
+        val source = readGithubContentFile(configuration, sourcePath)
+        if (contentRevision(source.content) != expectedSourceRevision) {
+            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
+        }
+
+        try {
+            readGithubContentFile(configuration, replacementPath)
+            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery destination already exists.")
+        } catch (ex: AfException) {
+            if (ex.code != "GITHUB_RESOURCE_NOT_FOUND") throw ex
+        }
+
+        val headSha = readBranchHead(configuration)
+        val commitSha = createRecoveryRelocationCommit(configuration, headSha, sourcePath, replacementPath, replacementContent)
+        return RecoveryGitWriteResult(replacementPath, contentRevision(replacementContent), commitSha)
+    }
+
+    private fun readBranchHead(configuration: JSONObject): String {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = androidNormalizeGitBranchRef(repository.optString("ref", "main"))
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/git/ref/${escapeRemotePath(ref)}"
+        val sha = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, ref)).optJSONObject("object")?.optString("sha").orEmpty().trim()
+        if (sha.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub ref response is invalid.")
+        return sha
+    }
+
+    private fun createRecoveryRelocationCommit(
+        configuration: JSONObject,
+        expectedHeadSha: String,
+        sourcePath: String,
+        replacementPath: String,
+        replacementContent: String
+    ): String {
+        val repository = configuration.getJSONObject("repository")
+        val branchName = androidNormalizeGitBranchRef(repository.optString("ref", "main")).removePrefix("heads/")
+        val addition = androidRecoveryRelocationAddition(replacementPath, replacementContent)
+        val deletion = androidRecoveryRelocationDeletion(sourcePath)
+        val input = JSONObject()
+            .put("branch", JSONObject()
+                .put("repositoryNameWithOwner", "${repository.optString("owner").trim()}/${repository.optString("repository").trim()}")
+                .put("branchName", branchName))
+            .put("expectedHeadOid", expectedHeadSha)
+            .put("message", JSONObject().put("headline", "Recover workout resource"))
+            .put("fileChanges", JSONObject()
+                .put("additions", JSONArray().put(JSONObject()
+                    .put("path", addition.path)
+                    .put("contents", addition.contents)))
+                .put("deletions", JSONArray().put(JSONObject()
+                    .put("path", deletion.path))))
+        val payload = JSONObject()
+            .put("query", """
+                mutation(${'$'}input: CreateCommitOnBranchInput!) {
+                  createCommitOnBranch(input: ${'$'}input) {
+                    commit { oid }
+                  }
+                }
+            """.trimIndent())
+            .put("variables", JSONObject().put("input", input))
+            .toString()
+        val response = postGithubGraphql(configuration, payload)
+        val errors = response.optJSONArray("errors")
+        if (errors != null && errors.length() > 0) {
+            val message = errors.optJSONObject(0)?.optString("message").orEmpty()
+            val type = errors.optJSONObject(0)?.optString("type").orEmpty()
+            if (type == "STALE_DATA" || message.contains("Expected branch to point to", ignoreCase = true)) {
+                throw AfException("RECOVERY_WRITE_CONFLICT", "Remote repository changed before Recovery commit.")
+            }
+            throw AfException("RECOVERY_WRITE_FAILED", message.ifBlank { "Recovery relocation commit failed." })
+        }
+        val commitSha = response.optJSONObject("data")
+            ?.optJSONObject("createCommitOnBranch")
+            ?.optJSONObject("commit")
+            ?.optString("oid")
+            .orEmpty()
+            .trim()
+        if (commitSha.isBlank()) throw AfException("RECOVERY_WRITE_FAILED", "GitHub write result is ambiguous.")
+        return commitSha
+    }
+
+    private fun reflectRecoveryCommit(
+        configuration: JSONObject,
+        replacementPath: String,
+        replacementRevision: String,
+        commitRevision: String
+    ): JSONObject {
+        val committedConfiguration = JSONObject(configuration.toString())
+        committedConfiguration.getJSONObject("repository").put("ref", commitRevision)
+        val fetched = fetchConfiguredResources(committedConfiguration)
+        val machine = fetched.machineMaster ?: return recoveryReflectionJson(false, JSONObject.NULL, errorsArray("RECOVERY_REFLECTION_FAILED", "Machine master resource is unavailable."), JSONArray())
+        val gym = fetched.gymMaster ?: return recoveryReflectionJson(false, JSONObject.NULL, errorsArray("RECOVERY_REFLECTION_FAILED", "Gym master resource is unavailable."), JSONArray())
+        val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
+        val gymMaster = MasterDocument("GYM_MASTER", gym.path, sourceRevision(gym), gym.content)
+        val committed = fetched.workoutFiles.firstOrNull { it.path == replacementPath && sourceRevision(it) == replacementRevision }
+            ?: return recoveryReflectionJson(false, JSONObject.NULL, errorsArray("RECOVERY_REFLECTION_FAILED", "Recovered resource revision is not reflected at the Recovery commit."), JSONArray())
+        val inspection = inspectWorkoutResource(committed, machineMaster, gymMaster)
+        if (inspection.optString("health") == "broken") {
+            return recoveryReflectionJson(false, inspection.optString("health"), errorsArray("RECOVERY_REFLECTION_FAILED", "Recovered resource is not reflected as Healthy or Degraded."), JSONArray())
+        }
+
+        val build = buildRuntimeDataPayload(fetched.workoutFiles, machineMaster, gymMaster)
+        if (build.payload == null) {
+            return recoveryReflectionJson(false, inspection.optString("health"), build.errors, build.warnings)
+        }
+        val saveErrors = saveRuntimeDataAtomically(build.payload)
+        if (saveErrors.length() > 0) {
+            return recoveryReflectionJson(false, inspection.optString("health"), saveErrors, build.warnings)
+        }
+
+        githubComponentStatus = "available"
+        latestRemoteRetrieval = "succeeded"
+        latestValidation = "succeeded"
+        return recoveryReflectionJson(true, inspection.optString("health"), JSONArray(), build.warnings)
+    }
+
+    private fun recoveryReflectionJson(succeeded: Boolean, health: Any, errors: JSONArray, warnings: JSONArray): JSONObject =
+        JSONObject()
+            .put("succeeded", succeeded)
+            .put("health", health)
+            .put("errors", errors)
+            .put("warnings", warnings)
+
     private fun okJson(dataJson: String, errorsJson: String = "[]", warningsJson: String = "[]"): String = """
         {
           "success": true,
@@ -1182,7 +1727,7 @@ class AndroidLocalhostServer(
     private fun syncRuntimeData(): SyncResponse {
         return try {
             val build = fetchRuntimeWorkoutData()
-            if (build.errors.length() > 0 || build.payload == null) {
+            if (build.payload == null) {
                 return failedSync(build.errors)
             }
             val saveErrors = saveRuntimeDataAtomically(build.payload)
@@ -1195,9 +1740,9 @@ class AndroidLocalhostServer(
             writeLog("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
-                  "degraded": false
+                  "degraded": ${build.errors.length() > 0}
                 }
-            """.trimIndent(), warningsJson = build.warnings.toString()), true)
+            """.trimIndent(), errorsJson = build.errors.toString(), warningsJson = build.warnings.toString()), true)
         } catch (ex: AfException) {
             githubComponentStatus = "degraded"
             latestRemoteRetrieval = "failed"
@@ -1238,6 +1783,497 @@ class AndroidLocalhostServer(
         }
     }
 
+    private fun inspectWorkoutRecoveryResources(): List<RecoveryResource> {
+        val configuration = JSONObject(loadConfigurationJson())
+        val fetched = fetchConfiguredResources(configuration)
+        val machine = fetched.machineMaster ?: throw AfException("RECOVERY_UNAVAILABLE", "Machine master resource is unavailable.")
+        val gym = fetched.gymMaster ?: throw AfException("RECOVERY_UNAVAILABLE", "Gym master resource is unavailable.")
+        val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
+        val gymMaster = MasterDocument("GYM_MASTER", gym.path, sourceRevision(gym), gym.content)
+        return fetched.workoutFiles
+            .sortedBy { it.path }
+            .map { source ->
+                val inspection = inspectWorkoutResource(source, machineMaster, gymMaster)
+                RecoveryResource(source, recoveryResourceKey(configuration, "WORKOUT", source.path, sourceRevision(source)), inspection)
+            }
+    }
+
+    private fun inspectWorkoutResource(source: RuntimeSourceFile, machineMaster: MasterDocument, gymMaster: MasterDocument): JSONObject {
+        val build = buildRuntimeDataPayload(listOf(source), machineMaster, gymMaster)
+        val issues = JSONArray()
+        appendJsonArray(issues, resourceIssuesFromErrors(build.errors))
+        appendJsonArray(issues, resourceIssuesFromWarnings(build.warnings))
+        val health = when {
+            hasSeverity(issues, "broken") -> "broken"
+            issues.length() > 0 -> "degraded"
+            else -> "healthy"
+        }
+        return JSONObject()
+            .put("path", source.path)
+            .put("revision", sourceRevision(source))
+            .put("resourceType", "WORKOUT")
+            .put("inspectionVersion", 1)
+            .put("health", health)
+            .put("issues", issues)
+    }
+
+    private fun resolveRecoveryResource(resourceKey: String): RecoveryResource? =
+        runCatching { inspectWorkoutRecoveryResources().firstOrNull { it.resourceKey == resourceKey } }.getOrNull()
+
+    private fun resolveRecoveryResourceForRead(resourceKey: String): RecoveryResource? = runCatching {
+        val configuration = JSONObject(loadConfigurationJson())
+        val resources = inspectWorkoutRecoveryResources()
+        resources.firstOrNull { it.resourceKey == resourceKey } ?: run {
+            val draft = findRecoveryDraftByResourceKey(configuration, resourceKey) ?: return@run null
+            resources.firstOrNull { it.source.path == draft.optString("sourcePath") }
+        }
+    }.getOrNull()
+
+    private fun validateRecoveryDraft(resourceKey: String): JSONObject {
+        val configuration = runCatching { JSONObject(loadConfigurationJson()) }.getOrElse { ex ->
+            val code = if (ex is AfException) ex.code else "RECOVERY_UNAVAILABLE"
+            val message = ex.message ?: "Recovery is unavailable."
+            return JSONObject().put("errors", errorsArray(code, message))
+        }
+        val resources = runCatching { inspectWorkoutRecoveryResources() }.getOrElse { ex ->
+            val code = if (ex is AfException) ex.code else "RECOVERY_UNAVAILABLE"
+            val message = ex.message ?: "Recovery is unavailable."
+            return JSONObject().put("errors", errorsArray(code, message))
+        }
+        val resolved = resources.firstOrNull { it.resourceKey == resourceKey }
+            ?: findRecoveryDraftByResourceKey(configuration, resourceKey)?.let { draft ->
+                resources.firstOrNull { it.source.path == draft.optString("sourcePath") }
+            }
+            ?: return JSONObject().put("errors", errorsArray("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
+        val snapshot = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        val draft = snapshot.optJSONObject("draft")
+        when (snapshot.optString("state")) {
+            "none" -> return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_REQUIRED", "Recovery Draft is required."))
+            "stale" -> return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_STALE", "Recovery Draft source revision is stale."))
+            "incompatible" -> return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_INCOMPATIBLE", "Recovery Draft schema is incompatible."))
+            "corrupted" -> return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_CORRUPTED", "Recovery Draft is corrupted."))
+        }
+        if (draft == null) return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_REQUIRED", "Recovery Draft is required."))
+
+        val unresolved = unresolvedRecoveryIssues(draft.optJSONArray("fields") ?: JSONArray())
+        if (unresolved.length() > 0) {
+            return JSONObject()
+                .put("errors", JSONArray())
+                .put("data", recoveryValidationJson(draft, "broken", unresolved, false, draft.optString("sourcePath"), null))
+        }
+
+        val fetched = fetchConfiguredResources(configuration)
+        val machine = fetched.machineMaster ?: return JSONObject().put("errors", errorsArray("RECOVERY_UNAVAILABLE", "Machine master resource is unavailable."))
+        val gym = fetched.gymMaster ?: return JSONObject().put("errors", errorsArray("RECOVERY_UNAVAILABLE", "Gym master resource is unavailable."))
+        val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
+        val gymMaster = MasterDocument("GYM_MASTER", gym.path, sourceRevision(gym), gym.content)
+        val candidate = buildRecoveryCandidateContent(draft)
+        val replacementPath = determineReplacementPath(draft.optString("sourcePath"), candidate)
+        val candidateFile = RuntimeSourceFile(replacementPath, candidate, draft.optString("sourceRevision"))
+        val validation = buildRuntimeDataPayload(listOf(candidateFile), machineMaster, gymMaster)
+        val issues = JSONArray()
+        appendJsonArray(issues, resourceIssuesFromErrors(validation.errors))
+        appendJsonArray(issues, resourceIssuesFromWarnings(validation.warnings))
+        appendJsonArray(issues, duplicateRecoveryIssues(candidateFile, fetched.workoutFiles.filter { it.path != resolved.source.path }, machineMaster, gymMaster))
+        val health = when {
+            hasSeverity(issues, "broken") -> "broken"
+            issues.length() > 0 -> "degraded"
+            else -> "healthy"
+        }
+        val pathChange = if (replacementPath == draft.optString("sourcePath")) null else JSONObject().put("from", draft.optString("sourcePath")).put("to", replacementPath)
+        return JSONObject()
+            .put("errors", JSONArray())
+            .put("data", recoveryValidationJson(draft, health, issues, health == "healthy" || health == "degraded", replacementPath, pathChange))
+    }
+
+    private fun recoveryValidationJson(
+        draft: JSONObject,
+        health: String,
+        issues: JSONArray,
+        commitAllowed: Boolean,
+        replacementPath: String,
+        pathChange: JSONObject?
+    ): JSONObject = JSONObject()
+        .put("sourceRevision", draft.optString("sourceRevision"))
+        .put("draftRevision", draft.optInt("draftRevision"))
+        .put("health", health)
+        .put("issues", issues)
+        .put("commitAllowed", commitAllowed)
+        .put("replacementPath", replacementPath)
+        .put("replacementContent", JSONObject.NULL)
+        .put("changeSummary", JSONArray().put("replacement candidate generated"))
+        .put("pathChange", pathChange ?: JSONObject.NULL)
+
+    private fun unresolvedRecoveryIssues(fields: JSONArray): JSONArray {
+        val issues = JSONArray()
+        for (index in 0 until fields.length()) {
+            val field = fields.optJSONObject(index) ?: continue
+            if (field.optString("state") == "unresolved") {
+                issues.put(JSONObject()
+                    .put("code", "RECOVERY_FIELD_UNRESOLVED")
+                    .put("severity", "broken")
+                    .put("message", "Recovery field is unresolved.")
+                    .put("location", JSONObject()
+                        .put("line", JSONObject.NULL)
+                        .put("recordId", JSONObject.NULL)
+                        .put("sessionId", JSONObject.NULL)
+                        .put("fieldPath", field.optString("fieldPath")))
+                    .put("details", JSONObject.NULL))
+            }
+        }
+        return issues
+    }
+
+    private fun duplicateRecoveryIssues(
+        candidateFile: RuntimeSourceFile,
+        otherWorkoutFiles: List<RuntimeSourceFile>,
+        machineMaster: MasterDocument,
+        gymMaster: MasterDocument
+    ): JSONArray {
+        val candidate = buildRuntimeDataPayload(listOf(candidateFile), machineMaster, gymMaster)
+        val others = buildRuntimeDataPayload(otherWorkoutFiles, machineMaster, gymMaster)
+        val otherSessionIds = linkedSetOf<String>()
+        val otherSessions = JSONObject(others.payload ?: "{}").optJSONObject("data")?.optJSONArray("sessions") ?: JSONArray()
+        for (index in 0 until otherSessions.length()) {
+            val sessionId = otherSessions.optJSONObject(index)?.optString("session_id").orEmpty()
+            if (sessionId.isNotBlank()) otherSessionIds.add(sessionId)
+        }
+
+        val issues = JSONArray()
+        val candidateSessions = JSONObject(candidate.payload ?: "{}").optJSONObject("data")?.optJSONArray("sessions") ?: JSONArray()
+        for (index in 0 until candidateSessions.length()) {
+            val sessionId = candidateSessions.optJSONObject(index)?.optString("session_id").orEmpty()
+            if (otherSessionIds.contains(sessionId)) {
+                issues.put(JSONObject()
+                    .put("code", "RECOVERY_DUPLICATE_SESSION_ID")
+                    .put("severity", "broken")
+                    .put("message", "Duplicate session_id: $sessionId.")
+                    .put("location", JSONObject()
+                        .put("line", JSONObject.NULL)
+                        .put("recordId", JSONObject.NULL)
+                        .put("sessionId", sessionId)
+                        .put("fieldPath", "/session_id"))
+                    .put("details", JSONObject.NULL))
+            }
+        }
+        return issues
+    }
+
+    private fun buildRecoveryCandidateContent(draft: JSONObject): String {
+        val fields = draft.optJSONArray("fields") ?: JSONArray()
+        val confirmed = mutableListOf<JSONObject>()
+        for (index in 0 until fields.length()) {
+            val field = fields.optJSONObject(index) ?: continue
+            if ((field.optString("state") == "recovered" || field.optString("state") == "confirmed") && field.has("value")) {
+                confirmed.add(field)
+            }
+        }
+        val sessionIndexes = confirmed.mapNotNull { field ->
+            Regex("""^/sessions/([^/]+)/""").find(field.optString("fieldPath"))?.groupValues?.get(1)
+        }.distinct().sortedBy { it.toIntOrNull() ?: Int.MAX_VALUE }
+
+        return if (sessionIndexes.isNotEmpty()) {
+            sessionIndexes.joinToString("\n") { index ->
+                buildRecoveryObject(confirmed.filter { it.optString("fieldPath").startsWith("/sessions/$index/") }, "/sessions/$index").toString()
+            } + "\n"
+        } else {
+            buildRecoveryObject(confirmed, "").toString(2) + "\n"
+        }
+    }
+
+    private fun buildRecoveryObject(fields: List<JSONObject>, prefix: String): JSONObject {
+        val values = mutableMapOf<String, Any?>()
+        val result = JSONObject()
+        fields.sortedBy { it.optString("fieldPath") }.forEach { field ->
+            val path = field.optString("fieldPath")
+            val key = if (prefix.isEmpty()) path.trimStart('/') else path.removePrefix("$prefix/")
+            if (key.isNotBlank() && !key.contains('/')) {
+                values[key] = field.opt("value")
+            }
+        }
+        androidRecoveryWorkoutFieldOrder.forEach { key ->
+            if (values.containsKey(key)) result.put(key, values.remove(key))
+        }
+        values.keys.sorted().forEach { key -> result.put(key, values[key]) }
+        return result
+    }
+
+    private fun determineReplacementPath(sourcePath: String, candidateContent: String): String {
+        if (!sourcePath.endsWith(".json", ignoreCase = true) || sourcePath.endsWith(".jsonl", ignoreCase = true)) return sourcePath
+        return runCatching {
+            val date = JSONObject(candidateContent).optString("date").trim()
+            if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(date)) return sourcePath
+            val normalized = sourcePath.replace('\\', '/')
+            val fileName = normalized.substringAfterLast('/')
+            val rewrittenFile = Regex("""\d{4}-\d{2}-\d{2}""").replace(fileName, date)
+            if (rewrittenFile == fileName) return sourcePath
+            val segments = normalized.substringBeforeLast('/', "").split('/').filter { it.isNotBlank() }.toMutableList()
+            if (segments.size >= 2 && Regex("""^\d{4}$""").matches(segments[segments.size - 2]) && Regex("""^\d{2}$""").matches(segments.last())) {
+                segments[segments.size - 2] = date.substring(0, 4)
+                segments[segments.size - 1] = date.substring(5, 7)
+            }
+            val directory = segments.joinToString("/")
+            if (directory.isBlank()) rewrittenFile else "$directory/$rewrittenFile"
+        }.getOrDefault(sourcePath)
+    }
+
+    private fun resourceIssuesFromErrors(errors: JSONArray): JSONArray {
+        val issues = JSONArray()
+        for (index in 0 until errors.length()) {
+            val error = errors.optJSONObject(index) ?: continue
+            issues.put(JSONObject()
+                .put("code", error.optString("code"))
+                .put("severity", "broken")
+                .put("message", error.optString("message"))
+                .put("location", JSONObject.NULL)
+                .put("details", JSONObject.NULL))
+        }
+        return issues
+    }
+
+    private fun resourceIssuesFromWarnings(warnings: JSONArray): JSONArray {
+        val issues = JSONArray()
+        for (index in 0 until warnings.length()) {
+            val warning = warnings.optJSONObject(index) ?: continue
+            issues.put(JSONObject()
+                .put("code", warning.optString("code"))
+                .put("severity", "warning")
+                .put("message", warning.optString("message"))
+                .put("location", JSONObject()
+                    .put("line", if (warning.isNull("line")) JSONObject.NULL else warning.optInt("line"))
+                    .put("recordId", JSONObject.NULL)
+                    .put("sessionId", warning.optString("sessionId").takeIf { it.isNotBlank() } ?: JSONObject.NULL)
+                    .put("fieldPath", JSONObject.NULL))
+                .put("details", JSONObject()
+                    .put("referenceKind", warning.optString("referenceKind"))
+                    .put("resolutionState", warning.optString("resolutionState"))
+                    .put("originalId", warning.optString("originalId"))
+                    .put("resolvedId", if (warning.isNull("resolvedId")) JSONObject.NULL else warning.optString("resolvedId"))))
+        }
+        return issues
+    }
+
+    private fun hasSeverity(issues: JSONArray, severity: String): Boolean {
+        for (index in 0 until issues.length()) {
+            if (issues.optJSONObject(index)?.optString("severity") == severity) return true
+        }
+        return false
+    }
+
+    private fun recoveryCapabilitiesJson(eligible: Boolean): JSONObject = JSONObject()
+        .put("sourceView", true)
+        .put("draft", eligible)
+        .put("validate", eligible)
+        .put("commit", eligible)
+
+    private fun deleteRecoveryDraft(resourceType: String, sourcePath: String, currentSourceRevision: String) {
+        val draft = JSONObject()
+            .put("resourceType", resourceType)
+            .put("sourcePath", sourcePath)
+            .put("sourceRevision", currentSourceRevision)
+        val path = File(recoveryDraftDirectory, recoveryDraftFileName(draft))
+        if (path.exists()) path.delete()
+    }
+
+    private fun recoveryResourceKey(configuration: JSONObject, resourceType: String, sourcePath: String, sourceRevision: String): String {
+        val repository = configuration.getJSONObject("repository")
+        val key = listOf(
+            repository.optString("owner"),
+            repository.optString("repository"),
+            repository.optString("ref"),
+            repository.optString("rootPath"),
+            resourceType,
+            sourcePath,
+            sourceRevision
+        ).joinToString("|")
+        return Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(key.toByteArray(StandardCharsets.UTF_8)), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    private fun sourceRevision(source: RuntimeSourceFile): String = source.revision ?: contentRevision(source.content)
+
+    private fun recoveryStatusCode(code: String): Int = when (code) {
+        "RECOVERY_RESOURCE_NOT_FOUND" -> 404
+        "RECOVERY_SOURCE_VIEW_TOO_LARGE" -> 413
+        "RECOVERY_RESOURCE_NOT_BROKEN",
+        "RECOVERY_DRAFT_REQUIRED",
+        "RECOVERY_DRAFT_CONFLICT",
+        "RECOVERY_DRAFT_STALE",
+        "RECOVERY_DRAFT_INCOMPATIBLE",
+        "RECOVERY_DRAFT_CORRUPTED",
+        "RECOVERY_VALIDATION_FAILED",
+        "RECOVERY_WRITE_CONFLICT" -> 409
+        "RECOVERY_UNAVAILABLE",
+        "RECOVERY_WRITE_FAILED",
+        "RECOVERY_REFLECTION_FAILED" -> 503
+        "CONFIG_REQUIRED",
+        "CONFIG_INVALID" -> 400
+        "GITHUB_UNAUTHORIZED" -> 401
+        "GITHUB_FORBIDDEN" -> 403
+        "GITHUB_RESOURCE_NOT_FOUND" -> 404
+        "GITHUB_RATE_LIMIT" -> 429
+        "GITHUB_TIMEOUT",
+        "GITHUB_CONNECTION_FAILED",
+        "GITHUB_SERVER_ERROR" -> 503
+        else -> 500
+    }
+
+
+    private fun createWorkoutRecoveryDraft(source: RuntimeSourceFile, broken: Boolean): JSONObject {
+        val sourceRevision = source.revision ?: contentRevision(source.content)
+        val existing = loadRecoveryDraft("WORKOUT", source.path, sourceRevision)
+        if (existing.optString("state") == "active") return existing
+        if (!broken) {
+            return JSONObject()
+                .put("state", "none")
+                .put("draft", JSONObject.NULL)
+                .put("errors", errorsArray("RECOVERY_RESOURCE_NOT_BROKEN", "Recovery Draft requires a Broken Resource."))
+        }
+
+        val draft = JSONObject()
+            .put("schemaVersion", 1)
+            .put("sourcePath", source.path)
+            .put("sourceRevision", sourceRevision)
+            .put("resourceType", "WORKOUT")
+            .put("inspectionVersion", 1)
+            .put("draftRevision", 1)
+            .put("fields", extractWorkoutRecoveryFields(source.path, source.content))
+            .put("suggestions", JSONArray())
+        val errors = saveRecoveryDraft(draft)
+        return JSONObject()
+            .put("state", if (errors.length() == 0) "active" else "none")
+            .put("draft", if (errors.length() == 0) draft else JSONObject.NULL)
+            .put("errors", errors)
+    }
+
+    private fun loadRecoveryDraft(resourceType: String, sourcePath: String, currentSourceRevision: String): JSONObject {
+        if (!recoveryDraftDirectory.exists()) {
+            return JSONObject().put("state", "none").put("draft", JSONObject.NULL)
+        }
+
+        return try {
+            recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
+                ?.sortedBy { it.name }
+                ?.forEach { file ->
+                    val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
+                    val draft = envelope.optJSONObject("draft") ?: return JSONObject().put("state", "corrupted").put("draft", JSONObject.NULL)
+                    if (draft.optString("resourceType") == resourceType && draft.optString("sourcePath") == sourcePath) {
+                        val state = when {
+                            draft.optInt("schemaVersion", -1) != 1 -> "incompatible"
+                            draft.optString("sourceRevision") != currentSourceRevision -> "stale"
+                            else -> "active"
+                        }
+                        return JSONObject().put("state", state).put("draft", draft)
+                    }
+                }
+            JSONObject().put("state", "none").put("draft", JSONObject.NULL)
+        } catch (_: Exception) {
+            JSONObject().put("state", "corrupted").put("draft", JSONObject.NULL)
+        }
+    }
+
+    private fun findRecoveryDraftByResourceKey(configuration: JSONObject, resourceKey: String): JSONObject? {
+        if (!recoveryDraftDirectory.exists()) {
+            return null
+        }
+
+        return try {
+            recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
+                ?.sortedBy { it.name }
+                ?.forEach { file ->
+                    val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
+                    val draft = envelope.optJSONObject("draft") ?: return null
+                    if (draft.optInt("schemaVersion", -1) == 1 &&
+                        draft.optString("resourceType") == "WORKOUT" &&
+                        recoveryResourceKey(configuration, draft.optString("resourceType"), draft.optString("sourcePath"), draft.optString("sourceRevision")) == resourceKey) {
+                        return draft
+                    }
+                }
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun saveRecoveryDraft(draft: JSONObject): JSONArray {
+        return try {
+            recoveryDraftDirectory.mkdirs()
+            recoveryTemporaryDirectory.mkdirs()
+            val path = File(recoveryDraftDirectory, recoveryDraftFileName(draft))
+            val temporary = File(recoveryTemporaryDirectory, path.name + ".tmp")
+            temporary.writeText(JSONObject().put("draft", draft).toString(2), StandardCharsets.UTF_8)
+            if (!temporary.renameTo(path)) throw IllegalStateException("Recovery Draft could not be replaced.")
+            JSONArray()
+        } catch (_: Exception) {
+            errorsArray("RECOVERY_DRAFT_SAVE_FAILED", "Recovery Draft could not be saved.")
+        }
+    }
+
+    private fun recoveryDraftFileName(draft: JSONObject): String {
+        val key = listOf(
+            draft.optString("resourceType"),
+            draft.optString("sourcePath"),
+            draft.optString("sourceRevision")
+        ).joinToString("|")
+        return sha256Hex(key) + ".json"
+    }
+
+    private fun extractWorkoutRecoveryFields(path: String, content: String): JSONArray {
+        val lines = content.split("\r\n", "\n").withIndex().filter { it.value.isNotBlank() }
+        if (path.endsWith(".jsonl", ignoreCase = true)) {
+            val fields = JSONArray()
+            lines.forEach { line ->
+                appendJsonArray(fields, extractWorkoutObjectFields(runCatching { JSONObject(line.value) }.getOrNull(), "/sessions/${line.index}"))
+            }
+            return fields
+        }
+        return extractWorkoutObjectFields(runCatching { JSONObject(content) }.getOrNull(), "")
+    }
+
+    private fun extractWorkoutObjectFields(source: JSONObject?, prefix: String): JSONArray {
+        if (source == null) return unresolvedWorkoutFields(prefix)
+        return JSONArray()
+            .put(recoverableField(source, "${prefix}/schema_version", "schema_version", "number"))
+            .put(recoverableField(source, "${prefix}/session_id", "session_id", "string"))
+            .put(recoverableField(source, "${prefix}/date", "date", "string"))
+            .put(recoverableField(source, "${prefix}/status", "status", "string"))
+            .put(recoverableField(source, "${prefix}/gym_id", "gym_id", "string"))
+            .put(recoverableField(source, "${prefix}/condition", "condition", "object", optional = true))
+            .put(recoverableField(source, "${prefix}/machines", "machines", "array"))
+            .put(recoverableField(source, "${prefix}/notes", "notes", "array", optional = true))
+    }
+
+    private fun unresolvedWorkoutFields(prefix: String): JSONArray {
+        val fields = JSONArray()
+        listOf("/schema_version", "/session_id", "/date", "/status", "/gym_id", "/machines")
+            .forEach { fields.put(JSONObject().put("fieldPath", prefix + it).put("state", "unresolved").put("source", "original")) }
+        listOf("/condition", "/notes")
+            .forEach { fields.put(JSONObject().put("fieldPath", prefix + it).put("state", "recovered").put("source", "original")) }
+        return fields
+    }
+
+    private fun recoverableField(source: JSONObject, fieldPath: String, key: String, type: String, optional: Boolean = false): JSONObject {
+        if (!source.has(key)) {
+            return if (optional) {
+                JSONObject().put("fieldPath", fieldPath).put("state", "recovered").put("source", "original")
+            } else {
+                JSONObject().put("fieldPath", fieldPath).put("state", "unresolved").put("source", "original")
+            }
+        }
+        val value = source.opt(key)
+        val matches = when (type) {
+            "string" -> value is String
+            "number" -> value is Number
+            "object" -> value == JSONObject.NULL || value is JSONObject
+            "array" -> value is JSONArray
+            else -> false
+        }
+        return if (matches) {
+            JSONObject().put("fieldPath", fieldPath).put("state", "recovered").put("source", "original").put("value", value)
+        } else {
+            JSONObject().put("fieldPath", fieldPath).put("state", "unresolved").put("source", "original")
+        }
+    }
+
     private fun failedSync(errors: JSONArray): SyncResponse {
         githubComponentStatus = "degraded"
         if (latestRemoteRetrieval == "unknown") latestRemoteRetrieval = "succeeded"
@@ -1259,8 +2295,8 @@ class AndroidLocalhostServer(
         // All write-like operations share one gate because configuration, credential, and sync can
         // affect the same Status API state observed by Portal.
         if (shutdownStatus == "running" && name != "shutdown") return@synchronized false
-        if (name in setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate")) {
-            if (startupSyncStatus == "running" || manualSyncStatus == "running" || configurationUpdateStatus == "running" || credentialUpdateStatus == "running") {
+        if (name in setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate", "recoveryCommit")) {
+            if (startupSyncStatus == "running" || manualSyncStatus == "running" || configurationUpdateStatus == "running" || credentialUpdateStatus == "running" || recoveryCommitRunning) {
                 return@synchronized false
             }
         }
@@ -1281,6 +2317,10 @@ class AndroidLocalhostServer(
                 if (credentialUpdateStatus == "running") return@synchronized false
                 credentialUpdateStatus = "running"
             }
+            "recoveryCommit" -> {
+                if (recoveryCommitRunning) return@synchronized false
+                recoveryCommitRunning = true
+            }
             "shutdown" -> {
                 if (shutdownStatus == "running") return@synchronized false
                 shutdownStatus = "running"
@@ -1297,11 +2337,20 @@ class AndroidLocalhostServer(
             "manualSync" -> manualSyncStatus = status
             "configurationUpdate" -> configurationUpdateStatus = status
             "credentialUpdate" -> credentialUpdateStatus = status
+            "recoveryCommit" -> recoveryCommitRunning = false
             "shutdown" -> shutdownStatus = status
         }
     }
 
-    private fun runtimeDataStatus(): String = if (runtimeDataFile.exists()) "available" else "unavailable"
+    private fun runtimeDataStatus(): String {
+        if (!runtimeDataFile.exists()) return "unavailable"
+        return if (runtimeDataHasRetainedErrors()) "degraded" else "available"
+    }
+
+    private fun runtimeDataHasRetainedErrors(): Boolean = runCatching {
+        val runtimeData = JSONObject(runtimeDataFile.readText(StandardCharsets.UTF_8))
+        (runtimeData.optJSONArray("errors")?.length() ?: 0) > 0
+    }.getOrDefault(false)
 
     private fun githubStatus(): String = githubComponentStatus
 
@@ -1329,20 +2378,28 @@ class AndroidLocalhostServer(
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
+            val resourceSessions = JSONArray()
+            val resourceErrors = JSONArray()
+            val resourceWarnings = JSONArray()
             if (file.path.endsWith(".jsonl", ignoreCase = true)) {
                 file.content.split("\r\n", "\n").forEachIndexed { index, line ->
-                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, errors, warnings)?.let(sessions::put)
+                    if (line.isNotBlank()) buildSession(file.path, index + 1, line, machines, gyms, resourceErrors, resourceWarnings)?.let(resourceSessions::put)
                 }
             } else if (file.path.endsWith(".json", ignoreCase = true)) {
-                buildSession(file.path, null, file.content, machines, gyms, errors, warnings)?.let(sessions::put)
+                buildSession(file.path, null, file.content, machines, gyms, resourceErrors, resourceWarnings)?.let(resourceSessions::put)
+            }
+
+            if (resourceErrors.length() > 0) {
+                appendJsonArray(errors, resourceErrors)
+            } else {
+                appendJsonArray(sessions, resourceSessions)
+                appendJsonArray(warnings, resourceWarnings)
             }
         }
 
-        if (errors.length() > 0) return RuntimeBuildResult(null, errors, warnings)
-
         val payload = JSONObject()
             .put("success", true)
-            .put("errors", JSONArray())
+            .put("errors", errors)
             .put("warnings", warnings)
             .put("data", JSONObject().put("sessions", sessions))
             .put("masterDocuments", JSONObject()
@@ -1350,6 +2407,12 @@ class AndroidLocalhostServer(
                 .put("gym", masterDocumentJson(gymMaster)))
             .toString(2)
         return RuntimeBuildResult(payload, errors, warnings)
+    }
+
+    private fun appendJsonArray(target: JSONArray, source: JSONArray) {
+        for (index in 0 until source.length()) {
+            target.put(source.get(index))
+        }
     }
 
     private fun fetchConfiguredWorkoutResources(configuration: JSONObject): List<RuntimeSourceFile> {
@@ -1731,8 +2794,12 @@ class AndroidLocalhostServer(
         token: String?,
         timeoutSec: Int
     ): RuntimeSourceFile {
-        val url = "https://raw.githubusercontent.com/${urlPath(owner)}/${urlPath(repo)}/${urlPath(ref)}/${escapeRemotePath(path)}"
-        return RuntimeSourceFile(path, httpGet(url, token, timeoutSec, path))
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
+        val response = JSONObject(httpGet(url, token, timeoutSec, path))
+        val encoded = response.optString("content").replace("\\s".toRegex(), "")
+        if (encoded.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub contents response is invalid.")
+        val content = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
+        return RuntimeSourceFile(path, content, contentRevision(content))
     }
 
     private fun httpGet(url: String, token: String?, timeoutSec: Int, pathForError: String): String {
@@ -1753,6 +2820,31 @@ class AndroidLocalhostServer(
         }
     }
 
+    private fun postGithubGraphql(configuration: JSONObject, payload: String): JSONObject {
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/graphql"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            doOutput = true
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            setRequestProperty("Content-Type", "application/json")
+            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        return try {
+            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                throw mapGithubError(status, "graphql")
+            }
+            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            JSONObject(response)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun combineRemote(rootPath: String, path: String): String =
         listOf(rootPath, path)
             .map { it.trim().trim('/') }
@@ -1764,8 +2856,34 @@ class AndroidLocalhostServer(
 
     private fun urlPath(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
+    private fun contentRevision(content: String): String = "content-sha256-${sha256Hex(content)}"
+
+    private fun sha256Hex(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     private fun isJsonRuntimePath(path: String): Boolean =
         path.endsWith(".json", ignoreCase = true) || path.endsWith(".jsonl", ignoreCase = true)
+
+    private fun isAllowedRecoveryWorkoutPath(configuration: JSONObject, path: String): Boolean {
+        val normalized = path.replace('\\', '/').trim('/')
+        if (!isJsonRuntimePath(normalized)) return false
+        val repository = configuration.getJSONObject("repository")
+        val resources = configuration.getJSONArray("resources")
+        for (index in 0 until resources.length()) {
+            val resource = resources.getJSONObject(index)
+            if (resource.optString("type") != "WORKOUT") continue
+            val fullPath = combineRemote(repository.optString("rootPath"), resource.optString("path")).trim('/')
+            if (resource.optString("resourceKind", "file") == "directory") {
+                val prefix = fullPath.trimEnd('/') + "/"
+                if (normalized.startsWith(prefix)) return true
+            } else if (normalized == fullPath) {
+                return true
+            }
+        }
+        return false
+    }
 
     private fun mapGithubError(status: Int, path: String): AfException = when (status) {
         401 -> AfException("GITHUB_UNAUTHORIZED", "GitHub token is unauthorized.")
@@ -1799,11 +2917,11 @@ class AndroidLocalhostServer(
         }
     """.trimIndent()
 
-    private fun responseJson(success: Boolean, dataJson: String, errors: JSONArray): String = """
+    private fun responseJson(success: Boolean, dataJson: String, errors: JSONArray, warnings: JSONArray = JSONArray()): String = """
         {
           "success": $success,
           "errors": ${errors.toString()},
-          "warnings": [],
+          "warnings": ${warnings.toString()},
           "data": $dataJson
         }
     """.trimIndent()

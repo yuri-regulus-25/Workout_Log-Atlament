@@ -117,6 +117,55 @@ public sealed class AfHttpHost : IAsyncDisposable
             var result = await _application.WriteMasterDocumentAsync(type, update, context.RequestAborted);
             return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
         });
+        app.MapGet($"{prefix}/recovery/resources", async (HttpContext context) =>
+        {
+            var result = await _application.ListRecoveryResourcesAsync(context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapGet($"{prefix}/recovery/resources/{{resourceKey}}", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.GetRecoveryResourceAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapGet($"{prefix}/recovery/resources/{{resourceKey}}/source", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.GetRecoverySourceAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapGet($"{prefix}/recovery/resources/{{resourceKey}}/draft", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.GetRecoveryDraftAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPost($"{prefix}/recovery/resources/{{resourceKey}}/draft", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.CreateRecoveryDraftAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPut($"{prefix}/recovery/resources/{{resourceKey}}/draft", async (string resourceKey, HttpContext context) =>
+        {
+            var update = await context.Request.ReadFromJsonAsync<RecoveryDraftUpdate>(AfJson.Options, context.RequestAborted)
+                ?? new RecoveryDraftUpdate(null, Array.Empty<System.Text.Json.Nodes.JsonObject>());
+            var result = await _application.UpdateRecoveryDraftAsync(resourceKey, update, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapDelete($"{prefix}/recovery/resources/{{resourceKey}}/draft", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.DeleteRecoveryDraftAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPost($"{prefix}/recovery/resources/{{resourceKey}}/validate", async (string resourceKey, HttpContext context) =>
+        {
+            var result = await _application.ValidateRecoveryDraftAsync(resourceKey, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPost($"{prefix}/recovery/resources/{{resourceKey}}/commit", async (string resourceKey, HttpContext context) =>
+        {
+            var request = await context.Request.ReadFromJsonAsync<RecoveryCommitRequest>(AfJson.Options, context.RequestAborted)
+                ?? new RecoveryCommitRequest(null, null);
+            var result = await _application.CommitRecoveryDraftAsync(resourceKey, request, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
         app.MapPost($"{prefix}/credential", async (HttpContext context) =>
         {
             var update = await context.Request.ReadFromJsonAsync<CredentialUpdate>(AfJson.Options, context.RequestAborted)
