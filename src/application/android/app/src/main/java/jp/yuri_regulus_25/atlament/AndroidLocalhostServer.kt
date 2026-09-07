@@ -1,10 +1,7 @@
 package jp.yuri_regulus_25.atlament
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.database.sqlite.SQLiteDatabase
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.io.BufferedInputStream
 import java.io.BufferedReader
@@ -23,16 +20,11 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
-import java.security.KeyStore
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -61,11 +53,7 @@ class AndroidLocalhostServer(
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
     private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
-    private val credentialPreferences: SharedPreferences = context.getSharedPreferences("atlament_secure_credential", Context.MODE_PRIVATE)
-    private val credentialKeyAlias = "atlament_github_token"
-    private val credentialCiphertextKey = "github_token_ciphertext"
-    private val credentialIvKey = "github_token_iv"
-    private val credentialLimitDateKey = "github_token_limit_date"
+    private val credentialStore = AndroidCredentialStore(context)
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
     private val recoveryDraftDirectory = File(context.filesDir, "recovery/drafts")
     private val recoveryTemporaryDirectory = File(context.filesDir, "recovery/temporary")
@@ -179,7 +167,7 @@ class AndroidLocalhostServer(
         when {
             method == "GET" && route == "/status" -> sendJson(output, 200, statusJson())
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
-            method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStatusJson()))
+            method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStore.statusJson()))
             method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
             method == "GET" && route == "/master-write/unresolved" -> sendUnresolvedMasterReferences(output)
             method == "GET" && route.startsWith("/master-write/documents/") -> sendMasterDocument(output, route.substringAfterLast('/'))
@@ -297,7 +285,7 @@ class AndroidLocalhostServer(
             },
             "components": {
               "configuration": "${configurationStatus()}",
-              "credential": "${credentialComponentStatus()}",
+              "credential": "${credentialStore.componentStatus()}",
               "github": "${githubStatus()}",
               "runtimeData": "${runtimeDataStatus()}",
               "hosting": ${hostingStatusJson()}
@@ -397,7 +385,7 @@ class AndroidLocalhostServer(
         val requiredActions = requiredActionNames().sorted()
         val unavailableComponents = mutableListOf<String>()
         if (configurationStatus() == "unavailable") unavailableComponents.add("configuration")
-        if (credentialComponentStatus() == "unavailable") unavailableComponents.add("credential")
+        if (credentialStore.componentStatus() == "unavailable") unavailableComponents.add("credential")
         if (runtimeDataStatus() == "unavailable") unavailableComponents.add("runtimeData")
         val degradedComponents = mutableListOf<String>()
         if (githubStatus() == "degraded") degradedComponents.add("github")
@@ -423,7 +411,7 @@ class AndroidLocalhostServer(
     private fun requiredActionNames(): List<String> {
         val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
         if (runtimeDataFile.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
-        if (!hasEncryptedCredential()) actions.add(0, "CREDENTIAL_REQUIRED")
+        if (credentialStore.state() == "missing") actions.add(0, "CREDENTIAL_REQUIRED")
         if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
         return actions
     }
@@ -461,7 +449,7 @@ class AndroidLocalhostServer(
         }
         val allTargetsConfigured = configuredTargetKeys.contains("MACHINE_MASTER:master/machines.json") &&
             configuredTargetKeys.contains("GYM_MASTER:master/gyms.json")
-        val credential = JSONObject(credentialStatusJson())
+        val credential = JSONObject(credentialStore.statusJson())
         val credentialState = credential.optString("state", "unknown")
         val writeEnabled = configurationStatus() == "available" &&
             credential.optBoolean("configured", false) &&
@@ -605,7 +593,7 @@ class AndroidLocalhostServer(
         if (configurationStatus() != "available") {
             return Pair(SyncResponse(400, failJson("CONFIG_REQUIRED", "Configuration is required."), false), null)
         }
-        if (credentialState() != "available" || readCredentialToken().isNullOrBlank()) {
+        if (credentialStore.state() != "available" || credentialStore.readToken().isNullOrBlank()) {
             return Pair(SyncResponse(401, failJson("CREDENTIAL_REQUIRED", "Credential is required."), false), null)
         }
         return Pair(null, JSONObject(loadConfigurationJson()))
@@ -681,7 +669,7 @@ class AndroidLocalhostServer(
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/contents/${escapeRemotePath(path)}?ref=${urlPath(ref)}"
-        val response = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, path))
+        val response = JSONObject(httpGet(url, credentialStore.readToken(), timeoutSec, path))
         val revision = response.optString("sha").trim()
         val encoded = response.optString("content").replace("\\s".toRegex(), "")
         if (revision.isBlank() || encoded.isBlank()) {
@@ -711,7 +699,7 @@ class AndroidLocalhostServer(
             doOutput = true
             setRequestProperty("User-Agent", "Atlament-Android-AF")
             setRequestProperty("Content-Type", "application/json")
-            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
         return try {
             connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
@@ -1309,7 +1297,7 @@ class AndroidLocalhostServer(
             doOutput = true
             setRequestProperty("User-Agent", "Atlament-Android-AF")
             setRequestProperty("Content-Type", "application/json")
-            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
         return try {
             connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
@@ -1359,7 +1347,7 @@ class AndroidLocalhostServer(
         val ref = androidNormalizeGitBranchRef(repository.optString("ref", "main"))
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/git/ref/${escapeRemotePath(ref)}"
-        val sha = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, ref)).optJSONObject("object")?.optString("sha").orEmpty().trim()
+        val sha = JSONObject(httpGet(url, credentialStore.readToken(), timeoutSec, ref)).optJSONObject("object")?.optString("sha").orEmpty().trim()
         if (sha.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub ref response is invalid.")
         return sha
     }
@@ -1513,29 +1501,6 @@ class AndroidLocalhostServer(
         }
     """.trimIndent()
 
-    private fun credentialStatusJson(): String = credentialStatusJsonFor(credentialState())
-
-    private fun credentialUpdateResultJson(updateJson: String): String {
-        val currentToken = readCredentialToken()
-        val update = if (updateJson.isBlank()) JSONObject() else JSONObject(updateJson)
-        val token = update.optString("token", "").trim().ifEmpty { currentToken }
-        val limitDate = if (update.has("limitDate") && !update.isNull("limitDate")) {
-            update.optString("limitDate", "").trim().ifEmpty { null }
-        } else {
-            null
-        }
-
-        if (!limitDate.isNullOrBlank() && runCatching { LocalDate.parse(limitDate) }.isFailure) {
-            return credentialStatusJsonFor("invalid", configured = hasEncryptedCredential(), limitDate = limitDate)
-        }
-        if (token.isNullOrBlank()) {
-            return credentialStatusJson()
-        }
-
-        writeCredentialToken(token, limitDate)
-        return credentialStatusJsonFor(credentialState(), configured = true, limitDate = limitDate)
-    }
-
     private fun sendCredentialUpdate(output: OutputStream, updateJson: String) {
         val response = credentialUpdateResponse(updateJson)
         sendJson(output, response.status, response.body)
@@ -1548,7 +1513,7 @@ class AndroidLocalhostServer(
 
         var success = false
         return try {
-            val data = credentialUpdateResultJson(updateJson)
+            val data = credentialStore.updateResultJson(updateJson)
             val state = JSONObject(data).optString("state")
             success = state != "invalid"
             if (success) {
@@ -1561,76 +1526,6 @@ class AndroidLocalhostServer(
         } finally {
             completeOperation("credentialUpdate", success)
         }
-    }
-
-    private fun credentialStatusJsonFor(
-        state: String,
-        configured: Boolean = hasEncryptedCredential(),
-        limitDate: String? = credentialPreferences.getString(credentialLimitDateKey, null)
-    ): String {
-        val limitDateJson = limitDate?.let { "\"$it\"" } ?: "null"
-        return """
-            {
-              "configured": $configured,
-              "state": "$state",
-              "limitDate": $limitDateJson
-            }
-        """.trimIndent()
-    }
-
-    private fun credentialComponentStatus(): String = if (credentialState() == "available") "available" else "unavailable"
-
-    private fun credentialState(): String {
-        if (!hasEncryptedCredential()) return "missing"
-        if (readCredentialToken().isNullOrBlank()) return "invalid"
-        val limitDate = credentialPreferences.getString(credentialLimitDateKey, null)
-        if (!limitDate.isNullOrBlank()) {
-            val parsed = runCatching { LocalDate.parse(limitDate) }.getOrNull() ?: return "invalid"
-            if (parsed < LocalDate.now()) return "expired"
-        }
-        return "available"
-    }
-
-    private fun hasEncryptedCredential(): Boolean =
-        !credentialPreferences.getString(credentialCiphertextKey, null).isNullOrBlank() &&
-            !credentialPreferences.getString(credentialIvKey, null).isNullOrBlank()
-
-    private fun readCredentialToken(): String? = runCatching {
-        val ciphertext = credentialPreferences.getString(credentialCiphertextKey, null) ?: return null
-        val iv = credentialPreferences.getString(credentialIvKey, null) ?: return null
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, getCredentialKey(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
-        String(cipher.doFinal(Base64.decode(ciphertext, Base64.NO_WRAP)), StandardCharsets.UTF_8)
-    }.getOrNull()
-
-    private fun writeCredentialToken(token: String, limitDate: String?) {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, getCredentialKey())
-        val encrypted = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
-        credentialPreferences.edit()
-            .putString(credentialCiphertextKey, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString(credentialIvKey, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .apply {
-                if (limitDate.isNullOrBlank()) remove(credentialLimitDateKey) else putString(credentialLimitDateKey, limitDate)
-            }
-            .apply()
-    }
-
-    private fun getCredentialKey(): SecretKey {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (keyStore.getEntry(credentialKeyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey?.let { return it }
-
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        val spec = KeyGenParameterSpec.Builder(
-            credentialKeyAlias,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
-            .build()
-        generator.init(spec)
-        return generator.generateKey()
     }
 
     private fun sendRuntimeWorkoutData(output: OutputStream) {
@@ -1669,7 +1564,7 @@ class AndroidLocalhostServer(
         if (!tryStartOperation("startup")) return
         requestExecutor.execute {
             try {
-                if (configurationStatus() != "available" || credentialState() != "available") {
+                if (configurationStatus() != "available" || credentialStore.state() != "available") {
                     writeLog("INFO", "Startup sync skipped because configuration or credential is unavailable.")
                     completeOperation("startup", true)
                     return@execute
@@ -2387,7 +2282,7 @@ class AndroidLocalhostServer(
         val repo = repository.optString("repository").trim()
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val token = readCredentialToken()
+        val token = credentialStore.readToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
         val resources = configuration.getJSONArray("resources")
 
@@ -2426,7 +2321,7 @@ class AndroidLocalhostServer(
         val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
 
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val token = readCredentialToken()
+        val token = credentialStore.readToken()
         val workoutFiles = mutableListOf<RuntimeSourceFile>()
         var machineMaster: RuntimeSourceFile? = null
         var gymMaster: RuntimeSourceFile? = null
@@ -2823,7 +2718,7 @@ class AndroidLocalhostServer(
             doOutput = true
             setRequestProperty("User-Agent", "Atlament-Android-AF")
             setRequestProperty("Content-Type", "application/json")
-            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+            credentialStore.readToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
         return try {
             connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
