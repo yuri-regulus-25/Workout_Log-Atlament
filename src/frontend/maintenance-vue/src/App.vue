@@ -8,7 +8,7 @@
           </div>
         </div>
         <h1 ref="pageHeading" tabindex="-1">Resource Management</h1>
-        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認しま</p>
+        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認します</p>
       </header>
 
       <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
