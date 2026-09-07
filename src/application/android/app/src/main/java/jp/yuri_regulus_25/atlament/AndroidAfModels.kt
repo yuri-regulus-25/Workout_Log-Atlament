@@ -6,6 +6,12 @@ internal data class RuntimeSourceFile(val path: String, val content: String, val
 
 internal data class RuntimeBuildResult(val payload: String?, val errors: JSONArray, val warnings: JSONArray)
 
+internal data class RuntimeFetchedResources(
+    val workoutFiles: List<RuntimeSourceFile>,
+    val machineMaster: RuntimeSourceFile?,
+    val gymMaster: RuntimeSourceFile?
+)
+
 internal data class MasterDocument(val type: String, val path: String, val revision: String, val content: String)
 
 internal data class GithubContent(val revision: String, val content: String)

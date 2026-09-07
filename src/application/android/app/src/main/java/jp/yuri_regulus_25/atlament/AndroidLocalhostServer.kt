@@ -28,16 +28,12 @@ class AndroidLocalhostServer(
     private val onShutdown: () -> Unit = {}
 ) : Closeable {
     private data class SyncResponse(val status: Int, val body: String, val success: Boolean)
-    private data class RuntimeFetchedResources(
-        val workoutFiles: List<RuntimeSourceFile>,
-        val machineMaster: RuntimeSourceFile?,
-        val gymMaster: RuntimeSourceFile?
-    )
     private data class RecoveryResource(val source: RuntimeSourceFile, val resourceKey: String, val inspection: JSONObject)
     private data class MasterWriteTarget(val type: String, val path: String)
     private val assetServer = AndroidAssetServer(context)
     private val runtimeDataBuilder = AndroidRuntimeDataBuilder()
     private val githubClient = AndroidGithubClient { credentialStore.readToken() }
+    private val configuredResourceFetcher = AndroidConfiguredResourceFetcher(githubClient, ::validateConfiguration)
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -477,7 +473,7 @@ class AndroidLocalhostServer(
 
             val savedRevision = githubClient.writeContentFile(configuration, fullPath, current.revision, nextContent, masterCommitMessage(target))
             val confirmedDocuments = replaceLocalMasterDocument(localDocuments, type, nextContent, savedRevision)
-            val workoutFiles = fetchConfiguredWorkoutResources(configuration)
+            val workoutFiles = configuredResourceFetcher.fetchWorkoutResources(configuration)
             val machineMaster = selectLocalMasterDocument(confirmedDocuments, "MACHINE_MASTER")
                 ?: return SyncResponse(409, failJson("MASTER_SYNC_REQUIRED", "Master data was saved remotely. Synchronize application data before continuing."), false)
             val gymMaster = selectLocalMasterDocument(confirmedDocuments, "GYM_MASTER")
@@ -839,7 +835,7 @@ class AndroidLocalhostServer(
 
     private fun checkRemoteConfiguration(configuration: JSONObject): JSONArray {
         return try {
-            fetchConfiguredResources(configuration)
+            configuredResourceFetcher.fetchAll(configuration)
             JSONArray()
         } catch (ex: AfException) {
             errorsArray(ex.code, ex.message)
@@ -1082,7 +1078,8 @@ class AndroidLocalhostServer(
 
             val replacementContent = buildRecoveryCandidateContent(draft)
             val replacementPath = validation.optString("replacementPath")
-            if (!isAllowedRecoveryWorkoutPath(configuration, resolved.source.path) || !isAllowedRecoveryWorkoutPath(configuration, replacementPath)) {
+            if (!configuredResourceFetcher.isAllowedRecoveryWorkoutPath(configuration, resolved.source.path) ||
+                !configuredResourceFetcher.isAllowedRecoveryWorkoutPath(configuration, replacementPath)) {
                 sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery path is outside the configured resource boundary."))
                 return
             }
@@ -1223,7 +1220,7 @@ class AndroidLocalhostServer(
     ): JSONObject {
         val committedConfiguration = JSONObject(configuration.toString())
         committedConfiguration.getJSONObject("repository").put("ref", commitRevision)
-        val fetched = fetchConfiguredResources(committedConfiguration)
+        val fetched = configuredResourceFetcher.fetchAll(committedConfiguration)
         val machine = fetched.machineMaster ?: return recoveryReflectionJson(false, JSONObject.NULL, errorsArray("RECOVERY_REFLECTION_FAILED", "Machine master resource is unavailable."), JSONArray())
         val gym = fetched.gymMaster ?: return recoveryReflectionJson(false, JSONObject.NULL, errorsArray("RECOVERY_REFLECTION_FAILED", "Gym master resource is unavailable."), JSONArray())
         val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
@@ -1383,7 +1380,7 @@ class AndroidLocalhostServer(
 
     private fun inspectWorkoutRecoveryResources(): List<RecoveryResource> {
         val configuration = JSONObject(loadConfigurationJson())
-        val fetched = fetchConfiguredResources(configuration)
+        val fetched = configuredResourceFetcher.fetchAll(configuration)
         val machine = fetched.machineMaster ?: throw AfException("RECOVERY_UNAVAILABLE", "Machine master resource is unavailable.")
         val gym = fetched.gymMaster ?: throw AfException("RECOVERY_UNAVAILABLE", "Gym master resource is unavailable.")
         val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
@@ -1460,7 +1457,7 @@ class AndroidLocalhostServer(
                 .put("data", recoveryValidationJson(draft, "broken", unresolved, false, draft.optString("sourcePath"), null))
         }
 
-        val fetched = fetchConfiguredResources(configuration)
+        val fetched = configuredResourceFetcher.fetchAll(configuration)
         val machine = fetched.machineMaster ?: return JSONObject().put("errors", errorsArray("RECOVERY_UNAVAILABLE", "Machine master resource is unavailable."))
         val gym = fetched.gymMaster ?: return JSONObject().put("errors", errorsArray("RECOVERY_UNAVAILABLE", "Gym master resource is unavailable."))
         val machineMaster = MasterDocument("MACHINE_MASTER", machine.path, sourceRevision(machine), machine.content)
@@ -1816,7 +1813,7 @@ class AndroidLocalhostServer(
         // Android mirrors the Windows runtime builder contract in-place so packaged APKs can sync
         // without a shared .NET runtime dependency.
         val configuration = JSONObject(loadConfigurationJson())
-        val workoutFiles = fetchConfiguredWorkoutResources(configuration)
+        val workoutFiles = configuredResourceFetcher.fetchWorkoutResources(configuration)
         val machineMaster = readMasterDocumentFromGithub(configuration, "MACHINE_MASTER")
         val gymMaster = readMasterDocumentFromGithub(configuration, "GYM_MASTER")
         return runtimeDataBuilder.buildRuntimeDataPayload(workoutFiles, machineMaster, gymMaster)
@@ -1826,91 +1823,6 @@ class AndroidLocalhostServer(
         for (index in 0 until source.length()) {
             target.put(source.get(index))
         }
-    }
-
-    private fun fetchConfiguredWorkoutResources(configuration: JSONObject): List<RuntimeSourceFile> {
-        val configurationErrors = validateConfiguration(configuration)
-        if (configurationErrors.length() > 0) {
-            throw AfException("CONFIG_INVALID", configurationErrors.getJSONObject(0).optString("message", "Configuration is invalid."))
-        }
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val workoutFiles = mutableListOf<RuntimeSourceFile>()
-        val resources = configuration.getJSONArray("resources")
-
-        for (index in 0 until resources.length()) {
-            val resource = resources.getJSONObject(index)
-            if (resource.optString("type") != "WORKOUT") continue
-            val resourcePath = resource.optString("path")
-            val kind = resource.optString("resourceKind", "file")
-            val required = resource.optBoolean("required", true)
-            val emptyAllowed = resource.optBoolean("emptyAllowed", false)
-            val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
-            val fetched = if (kind == "directory") {
-                githubClient.fetchDirectoryFiles(owner, repo, ref, fullPath, timeoutSec)
-            } else {
-                listOf(githubClient.fetchRawRuntimeFile(owner, repo, ref, fullPath, timeoutSec))
-            }
-
-            if (!emptyAllowed && fetched.isEmpty()) {
-                if (required) throw IllegalStateException("$resourcePath is empty.")
-                continue
-            }
-            workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
-        }
-
-        return workoutFiles
-    }
-
-    private fun fetchConfiguredResources(configuration: JSONObject): RuntimeFetchedResources {
-        val configurationErrors = validateConfiguration(configuration)
-        if (configurationErrors.length() > 0) {
-            throw AfException("CONFIG_INVALID", configurationErrors.getJSONObject(0).optString("message", "Configuration is invalid."))
-        }
-        val repository = configuration.getJSONObject("repository")
-        val owner = repository.optString("owner").trim()
-        val repo = repository.optString("repository").trim()
-        val ref = repository.optString("ref", "main").trim().ifEmpty { "main" }
-
-        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
-        val workoutFiles = mutableListOf<RuntimeSourceFile>()
-        var machineMaster: RuntimeSourceFile? = null
-        var gymMaster: RuntimeSourceFile? = null
-        val resources = configuration.getJSONArray("resources")
-
-        for (index in 0 until resources.length()) {
-            val resource = resources.getJSONObject(index)
-            val type = resource.optString("type")
-            val resourcePath = resource.optString("path")
-            val kind = resource.optString("resourceKind", "file")
-            val required = resource.optBoolean("required", true)
-            val emptyAllowed = resource.optBoolean("emptyAllowed", false)
-            val fullPath = combineRemote(repository.optString("rootPath"), resourcePath)
-            // Resource entries can point at files or directories. Directory mode expands to JSON
-            // files before type-specific master/workout classification.
-            val fetched = if (kind == "directory") {
-                githubClient.fetchDirectoryFiles(owner, repo, ref, fullPath, timeoutSec)
-            } else {
-                listOf(githubClient.fetchRawRuntimeFile(owner, repo, ref, fullPath, timeoutSec))
-            }
-
-            if (!emptyAllowed && fetched.isEmpty()) {
-                if (required) throw IllegalStateException("$resourcePath is empty.")
-                continue
-            }
-
-            when (type) {
-                "MACHINE_MASTER" -> machineMaster = fetched.firstOrNull()
-                "GYM_MASTER" -> gymMaster = fetched.firstOrNull()
-                "WORKOUT" -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
-                else -> workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) && it.path.contains("workouts/", ignoreCase = true) })
-            }
-        }
-
-        return RuntimeFetchedResources(workoutFiles, machineMaster, gymMaster)
     }
 
     private fun readStringList(array: JSONArray?): List<String> {
@@ -1935,28 +1847,6 @@ class AndroidLocalhostServer(
         MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-
-    private fun isJsonRuntimePath(path: String): Boolean =
-        path.endsWith(".json", ignoreCase = true) || path.endsWith(".jsonl", ignoreCase = true)
-
-    private fun isAllowedRecoveryWorkoutPath(configuration: JSONObject, path: String): Boolean {
-        val normalized = path.replace('\\', '/').trim('/')
-        if (!isJsonRuntimePath(normalized)) return false
-        val repository = configuration.getJSONObject("repository")
-        val resources = configuration.getJSONArray("resources")
-        for (index in 0 until resources.length()) {
-            val resource = resources.getJSONObject(index)
-            if (resource.optString("type") != "WORKOUT") continue
-            val fullPath = combineRemote(repository.optString("rootPath"), resource.optString("path")).trim('/')
-            if (resource.optString("resourceKind", "file") == "directory") {
-                val prefix = fullPath.trimEnd('/') + "/"
-                if (normalized.startsWith(prefix)) return true
-            } else if (normalized == fullPath) {
-                return true
-            }
-        }
-        return false
-    }
 
     private fun sendShutdown(output: OutputStream) {
         val already = shutdownRequested.getAndSet(true)
