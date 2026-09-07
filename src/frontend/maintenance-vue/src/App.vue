@@ -220,34 +220,26 @@ import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easte
 import { formatBodyPart } from '@workout-lab/workout-core'
 import RecoveryPanel from './RecoveryPanel.vue'
 import {
+  cloneRecordDraft,
+  cloneGymRecord,
+  cloneMachineRecord,
+  isGym,
+  isMachine,
+  isRecordDraft,
+  masterTypeLabel,
+  recordId,
+  toUserFacingMasterWriteError,
+  type GymRecord,
+  type MachineRecord,
+  type RecordDraft,
+} from './maintenance-master-records'
+import {
   getMasterDocument,
   getUnresolvedMasterReferences,
   updateMasterDocument,
   type MasterDocumentType,
   type UnresolvedMasterReference,
 } from '@workout-lab/frontend-common'
-
-type MachineRecord = {
-  machine_id: string
-  source_ids?: string[]
-  name: string
-  body_part: string
-  aliases: string[]
-  active: boolean
-  deleted: boolean
-}
-
-type GymRecord = {
-  gym_id: string
-  source_ids?: string[]
-  name: string
-  short_name?: string
-  active: boolean
-  deleted: boolean
-  main: boolean
-}
-
-type RecordDraft = MachineRecord | GymRecord
 
 const bodyPartValues = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'core', 'cardio', 'other']
 const bodyParts = bodyPartValues.map((bodyPart) => ({ title: formatBodyPart(bodyPart), value: bodyPart }))
@@ -434,21 +426,23 @@ function openCopy(record: RecordDraft) {
   dialogMode.value = 'create'
   originalDraftWasCopied.value = true
   if (isMachine(record)) {
-    machineDraft.value = cloneMachineRecord(record)
+    const draft = cloneMachineRecord(record)
+    draft.machine_id = ''
+    draft.source_ids = []
+    draft.active = true
+    draft.deleted = false
+    machineDraft.value = draft
     gymDraft.value = null
-    machineDraft.value.machine_id = ''
-    machineDraft.value.source_ids = []
-    machineDraft.value.active = true
-    machineDraft.value.deleted = false
-    aliasText.value = machineDraft.value.aliases.join(', ')
+    aliasText.value = draft.aliases.join(', ')
   } else {
-    gymDraft.value = cloneGymRecord(record)
+    const draft = cloneGymRecord(record)
+    draft.gym_id = ''
+    draft.source_ids = []
+    draft.active = true
+    draft.deleted = false
+    draft.main = false
+    gymDraft.value = draft
     machineDraft.value = null
-    gymDraft.value.gym_id = ''
-    gymDraft.value.source_ids = []
-    gymDraft.value.active = true
-    gymDraft.value.deleted = false
-    gymDraft.value.main = false
     aliasText.value = ''
   }
   originalDraft.value = JSON.stringify(activeDraft.value)
@@ -625,42 +619,6 @@ async function saveMainGym(record: GymRecord) {
   }
 }
 
-function recordId(record: RecordDraft): string {
-  return isMachine(record) ? record.machine_id : record.gym_id
-}
-
-function cloneRecordDraft(record: RecordDraft): RecordDraft {
-  return isMachine(record) ? cloneMachineRecord(record) : cloneGymRecord(record)
-}
-
-function cloneMachineRecord(record: MachineRecord): MachineRecord {
-  return {
-    machine_id: record.machine_id,
-    source_ids: [...(record.source_ids ?? [])],
-    name: record.name,
-    body_part: record.body_part,
-    aliases: [...record.aliases],
-    active: record.active,
-    deleted: record.deleted,
-  }
-}
-
-function cloneGymRecord(record: GymRecord): GymRecord {
-  return {
-    gym_id: record.gym_id,
-    source_ids: [...(record.source_ids ?? [])],
-    name: record.name,
-    short_name: record.short_name,
-    active: record.active,
-    deleted: record.deleted,
-    main: record.main,
-  }
-}
-
-function masterTypeLabel(type: MasterDocumentType): string {
-  return type === 'MACHINE_MASTER' ? 'マシン' : 'ジム'
-}
-
 function onRowClick(_: MouseEvent, row: { item?: RecordDraft | { raw?: RecordDraft } }) {
   const record = extractRowRecord(row)
   if (record) {
@@ -676,56 +634,7 @@ function extractRowRecord(row: { item?: RecordDraft | { raw?: RecordDraft } }): 
   return isRecordDraft(raw) ? raw : null
 }
 
-function isRecordDraft(value: unknown): value is RecordDraft {
-  return isMachine(value) || isGym(value)
-}
-
-function toUserFacingMasterWriteError(error: unknown): string {
-  const code = firstAfErrorCode(error)
-  if (code === 'MASTER_WRITE_CONFLICT') {
-    return 'ほかの更新が先に反映されています。画面を再読み込みしてから再度操作してください。'
-  }
-  if (code === 'MASTER_SYNC_REQUIRED') {
-    return '同期が必要です。同期してから再度操作してください。'
-  }
-  if (code === 'MASTER_WRITE_INVALID' || code === 'RUNTIME_DATA_INVALID') {
-    return '入力内容を保存できませんでした。マスター情報を確認してください。'
-  }
-  if (code === 'CONFIGURATION_REQUIRED' || code === 'CONFIG_REQUIRED') {
-    return '必要な設定を行ってから、再度操作してください。'
-  }
-  if (code === 'CREDENTIAL_REQUIRED' || code === 'GITHUB_UNAUTHORIZED' || code === 'GITHUB_FORBIDDEN') {
-    return 'GitHub Tokenを確認してください。'
-  }
-  if (code === 'GITHUB_RESOURCE_NOT_FOUND') {
-    return '必要なマスター情報が見つかりません。設定情報と同期対象を確認してください。'
-  }
-  if (code === 'GITHUB_TIMEOUT' || code === 'GITHUB_CONNECTION_FAILED' || code === 'GITHUB_RATE_LIMIT' || code === 'GITHUB_SERVER_ERROR') {
-    return 'GitHubとの通信に失敗しました。時間をおいて再度実行してください。'
-  }
-
-  return 'マスターデータを保存できませんでした。設定情報と同期状態を確認してください。'
-}
-
-function firstAfErrorCode(error: unknown): string | null {
-  if (typeof error !== 'object' || error === null || !('errors' in error)) return null
-  const errors = (error as { errors?: Array<{ code?: string }> }).errors
-  return errors?.[0]?.code ?? null
-}
-
 function reportDiagnostic(context: string, error: unknown) {
   console.error(context, error)
-}
-
-function isMachine(record: unknown): record is MachineRecord {
-  return isRecordLike(record) && 'machine_id' in record
-}
-
-function isGym(record: unknown): record is GymRecord {
-  return isRecordLike(record) && 'gym_id' in record
-}
-
-function isRecordLike(record: unknown): record is Record<string, unknown> {
-  return typeof record === 'object' && record !== null
 }
 </script>

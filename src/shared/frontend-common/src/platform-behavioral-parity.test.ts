@@ -74,6 +74,9 @@ describe('platform behavioral parity contract', () => {
       'src/application/windows/Core/AfModels.cs',
       'src/application/windows/Core/AfServices.cs',
       'src/application/windows/Core/AfContracts.cs',
+      'src/application/windows/Core/AfJson.cs',
+      'src/application/windows/Core/GithubAccessService.cs',
+      'src/application/windows/Core/RecoveryService.cs',
     ].map(readSource).join('\n')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
     const shared = readSource('src/shared/frontend-common/src/index.ts')
@@ -136,7 +139,7 @@ describe('platform behavioral parity contract', () => {
   })
 
   it('keeps Recovery fallback unresolved fields limited to Workout schema required fields', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/RecoveryService.cs')
       .split('private static IEnumerable<JsonObject> UnresolvedWorkoutFields')[1]
       .split('private static JsonObject RecoveredField')[0]
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
