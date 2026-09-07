@@ -41,4 +41,12 @@ class MasterReferenceContractParityTest {
         assertFalse(addition.path.contains("Android Recovery relocation commit is unavailable"))
         assertFalse(deletion.path.contains("Android Recovery relocation commit is unavailable"))
     }
+
+    @Test
+    fun keepsRecoveryWorkoutRepositoryFieldOrderAlignedWithCanonicalSchema() {
+        assertEquals(
+            listOf("schema_version", "session_id", "date", "status", "gym_id", "condition", "machines", "notes"),
+            androidRecoveryWorkoutFieldOrder
+        )
+    }
 }

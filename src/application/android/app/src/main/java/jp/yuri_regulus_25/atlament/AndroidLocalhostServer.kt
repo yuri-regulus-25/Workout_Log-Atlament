@@ -67,6 +67,17 @@ internal fun androidRecoveryRelocationAddition(replacementPath: String, replacem
 internal fun androidRecoveryRelocationDeletion(sourcePath: String): AndroidRecoveryFileDeletion =
     AndroidRecoveryFileDeletion(sourcePath.trim('/'))
 
+internal val androidRecoveryWorkoutFieldOrder = listOf(
+    "schema_version",
+    "session_id",
+    "date",
+    "status",
+    "gym_id",
+    "condition",
+    "machines",
+    "notes"
+)
+
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
@@ -1942,19 +1953,24 @@ class AndroidLocalhostServer(
                 buildRecoveryObject(confirmed.filter { it.optString("fieldPath").startsWith("/sessions/$index/") }, "/sessions/$index").toString()
             } + "\n"
         } else {
-            buildRecoveryObject(confirmed, "").toString() + "\n"
+            buildRecoveryObject(confirmed, "").toString(2) + "\n"
         }
     }
 
     private fun buildRecoveryObject(fields: List<JSONObject>, prefix: String): JSONObject {
+        val values = mutableMapOf<String, Any?>()
         val result = JSONObject()
         fields.sortedBy { it.optString("fieldPath") }.forEach { field ->
             val path = field.optString("fieldPath")
             val key = if (prefix.isEmpty()) path.trimStart('/') else path.removePrefix("$prefix/")
             if (key.isNotBlank() && !key.contains('/')) {
-                result.put(key, field.opt("value"))
+                values[key] = field.opt("value")
             }
         }
+        androidRecoveryWorkoutFieldOrder.forEach { key ->
+            if (values.containsKey(key)) result.put(key, values.remove(key))
+        }
+        values.keys.sorted().forEach { key -> result.put(key, values[key]) }
         return result
     }
 

@@ -525,6 +525,12 @@ public sealed class AfCoreTests
             Assert.Equal("healthy", result!.Health);
             Assert.True(result.CommitAllowed);
             Assert.DoesNotContain("\"condition\"", result.ReplacementContent);
+            Assert.DoesNotContain("\\u", result.ReplacementContent);
+            Assert.Contains("first note", result.ReplacementContent);
+            Assert.Contains("session note", result.ReplacementContent);
+            Assert.Contains("\n  \"schema_version\": 1,\n  \"session_id\": \"2026-08-22-01\",\n  \"date\": \"2026-08-22\"", result.ReplacementContent);
+            Assert.EndsWith("\n", result.ReplacementContent!, StringComparison.Ordinal);
+            Assert.False(result.ReplacementContent!.Contains("\r", StringComparison.Ordinal));
             var build = new RuntimeDataBuilder().Build(
                 new[] { new RuntimeSourceFile(result.ReplacementPath, result.ReplacementContent!) },
                 MachineMaster,
@@ -555,6 +561,52 @@ public sealed class AfCoreTests
                     Assert.Equal(8, set.Reps);
                     Assert.Null(set.Note);
                 });
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void RecoveryReplacementSerializesJsonlWithReadableCanonicalObjects()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new RecoveryService(new RecoveryDraftStore(new WindowsPathProvider(root)));
+            var configuration = Configuration("data");
+            var sourcePath = "data/workouts/2026/08/2026-08-22.jsonl";
+            var brokenSource = """
+                {"schema_version":1,"session_id":"2026-08-22-01","status":"complete","gym_id":"known-gym","machines":[{"machine_id":"known-machine","sets":[{"set":1,"weight_kg":22.5,"reps":10,"note":"1本目メモ"}]}],"notes":["午前セッション"]}
+                {"schema_version":1,"session_id":"2026-08-22-02","date":"2026-08-22","status":"complete","gym_id":"known-gym","machines":[{"machine_id":"known-machine","sets":[{"set":1,"weight_kg":25,"reps":8}]}]}
+                """;
+            var files = new[] { new RuntimeSourceFile(sourcePath, brokenSource, ContentRevision(brokenSource)) };
+            var key = Assert.Single(service.ListBrokenResources(configuration, files, MachineMaster, GymMaster)).ResourceKey;
+            var draft = service.CreateDraft(configuration, key, files, MachineMaster, GymMaster).Snapshot.Draft!;
+            var fields = draft.Fields
+                .Select(field => field["fieldPath"]?.GetValue<string>() == "/sessions/0/date"
+                    ? ConfirmedField("/sessions/0/date", JsonValue.Create("2026-08-22"))
+                    : field)
+                .ToArray();
+            Assert.Empty(service.UpdateDraft(configuration, key, new RecoveryDraftUpdate(draft.DraftRevision, fields), files, MachineMaster, GymMaster).Errors);
+
+            var (result, errors) = service.ValidateDraft(configuration, key, files, MachineMaster, GymMaster);
+
+            Assert.Empty(errors);
+            Assert.NotNull(result);
+            Assert.True(result!.CommitAllowed);
+            Assert.DoesNotContain("\\u", result.ReplacementContent);
+            Assert.Contains("1本目メモ", result.ReplacementContent);
+            Assert.Contains("午前セッション", result.ReplacementContent);
+            Assert.Contains("{\"schema_version\":1,\"session_id\":\"2026-08-22-01\",\"date\":\"2026-08-22\",\"status\":\"complete\",\"gym_id\":\"known-gym\"", result.ReplacementContent);
+            Assert.Equal(3, result.ReplacementContent!.Split('\n').Length);
+            var build = new RuntimeDataBuilder().Build(
+                new[] { new RuntimeSourceFile(result.ReplacementPath, result.ReplacementContent) },
+                MachineMaster,
+                GymMaster);
+            Assert.Empty(build.Errors);
+            Assert.Equal(new[] { "2026-08-22-01", "2026-08-22-02" }, build.Sessions.Select(session => session.SessionId));
         }
         finally
         {

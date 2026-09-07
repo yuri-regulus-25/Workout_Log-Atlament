@@ -121,5 +121,13 @@ describe('platform behavioral parity contract', () => {
     expect(android).not.toContain('Android Recovery commit is unavailable in this build.')
     expect(android).not.toContain('Android Recovery relocation commit is unavailable in this build.')
     expect(android).not.toContain('"committed": true')
+
+    expect(windowsCore).toContain('RepositoryWriteOptions')
+    expect(windowsCore).toContain('UnsafeRelaxedJsonEscaping')
+    expect(windowsCore).toContain('WorkoutFieldOrder')
+    expect(windowsCore).toContain('SerializeRepositoryWorkoutObject')
+    expect(android).toContain('androidRecoveryWorkoutFieldOrder')
+    expect(android).toContain('buildRecoveryObject')
+    expect(android).toContain('toString(2) + "\\n"')
   })
 })

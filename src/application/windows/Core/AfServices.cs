@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -51,6 +52,22 @@ public sealed class AfJson
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
+    };
+
+    public static readonly JsonSerializerOptions RepositoryWriteOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    public static readonly JsonSerializerOptions RepositoryJsonlWriteOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 }
 
@@ -507,6 +524,18 @@ public sealed class RecoveryDraftStore
 public sealed class RecoveryService
 {
     private const int SourceViewLimitBytes = 256 * 1024;
+    private static readonly string[] WorkoutFieldOrder =
+    {
+        "schema_version",
+        "session_id",
+        "date",
+        "status",
+        "gym_id",
+        "condition",
+        "machines",
+        "notes"
+    };
+
     private readonly RecoveryDraftStore _store;
     private readonly RuntimeDataBuilder _runtimeDataBuilder = new();
 
@@ -843,16 +872,16 @@ public sealed class RecoveryService
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => int.TryParse(value, out var parsed) ? parsed : int.MaxValue)
                 .Select(index => BuildObjectFromFields(fields.Where(field => (field["fieldPath"]?.GetValue<string>() ?? "").StartsWith($"/sessions/{index}/", StringComparison.Ordinal)), $"/sessions/{index}"))
-                .Select(obj => obj.ToJsonString(AfJson.Options));
-            return string.Join(Environment.NewLine, sessions) + Environment.NewLine;
+                .Select(SerializeRepositoryWorkoutLine);
+            return string.Join("\n", sessions) + "\n";
         }
 
-        return BuildObjectFromFields(fields, "").ToJsonString(AfJson.Options) + Environment.NewLine;
+        return SerializeRepositoryWorkoutObject(BuildObjectFromFields(fields, "")) + "\n";
     }
 
     private static JsonObject BuildObjectFromFields(IEnumerable<JsonObject> fields, string prefix)
     {
-        var result = new JsonObject();
+        var values = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
         foreach (var field in fields.OrderBy(field => field["fieldPath"]?.GetValue<string>(), StringComparer.Ordinal))
         {
             var fieldPath = field["fieldPath"]?.GetValue<string>();
@@ -869,11 +898,31 @@ public sealed class RecoveryService
                 continue;
             }
 
-            result[key] = field["value"]?.DeepClone();
+            values[key] = field["value"]?.DeepClone();
+        }
+
+        var result = new JsonObject();
+        foreach (var key in WorkoutFieldOrder)
+        {
+            if (values.Remove(key, out var value))
+            {
+                result[key] = value;
+            }
+        }
+
+        foreach (var entry in values.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            result[entry.Key] = entry.Value;
         }
 
         return result;
     }
+
+    private static string SerializeRepositoryWorkoutObject(JsonObject value) =>
+        value.ToJsonString(AfJson.RepositoryWriteOptions).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    private static string SerializeRepositoryWorkoutLine(JsonObject value) =>
+        value.ToJsonString(AfJson.RepositoryJsonlWriteOptions);
 
     private static string DetermineReplacementPath(string sourcePath, string candidateContent)
     {
