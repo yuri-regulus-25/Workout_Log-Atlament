@@ -1474,7 +1474,7 @@ public sealed class RuntimeDataBuilder
             var gymInvalidExcluded = gymMaster is null && gyms.ExcludedIds.Contains(gymId);
             if (gymMaster is null || gymMaster.Deleted)
             {
-                warnings.Add(CreateReferenceWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded, sessionId, filePath, line));
+                warnings.Add(MasterReferenceSemantics.CreateWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded, sessionId, filePath, line));
             }
 
             var workoutMachines = new List<WorkoutMachine>();
@@ -1500,7 +1500,7 @@ public sealed class RuntimeDataBuilder
                     gymMaster?.Id ?? gymId,
                     gymMaster is not null && !gymMaster.Deleted ? gymMaster.Name : null,
                     gymMaster is not null && !gymMaster.Deleted ? gymMaster.ShortName : null,
-                    ResolveMasterReference(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded)),
+                    MasterReferenceSemantics.Resolve(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded)),
                 ReadCondition(root),
                 workoutMachines,
                 ReadStringArray(root, "notes"));
@@ -1531,7 +1531,7 @@ public sealed class RuntimeDataBuilder
         var invalidExcluded = master is null && masters.ExcludedIds.Contains(machineId);
         if (master is null || master.Deleted)
         {
-            warnings.Add(CreateReferenceWarning("machine", machineId, master?.Id, master?.Deleted ?? false, invalidExcluded, sessionId, filePath, line));
+            warnings.Add(MasterReferenceSemantics.CreateWarning("machine", machineId, master?.Id, master?.Deleted ?? false, invalidExcluded, sessionId, filePath, line));
         }
 
         var sets = new List<MachineSet>();
@@ -1560,7 +1560,7 @@ public sealed class RuntimeDataBuilder
             master?.Id ?? machineId,
             master is not null && !master.Deleted ? master.Name : null,
             master is not null && !master.Deleted ? master.BodyPart : null,
-            ResolveMasterReference(machineId, master?.Id, master?.Deleted ?? false, invalidExcluded),
+            MasterReferenceSemantics.Resolve(machineId, master?.Id, master?.Deleted ?? false, invalidExcluded),
             sets,
             ReadStringArray(item, "notes")), false);
     }
@@ -1582,46 +1582,6 @@ public sealed class RuntimeDataBuilder
     }
 
     private static string Location(string filePath, int? line) => line is null ? $"{filePath}: " : $"{filePath}:{line}: ";
-
-    private static MasterReferenceResolution ResolveMasterReference(string originalId, string? resolvedId, bool deleted, bool invalidExcluded)
-    {
-        if (invalidExcluded)
-        {
-            return new MasterReferenceResolution("invalid_excluded", originalId, null);
-        }
-
-        if (string.IsNullOrWhiteSpace(resolvedId))
-        {
-            return new MasterReferenceResolution("missing", originalId, null);
-        }
-
-        return new MasterReferenceResolution(deleted ? "deleted" : "resolved", originalId, resolvedId);
-    }
-
-    private static RuntimeWarning CreateReferenceWarning(
-        string referenceKind,
-        string originalId,
-        string? resolvedId,
-        bool deleted,
-        bool invalidExcluded,
-        string sessionId,
-        string filePath,
-        int? line)
-    {
-        var resolutionState = invalidExcluded ? "invalid_excluded" : deleted ? "deleted" : "missing";
-        var subject = referenceKind == "gym" ? "ジム" : "マシン";
-        var stateText = invalidExcluded ? "Runtime採用対象から除外されています" : deleted ? "削除されています" : "存在しません";
-        return new RuntimeWarning(
-            invalidExcluded ? "MASTER_REFERENCE_INVALID_EXCLUDED" : deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
-            referenceKind,
-            resolutionState,
-            originalId,
-            resolvedId,
-            sessionId,
-            filePath,
-            line,
-            $"特定の{subject}が{stateText}: {originalId}");
-    }
 
     private static bool TryGetString(JsonElement element, string name, out string value)
     {

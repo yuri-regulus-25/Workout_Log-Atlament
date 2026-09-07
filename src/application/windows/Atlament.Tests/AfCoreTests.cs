@@ -109,6 +109,19 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void MasterReferenceSemanticsKeepsSharedResolutionAndWarningCodes()
+    {
+        Assert.Equal("missing", MasterReferenceSemantics.Resolve("missing-machine", null, deleted: false, invalidExcluded: false).State);
+        Assert.Equal("deleted", MasterReferenceSemantics.Resolve("deleted-machine", "deleted-machine", deleted: true, invalidExcluded: false).State);
+        Assert.Equal("invalid_excluded", MasterReferenceSemantics.Resolve("invalid-machine", null, deleted: false, invalidExcluded: true).State);
+        Assert.Equal("resolved", MasterReferenceSemantics.Resolve("legacy-machine", "known-machine", deleted: false, invalidExcluded: false).State);
+
+        Assert.Equal("MASTER_REFERENCE_MISSING", MasterReferenceSemantics.CreateWarning("machine", "missing-machine", null, false, false, "session", "workouts/a.json", null).Code);
+        Assert.Equal("MASTER_REFERENCE_DELETED", MasterReferenceSemantics.CreateWarning("machine", "deleted-machine", "deleted-machine", true, false, "session", "workouts/a.json", null).Code);
+        Assert.Equal("MASTER_REFERENCE_INVALID_EXCLUDED", MasterReferenceSemantics.CreateWarning("machine", "invalid-machine", null, false, true, "session", "workouts/a.json", null).Code);
+    }
+
+    [Fact]
     public void SourceIdsResolveUnresolvedWorkoutReferencesWithoutRawWorkoutRewrite()
     {
         var builder = new RuntimeDataBuilder();

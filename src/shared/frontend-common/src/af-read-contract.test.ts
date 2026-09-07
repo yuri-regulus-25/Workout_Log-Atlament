@@ -43,6 +43,24 @@ describe('AF read contract refinement', () => {
     expect(apiInventory).not.toContain('- `version`:')
   })
 
+  it('keeps build identity as an additive shared Status API field', () => {
+    const frontendContract = readSource('src/shared/frontend-common/src/index.ts')
+    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const windowsModels = readSource('src/application/windows/Core/AfModels.cs')
+    const windowsServices = readSource('src/application/windows/Core/AfServices.cs')
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+
+    expect(frontendContract).toContain('build?:')
+    expect(frontendContract).toContain('variant: string')
+    expect(frontendContract).toContain('debug: boolean')
+    expect(settings).toContain('buildIdentitySummary')
+    expect(windowsModels).toContain('BuildIdentity')
+    expect(windowsServices).toContain('ApplicationBuildIdentity')
+    expect(android).toContain('"build": {')
+    expect(android).toContain('"variant": "${BuildConfig.BUILD_TYPE}"')
+    expect(android).toContain('"debug": ${BuildConfig.DEBUG}')
+  })
+
   it('derives shared readiness without treating optional Main Gym context as setup failure', () => {
     const baseStatus = {
       application: { status: 'ready', degraded: false, acceptingRequests: true },

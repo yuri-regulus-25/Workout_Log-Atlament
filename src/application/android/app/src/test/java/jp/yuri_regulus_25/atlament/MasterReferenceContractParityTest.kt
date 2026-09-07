@@ -25,15 +25,17 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun keepsMasterRecordIsolationRuntimeSemanticsInAndroidBuilder() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val serverSource = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+            .readText()
+        val semanticsSource = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidMasterReferenceSemantics.kt")
             .readText()
 
-        assertTrue(source.contains("MasterRecordCatalog"))
-        assertTrue(source.contains("structuralInvalid"))
-        assertTrue(source.contains("duplicate reference key is excluded"))
-        assertTrue(source.contains("\"MASTER_REFERENCE_INVALID_EXCLUDED\""))
-        assertTrue(source.contains("\"invalid_excluded\""))
-        assertTrue(source.indexOf("machines.structuralInvalid || gyms.structuralInvalid") < source.indexOf("buildSession(file.path"))
+        assertTrue(serverSource.contains("MasterRecordCatalog"))
+        assertTrue(serverSource.contains("structuralInvalid"))
+        assertTrue(serverSource.contains("duplicate reference key is excluded"))
+        assertTrue(semanticsSource.contains("\"MASTER_REFERENCE_INVALID_EXCLUDED\""))
+        assertTrue(semanticsSource.contains("\"invalid_excluded\""))
+        assertTrue(serverSource.indexOf("machines.structuralInvalid || gyms.structuralInvalid") < serverSource.indexOf("buildSession(file.path"))
     }
 
     @Test
