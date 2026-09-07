@@ -12,6 +12,7 @@ class MasterReferenceContractParityTest {
         assertEquals("missing", androidMasterReferenceResolutionState(null, deleted = false))
         assertEquals("missing", androidMasterReferenceResolutionState("", deleted = true))
         assertEquals("deleted", androidMasterReferenceResolutionState("deleted-machine", deleted = true))
+        assertEquals("invalid_excluded", androidMasterReferenceResolutionState(null, deleted = false, invalidExcluded = true))
         assertEquals("resolved", androidMasterReferenceResolutionState("known-machine", deleted = false))
     }
 
@@ -19,6 +20,20 @@ class MasterReferenceContractParityTest {
     fun emitsSharedWarningCodesForUnresolvedReferences() {
         assertEquals("MASTER_REFERENCE_MISSING", androidMasterReferenceWarningCode(deleted = false))
         assertEquals("MASTER_REFERENCE_DELETED", androidMasterReferenceWarningCode(deleted = true))
+        assertEquals("MASTER_REFERENCE_INVALID_EXCLUDED", androidMasterReferenceWarningCode(deleted = false, invalidExcluded = true))
+    }
+
+    @Test
+    fun keepsMasterRecordIsolationRuntimeSemanticsInAndroidBuilder() {
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+            .readText()
+
+        assertTrue(source.contains("MasterRecordCatalog"))
+        assertTrue(source.contains("structuralInvalid"))
+        assertTrue(source.contains("duplicate reference key is excluded"))
+        assertTrue(source.contains("\"MASTER_REFERENCE_INVALID_EXCLUDED\""))
+        assertTrue(source.contains("\"invalid_excluded\""))
+        assertTrue(source.indexOf("machines.structuralInvalid || gyms.structuralInvalid") < source.indexOf("buildSession(file.path"))
     }
 
     @Test

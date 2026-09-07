@@ -4,9 +4,9 @@
     <AssemblyName>Atlament</AssemblyName>
     <Product>Atlament</Product>
     <Company>Atlament</Company>
-    <Version>2.1.0</Version>
-    <FileVersion>2.1.0.0</FileVersion>
-    <InformationalVersion>2.1.0</InformationalVersion>
+    <Version>2.2.0</Version>
+    <FileVersion>2.2.0.0</FileVersion>
+    <InformationalVersion>2.2.0</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Description>Workout Log Atlament Windows Application Framework</Description>
     <Authors>yuri-regulus-25</Authors>

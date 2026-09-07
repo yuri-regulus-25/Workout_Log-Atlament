@@ -297,6 +297,100 @@ describe('workout-data', () => {
     ])
   })
 
+  it('partially accepts valid master records while exposing invalid excluded references', () => {
+    const result = loadWorkoutSessionsFromFiles(
+      [{
+        path: 'workouts/mixed-master.json',
+        content: JSON.stringify({
+          schema_version: 1,
+          session_id: 'mixed-master',
+          date: '2026-08-22',
+          status: 'complete',
+          gym_id: 'af-shioiri',
+          machines: [
+            { machine_id: 'abdominal', sets: [{ set: 1, weight_kg: 40, reps: 12 }] },
+            { machine_id: 'invalid-machine', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+          ],
+        }),
+      }],
+      {
+        ...sampleMasterData,
+        machines: {
+          schema_version: 1,
+          machines: [
+            ...sampleMasterData.machines.machines,
+            { machine_id: 'invalid-machine', name: 'Invalid Machine', body_part: 'unknown' as never, aliases: [], active: true, deleted: false },
+          ],
+        },
+      },
+    )
+
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].machines[0]).toMatchObject({ machine_id: 'abdominal', name: 'アブドミナル' })
+    expect(result.sessions[0].machines[1]).toMatchObject({
+      machine_id: 'invalid-machine',
+      resolution: { state: 'invalid_excluded', originalId: 'invalid-machine', resolvedId: null },
+    })
+    expect(result.sessions[0].machines[1]).not.toHaveProperty('name')
+    expect(result.issues.some((issue) => issue.message.includes('invalid body_part'))).toBe(true)
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'MASTER_REFERENCE_INVALID_EXCLUDED',
+        referenceKind: 'machine',
+        resolutionState: 'invalid_excluded',
+        originalId: 'invalid-machine',
+      }),
+    ])
+  })
+
+  it('excludes every duplicate master conflict instead of choosing a winner', () => {
+    const result = loadWorkoutSessionsFromFiles(
+      [{
+        path: 'workouts/duplicate-master.json',
+        content: JSON.stringify({
+          schema_version: 1,
+          session_id: 'duplicate-master',
+          date: '2026-08-22',
+          status: 'complete',
+          gym_id: 'duplicate-gym',
+          machines: [
+            { machine_id: 'duplicate-machine', sets: [{ set: 1, weight_kg: 20, reps: 10 }] },
+          ],
+        }),
+      }],
+      {
+        machines: {
+          schema_version: 1,
+          machines: [
+            { machine_id: 'duplicate-machine', source_ids: [], name: 'First', body_part: 'chest', aliases: [], active: true, deleted: false },
+            { machine_id: 'duplicate-machine', source_ids: [], name: 'Second', body_part: 'back', aliases: [], active: true, deleted: false },
+          ],
+        },
+        gyms: {
+          schema_version: 1,
+          gyms: [
+            { gym_id: 'duplicate-gym', source_ids: [], name: 'First Gym', active: true, deleted: false, main: false },
+            { gym_id: 'duplicate-gym', source_ids: [], name: 'Second Gym', active: true, deleted: false, main: false },
+          ],
+        },
+      },
+    )
+
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].gym.resolution).toEqual({ state: 'invalid_excluded', originalId: 'duplicate-gym', resolvedId: null })
+    expect(result.sessions[0].machines[0].resolution).toEqual({ state: 'invalid_excluded', originalId: 'duplicate-machine', resolvedId: null })
+    expect(result.sessions[0].gym).not.toHaveProperty('name')
+    expect(result.sessions[0].machines[0]).not.toHaveProperty('name')
+    expect(result.issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'Machine master duplicate reference key is excluded: duplicate-machine.',
+      'Gym master duplicate reference key is excluded: duplicate-gym.',
+    ]))
+    expect(result.warnings).toEqual([
+      expect.objectContaining({ code: 'MASTER_REFERENCE_INVALID_EXCLUDED', referenceKind: 'gym', originalId: 'duplicate-gym' }),
+      expect.objectContaining({ code: 'MASTER_REFERENCE_INVALID_EXCLUDED', referenceKind: 'machine', originalId: 'duplicate-machine' }),
+    ])
+  })
+
   it('keeps workouts with deleted gym references as runtime warnings', () => {
     const result = parseWorkoutJson(
       'workouts/2026/08/2026-08-22.json',
@@ -697,7 +791,7 @@ describe('workout-data', () => {
     expect(gymResult.master?.gyms[0].main).toBe(false)
   })
 
-  it('reports duplicate master ids', () => {
+  it('reports duplicate master ids as excluded records', () => {
     const result = parseGymMaster(
       'master/gyms.json',
       JSON.stringify({
@@ -709,8 +803,8 @@ describe('workout-data', () => {
       }),
     )
 
-    expect(result.master).toBeUndefined()
-    expect(result.issues.some((issue) => issue.message.includes('Duplicate gym_id'))).toBe(true)
+    expect(result.master?.gyms).toEqual([])
+    expect(result.issues.some((issue) => issue.message.includes('duplicate reference key is excluded: af-shioiri'))).toBe(true)
   })
 
   it('normalizes source_ids as master reference aliases', async () => {

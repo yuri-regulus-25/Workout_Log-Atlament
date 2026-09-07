@@ -1217,10 +1217,10 @@ public sealed class RuntimeDataBuilder
         var warnings = new List<RuntimeWarning>();
         var machines = ParseMachineMaster(machinesFile, errors);
         var gyms = ParseGymMaster(gymsFile, errors);
-        if (errors.Any(error => error.Code == AfErrorCodes.RuntimeDataInvalid))
+        if (machines.StructuralInvalid || gyms.StructuralInvalid)
         {
-            // Master data is structural input for every workout. Stop immediately when it is
-            // malformed so downstream errors do not hide the actual contract failure.
+            // Master Resource の構造が読めない場合は、Record 単位の隔離対象にできないため
+            // v2.1.0 と同じ whole-runtime fallback 境界へ戻す。
             return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
         }
 
@@ -1269,20 +1269,26 @@ public sealed class RuntimeDataBuilder
 
     public (WorkoutSession? Session, bool TechnicalInvalid) BuildSingleSessionForTest(string json, string path = "test.json")
     {
-        var machines = new Dictionary<string, MachineMasterItem>
-        {
-            ["known-machine"] = new("known-machine", "Known Machine", "chest", false)
-        };
-        var gyms = new Dictionary<string, GymMasterItem>
-        {
-            ["known-gym"] = new("known-gym", "Known Gym", "KG", false)
-        };
+        var machines = new MasterRecordCatalog<MachineMasterItem>(
+            new Dictionary<string, MachineMasterItem>(StringComparer.Ordinal)
+            {
+                ["known-machine"] = new("known-machine", Array.Empty<string>(), "Known Machine", "chest", false)
+            },
+            new HashSet<string>(StringComparer.Ordinal),
+            false);
+        var gyms = new MasterRecordCatalog<GymMasterItem>(
+            new Dictionary<string, GymMasterItem>(StringComparer.Ordinal)
+            {
+                ["known-gym"] = new("known-gym", Array.Empty<string>(), "Known Gym", "KG", false)
+            },
+            new HashSet<string>(StringComparer.Ordinal),
+            false);
         var errors = new List<AfError>();
         var warnings = new List<RuntimeWarning>();
         return BuildSession(path, null, json, machines, gyms, errors, warnings);
     }
 
-    private static Dictionary<string, MachineMasterItem> ParseMachineMaster(RuntimeSourceFile file, List<AfError> errors)
+    private static MasterRecordCatalog<MachineMasterItem> ParseMachineMaster(RuntimeSourceFile file, List<AfError> errors)
     {
         try
         {
@@ -1291,10 +1297,11 @@ public sealed class RuntimeDataBuilder
             if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("machines", out var items) || items.ValueKind != JsonValueKind.Array)
             {
                 errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master contract is invalid.", false));
-                return new();
+                return MasterRecordCatalog<MachineMasterItem>.StructuralFailure();
             }
 
-            var result = new Dictionary<string, MachineMasterItem>(StringComparer.Ordinal);
+            var candidates = new List<MachineMasterItem>();
+            var excludedIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in items.EnumerateArray())
             {
                 if (!TryGetString(item, "machine_id", out var id) ||
@@ -1304,37 +1311,24 @@ public sealed class RuntimeDataBuilder
                     !TryGetBool(item, "active", out _))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master item is invalid.", false));
-                    return new();
+                    AddRecoverableMasterKeys(item, "machine_id", excludedIds);
+                    continue;
                 }
 
                 var deleted = TryGetOptionalBool(item, "deleted") ?? false;
-                var record = new MachineMasterItem(id, name, bodyPart, deleted);
-                if (!result.TryAdd(id, record))
-                {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine_id: {id}.", false));
-                    return new();
-                }
-
-                foreach (var sourceId in ReadStringArray(item, "source_ids"))
-                {
-                    if (!result.TryAdd(sourceId, record))
-                    {
-                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate machine source_id: {sourceId}.", false));
-                        return new();
-                    }
-                }
+                candidates.Add(new MachineMasterItem(id, ReadStringArray(item, "source_ids"), name, bodyPart, deleted));
             }
 
-            return result;
+            return BuildMasterCatalog(candidates, record => record.Id, record => record.SourceIds, excludedIds, file.Path, "Machine", errors);
         }
         catch
         {
             errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Machine master JSON is invalid.", false));
-            return new();
+            return MasterRecordCatalog<MachineMasterItem>.StructuralFailure();
         }
     }
 
-    private static Dictionary<string, GymMasterItem> ParseGymMaster(RuntimeSourceFile file, List<AfError> errors)
+    private static MasterRecordCatalog<GymMasterItem> ParseGymMaster(RuntimeSourceFile file, List<AfError> errors)
     {
         try
         {
@@ -1343,10 +1337,11 @@ public sealed class RuntimeDataBuilder
             if (!TryGetInt(root, "schema_version", out _) || !root.TryGetProperty("gyms", out var items) || items.ValueKind != JsonValueKind.Array)
             {
                 errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Gym master contract is invalid.", false));
-                return new();
+                return MasterRecordCatalog<GymMasterItem>.StructuralFailure();
             }
 
-            var result = new Dictionary<string, GymMasterItem>(StringComparer.Ordinal);
+            var candidates = new List<GymMasterItem>();
+            var excludedIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in items.EnumerateArray())
             {
                 if (!TryGetString(item, "gym_id", out var id) ||
@@ -1354,43 +1349,89 @@ public sealed class RuntimeDataBuilder
                     !TryGetBool(item, "active", out _))
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Gym master item is invalid.", false));
-                    return new();
+                    AddRecoverableMasterKeys(item, "gym_id", excludedIds);
+                    continue;
                 }
 
                 TryGetString(item, "short_name", out var shortName);
                 var deleted = TryGetOptionalBool(item, "deleted") ?? false;
-                var record = new GymMasterItem(id, name, shortName, deleted);
-                if (!result.TryAdd(id, record))
-                {
-                    errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym_id: {id}.", false));
-                    return new();
-                }
-
-                foreach (var sourceId in ReadStringArray(item, "source_ids"))
-                {
-                    if (!result.TryAdd(sourceId, record))
-                    {
-                        errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Duplicate gym source_id: {sourceId}.", false));
-                        return new();
-                    }
-                }
+                candidates.Add(new GymMasterItem(id, ReadStringArray(item, "source_ids"), name, shortName, deleted));
             }
 
-            return result;
+            return BuildMasterCatalog(candidates, record => record.Id, record => record.SourceIds, excludedIds, file.Path, "Gym", errors);
         }
         catch
         {
             errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{file.Path}: Gym master JSON is invalid.", false));
-            return new();
+            return MasterRecordCatalog<GymMasterItem>.StructuralFailure();
         }
+    }
+
+    private static MasterRecordCatalog<T> BuildMasterCatalog<T>(
+        IReadOnlyList<T> candidates,
+        Func<T, string> idSelector,
+        Func<T, IReadOnlyList<string>> sourceIdsSelector,
+        HashSet<string> excludedIds,
+        string filePath,
+        string label,
+        List<AfError> errors)
+    {
+        var ownersByKey = new Dictionary<string, List<T>>(StringComparer.Ordinal);
+        foreach (var candidate in candidates)
+        {
+            foreach (var key in CandidateKeys(idSelector(candidate), sourceIdsSelector(candidate)))
+            {
+                if (!ownersByKey.TryGetValue(key, out var owners))
+                {
+                    owners = new List<T>();
+                    ownersByKey[key] = owners;
+                }
+                owners.Add(candidate);
+            }
+        }
+
+        var excludedRecords = new HashSet<T>();
+        foreach (var (key, owners) in ownersByKey)
+        {
+            if (owners.Count <= 1) continue;
+            errors.Add(new AfError(AfErrorCodes.RuntimeDataInvalid, $"{filePath}: {label} master duplicate reference key is excluded: {key}.", false));
+            foreach (var owner in owners)
+            {
+                excludedRecords.Add(owner);
+            }
+        }
+
+        var lookup = new Dictionary<string, T>(StringComparer.Ordinal);
+        foreach (var candidate in candidates)
+        {
+            var keys = CandidateKeys(idSelector(candidate), sourceIdsSelector(candidate));
+            if (excludedRecords.Contains(candidate))
+            {
+                foreach (var key in keys) excludedIds.Add(key);
+                continue;
+            }
+
+            foreach (var key in keys) lookup[key] = candidate;
+        }
+
+        return new MasterRecordCatalog<T>(lookup, excludedIds, false);
+    }
+
+    private static IReadOnlyList<string> CandidateKeys(string id, IReadOnlyList<string> sourceIds) =>
+        new[] { id }.Concat(sourceIds).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).ToArray();
+
+    private static void AddRecoverableMasterKeys(JsonElement item, string idField, HashSet<string> excludedIds)
+    {
+        if (TryGetString(item, idField, out var id)) excludedIds.Add(id);
+        foreach (var sourceId in ReadStringArray(item, "source_ids")) excludedIds.Add(sourceId);
     }
 
     private static (WorkoutSession? Session, bool TechnicalInvalid) BuildSession(
         string filePath,
         int? line,
         string content,
-        IReadOnlyDictionary<string, MachineMasterItem> machines,
-        IReadOnlyDictionary<string, GymMasterItem> gyms,
+        MasterRecordCatalog<MachineMasterItem> machines,
+        MasterRecordCatalog<GymMasterItem> gyms,
         List<AfError> errors,
         List<RuntimeWarning> warnings)
     {
@@ -1429,10 +1470,11 @@ public sealed class RuntimeDataBuilder
                 return (null, true);
             }
 
-            gyms.TryGetValue(gymId, out var gymMaster);
+            gyms.Lookup.TryGetValue(gymId, out var gymMaster);
+            var gymInvalidExcluded = gymMaster is null && gyms.ExcludedIds.Contains(gymId);
             if (gymMaster is null || gymMaster.Deleted)
             {
-                warnings.Add(CreateReferenceWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, sessionId, filePath, line));
+                warnings.Add(CreateReferenceWarning("gym", gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded, sessionId, filePath, line));
             }
 
             var workoutMachines = new List<WorkoutMachine>();
@@ -1458,7 +1500,7 @@ public sealed class RuntimeDataBuilder
                     gymMaster?.Id ?? gymId,
                     gymMaster is not null && !gymMaster.Deleted ? gymMaster.Name : null,
                     gymMaster is not null && !gymMaster.Deleted ? gymMaster.ShortName : null,
-                    ResolveMasterReference(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false)),
+                    ResolveMasterReference(gymId, gymMaster?.Id, gymMaster?.Deleted ?? false, gymInvalidExcluded)),
                 ReadCondition(root),
                 workoutMachines,
                 ReadStringArray(root, "notes"));
@@ -1470,7 +1512,7 @@ public sealed class RuntimeDataBuilder
         string filePath,
         int? line,
         JsonElement item,
-        IReadOnlyDictionary<string, MachineMasterItem> masters,
+        MasterRecordCatalog<MachineMasterItem> masters,
         List<AfError> errors,
         List<RuntimeWarning> warnings,
         string sessionId)
@@ -1485,10 +1527,11 @@ public sealed class RuntimeDataBuilder
             return (null, true);
         }
 
-        masters.TryGetValue(machineId, out var master);
+        masters.Lookup.TryGetValue(machineId, out var master);
+        var invalidExcluded = master is null && masters.ExcludedIds.Contains(machineId);
         if (master is null || master.Deleted)
         {
-            warnings.Add(CreateReferenceWarning("machine", machineId, master?.Id, master?.Deleted ?? false, sessionId, filePath, line));
+            warnings.Add(CreateReferenceWarning("machine", machineId, master?.Id, master?.Deleted ?? false, invalidExcluded, sessionId, filePath, line));
         }
 
         var sets = new List<MachineSet>();
@@ -1517,7 +1560,7 @@ public sealed class RuntimeDataBuilder
             master?.Id ?? machineId,
             master is not null && !master.Deleted ? master.Name : null,
             master is not null && !master.Deleted ? master.BodyPart : null,
-            ResolveMasterReference(machineId, master?.Id, master?.Deleted ?? false),
+            ResolveMasterReference(machineId, master?.Id, master?.Deleted ?? false, invalidExcluded),
             sets,
             ReadStringArray(item, "notes")), false);
     }
@@ -1540,8 +1583,13 @@ public sealed class RuntimeDataBuilder
 
     private static string Location(string filePath, int? line) => line is null ? $"{filePath}: " : $"{filePath}:{line}: ";
 
-    private static MasterReferenceResolution ResolveMasterReference(string originalId, string? resolvedId, bool deleted)
+    private static MasterReferenceResolution ResolveMasterReference(string originalId, string? resolvedId, bool deleted, bool invalidExcluded)
     {
+        if (invalidExcluded)
+        {
+            return new MasterReferenceResolution("invalid_excluded", originalId, null);
+        }
+
         if (string.IsNullOrWhiteSpace(resolvedId))
         {
             return new MasterReferenceResolution("missing", originalId, null);
@@ -1555,15 +1603,16 @@ public sealed class RuntimeDataBuilder
         string originalId,
         string? resolvedId,
         bool deleted,
+        bool invalidExcluded,
         string sessionId,
         string filePath,
         int? line)
     {
-        var resolutionState = deleted ? "deleted" : "missing";
+        var resolutionState = invalidExcluded ? "invalid_excluded" : deleted ? "deleted" : "missing";
         var subject = referenceKind == "gym" ? "ジム" : "マシン";
-        var stateText = deleted ? "削除されています" : "存在しません";
+        var stateText = invalidExcluded ? "Runtime採用対象から除外されています" : deleted ? "削除されています" : "存在しません";
         return new RuntimeWarning(
-            deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
+            invalidExcluded ? "MASTER_REFERENCE_INVALID_EXCLUDED" : deleted ? "MASTER_REFERENCE_DELETED" : "MASTER_REFERENCE_MISSING",
             referenceKind,
             resolutionState,
             originalId,
@@ -1633,8 +1682,14 @@ public sealed class RuntimeDataBuilder
             .ToArray();
     }
 
-    private sealed record MachineMasterItem(string Id, string Name, string BodyPart, bool Deleted);
-    private sealed record GymMasterItem(string Id, string Name, string? ShortName, bool Deleted);
+    private sealed record MasterRecordCatalog<T>(Dictionary<string, T> Lookup, HashSet<string> ExcludedIds, bool StructuralInvalid)
+    {
+        public static MasterRecordCatalog<T> StructuralFailure() =>
+            new(new Dictionary<string, T>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal), true);
+    }
+
+    private sealed record MachineMasterItem(string Id, IReadOnlyList<string> SourceIds, string Name, string BodyPart, bool Deleted);
+    private sealed record GymMasterItem(string Id, IReadOnlyList<string> SourceIds, string Name, string? ShortName, bool Deleted);
 }
 
 public static class MasterWriteValidator
