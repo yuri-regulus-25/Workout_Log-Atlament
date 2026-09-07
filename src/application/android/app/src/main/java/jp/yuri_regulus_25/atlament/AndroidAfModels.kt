@@ -14,6 +14,8 @@ internal data class RuntimeFetchedResources(
     val gymMaster: RuntimeSourceFile?
 )
 
+internal data class RecoveryResource(val source: RuntimeSourceFile, val resourceKey: String, val inspection: org.json.JSONObject)
+
 internal data class MasterDocument(val type: String, val path: String, val revision: String, val content: String)
 
 internal data class GithubContent(val revision: String, val content: String)

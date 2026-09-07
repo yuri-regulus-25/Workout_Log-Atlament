@@ -10,6 +10,7 @@ class AndroidRecoveryDraftStoreContractTest {
     fun keepsRecoveryDraftPersistenceAndStateClassificationOutOfServerRouting() {
         val store = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryDraftStore.kt").readText()
         val server = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt").readText()
+        val recovery = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt").readText()
 
         assertTrue(store.contains("class AndroidRecoveryDraftStore"))
         assertTrue(store.contains("fun countActive()"))
@@ -30,7 +31,7 @@ class AndroidRecoveryDraftStoreContractTest {
         assertTrue(server.contains("recoveryDraftStore.load"))
         assertTrue(server.contains("recoveryDraftStore.save"))
         assertTrue(server.contains("recoveryDraftStore.delete"))
-        assertTrue(server.contains("recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::recoveryResourceKey)"))
+        assertTrue(recovery.contains("recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::resourceKey)"))
         assertFalse(server.contains("private fun activeRecoveryDraftCount"))
         assertFalse(server.contains("private fun recoveryDraftFileName"))
         assertFalse(server.contains("private fun saveRecoveryDraft"))

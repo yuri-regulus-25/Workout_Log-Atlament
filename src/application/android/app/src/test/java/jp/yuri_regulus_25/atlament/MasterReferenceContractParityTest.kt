@@ -87,7 +87,7 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun keepsRecoveryFallbackUnresolvedFieldsLimitedToRequiredWorkoutSchemaFields() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt")
             .readText()
         val fallback = source
             .substringAfter("private fun unresolvedWorkoutFields")
@@ -105,7 +105,7 @@ class MasterReferenceContractParityTest {
         val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
             .readText()
             .substringAfter("private fun sendRecoveryCommit")
-        val staleKeyLookup = "recoveryResourceKey(configuration, \"WORKOUT\", it.source.path, expectedSourceRevision) == resourceKey"
+        val staleKeyLookup = "recoveryService.resourceKey(configuration, \"WORKOUT\", it.source.path, expectedSourceRevision) == resourceKey"
         val conflict = "failJson(\"RECOVERY_WRITE_CONFLICT\", \"Recovery source revision is stale.\")"
         val notFound = "failJson(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
 
@@ -116,13 +116,13 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun recoveryReadAndValidateClassifyOldRevisionDraftAsStaleBeforeNotFound() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt")
             .readText()
-        val readResolver = "private fun resolveRecoveryResourceForRead"
-        val draftKeyLookup = "recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::recoveryResourceKey)"
+        val readResolver = "fun resolveResourceForRead"
+        val draftKeyLookup = "recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::resourceKey)"
         val stale = "errorsArray(\"RECOVERY_DRAFT_STALE\", \"Recovery Draft source revision is stale.\")"
         val notFound = "errorsArray(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
-        val validation = source.substringAfter("private fun validateRecoveryDraft")
+        val validation = source.substringAfter("fun validateDraft")
 
         assertTrue(source.contains(readResolver))
         assertTrue(source.contains(draftKeyLookup))
