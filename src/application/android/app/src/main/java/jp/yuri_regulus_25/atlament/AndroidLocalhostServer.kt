@@ -58,6 +58,7 @@ class AndroidLocalhostServer(
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
     private val recoveryDraftDirectory = File(context.filesDir, "recovery/drafts")
     private val recoveryTemporaryDirectory = File(context.filesDir, "recovery/temporary")
+    private val recoveryDraftStore = AndroidRecoveryDraftStore(recoveryDraftDirectory, recoveryTemporaryDirectory)
     private val logDatabaseFile = File(context.filesDir, "log/atlament-log.sqlite")
     private val operationLock = Object()
     @Volatile private var startupSyncStatus = "idle"
@@ -285,7 +286,7 @@ class AndroidLocalhostServer(
             .put("brokenWorkoutResourceCount", brokenWorkoutCount)
             .put("brokenMasterResourceCount", 0)
             .put("recoverableResourceCount", brokenWorkoutCount)
-            .put("activeDraftCount", activeRecoveryDraftCount())
+            .put("activeDraftCount", recoveryDraftStore.countActive())
             .toString()
     }
 
@@ -302,14 +303,6 @@ class AndroidLocalhostServer(
             }
         }
         paths.size
-    }.getOrDefault(0)
-
-    private fun activeRecoveryDraftCount(): Int = runCatching {
-        recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
-            ?.count { file ->
-                val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
-                envelope.optJSONObject("draft")?.optInt("schemaVersion", -1) == 1
-            } ?: 0
     }.getOrDefault(0)
 
     private fun hostingStatusJson(): String = """
@@ -952,7 +945,7 @@ class AndroidLocalhostServer(
             val array = JSONArray()
             resources.forEach { resource ->
                 val revision = sourceRevision(resource.source)
-                val draft = loadRecoveryDraft("WORKOUT", resource.source.path, revision)
+                val draft = recoveryDraftStore.load("WORKOUT", resource.source.path, revision)
                 array.put(JSONObject()
                     .put("resourceKey", resource.resourceKey)
                     .put("path", resource.source.path)
@@ -985,7 +978,7 @@ class AndroidLocalhostServer(
                 .put("eligible", eligible)
                 .put("reasonCode", if (eligible) JSONObject.NULL else "RECOVERY_RESOURCE_NOT_BROKEN"))
             .put("capabilities", recoveryCapabilitiesJson(eligible))
-            .put("draft", loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source)))
+            .put("draft", recoveryDraftStore.load("WORKOUT", resolved.source.path, sourceRevision(resolved.source)))
         sendJson(output, 200, okJson(detail.toString()))
     }
 
@@ -1015,7 +1008,7 @@ class AndroidLocalhostServer(
             sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
             return
         }
-        sendJson(output, 200, okJson(loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source)).toString()))
+        sendJson(output, 200, okJson(recoveryDraftStore.load("WORKOUT", resolved.source.path, sourceRevision(resolved.source)).toString()))
     }
 
     private fun sendRecoveryDraftCreate(output: OutputStream, resourceKey: String) {
@@ -1044,7 +1037,7 @@ class AndroidLocalhostServer(
             sendJson(output, 400, failJson("COMMON_INVALID_REQUEST", "Recovery Draft update request is invalid."))
             return
         }
-        val existing = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        val existing = recoveryDraftStore.load("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
         val draft = existing.optJSONObject("draft")
         if (existing.optString("state") != "active" || draft == null) {
             sendJson(output, 409, failJson("RECOVERY_DRAFT_CORRUPTED", "Active Recovery Draft is unavailable."))
@@ -1058,7 +1051,7 @@ class AndroidLocalhostServer(
         val next = JSONObject(draft.toString())
             .put("draftRevision", draft.optInt("draftRevision") + 1)
             .put("fields", request.optJSONArray("fields") ?: draft.optJSONArray("fields") ?: JSONArray())
-        val errors = saveRecoveryDraft(next)
+        val errors = recoveryDraftStore.save(next)
         if (errors.length() > 0) {
             sendJson(output, 503, responseJson(false, existing.toString(), errors))
             return
@@ -1072,7 +1065,7 @@ class AndroidLocalhostServer(
             sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
             return
         }
-        deleteRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        recoveryDraftStore.delete("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
         sendJson(output, 200, okJson(JSONObject().put("state", "none").put("draft", JSONObject.NULL).toString()))
     }
 
@@ -1130,7 +1123,7 @@ class AndroidLocalhostServer(
                 return
             }
 
-            val snapshot = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+            val snapshot = recoveryDraftStore.load("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
             val draft = snapshot.optJSONObject("draft")
             if (snapshot.optString("state") != "active" || draft == null) {
                 sendJson(output, 409, failJson("RECOVERY_DRAFT_REQUIRED", "Recovery Draft is required."))
@@ -1173,7 +1166,7 @@ class AndroidLocalhostServer(
                 .put("reflection", reflection)
 
             if (reflection.optBoolean("succeeded")) {
-                deleteRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+                recoveryDraftStore.delete("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
                 success = true
                 sendJson(output, 200, okJson(result.toString()))
                 return
@@ -1573,7 +1566,7 @@ class AndroidLocalhostServer(
         val configuration = JSONObject(loadConfigurationJson())
         val resources = inspectWorkoutRecoveryResources()
         resources.firstOrNull { it.resourceKey == resourceKey } ?: run {
-            val draft = findRecoveryDraftByResourceKey(configuration, resourceKey) ?: return@run null
+            val draft = recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::recoveryResourceKey) ?: return@run null
             resources.firstOrNull { it.source.path == draft.optString("sourcePath") }
         }
     }.getOrNull()
@@ -1590,11 +1583,11 @@ class AndroidLocalhostServer(
             return JSONObject().put("errors", errorsArray(code, message))
         }
         val resolved = resources.firstOrNull { it.resourceKey == resourceKey }
-            ?: findRecoveryDraftByResourceKey(configuration, resourceKey)?.let { draft ->
+            ?: recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::recoveryResourceKey)?.let { draft ->
                 resources.firstOrNull { it.source.path == draft.optString("sourcePath") }
             }
             ?: return JSONObject().put("errors", errorsArray("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
-        val snapshot = loadRecoveryDraft("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
+        val snapshot = recoveryDraftStore.load("WORKOUT", resolved.source.path, sourceRevision(resolved.source))
         val draft = snapshot.optJSONObject("draft")
         when (snapshot.optString("state")) {
             "none" -> return JSONObject().put("errors", errorsArray("RECOVERY_DRAFT_REQUIRED", "Recovery Draft is required."))
@@ -1815,15 +1808,6 @@ class AndroidLocalhostServer(
         .put("validate", eligible)
         .put("commit", eligible)
 
-    private fun deleteRecoveryDraft(resourceType: String, sourcePath: String, currentSourceRevision: String) {
-        val draft = JSONObject()
-            .put("resourceType", resourceType)
-            .put("sourcePath", sourcePath)
-            .put("sourceRevision", currentSourceRevision)
-        val path = File(recoveryDraftDirectory, recoveryDraftFileName(draft))
-        if (path.exists()) path.delete()
-    }
-
     private fun recoveryResourceKey(configuration: JSONObject, resourceType: String, sourcePath: String, sourceRevision: String): String {
         val repository = configuration.getJSONObject("repository")
         val key = listOf(
@@ -1869,7 +1853,7 @@ class AndroidLocalhostServer(
 
     private fun createWorkoutRecoveryDraft(source: RuntimeSourceFile, broken: Boolean): JSONObject {
         val sourceRevision = source.revision ?: contentRevision(source.content)
-        val existing = loadRecoveryDraft("WORKOUT", source.path, sourceRevision)
+        val existing = recoveryDraftStore.load("WORKOUT", source.path, sourceRevision)
         if (existing.optString("state") == "active") return existing
         if (!broken) {
             return JSONObject()
@@ -1887,83 +1871,11 @@ class AndroidLocalhostServer(
             .put("draftRevision", 1)
             .put("fields", extractWorkoutRecoveryFields(source.path, source.content))
             .put("suggestions", JSONArray())
-        val errors = saveRecoveryDraft(draft)
+        val errors = recoveryDraftStore.save(draft)
         return JSONObject()
             .put("state", if (errors.length() == 0) "active" else "none")
             .put("draft", if (errors.length() == 0) draft else JSONObject.NULL)
             .put("errors", errors)
-    }
-
-    private fun loadRecoveryDraft(resourceType: String, sourcePath: String, currentSourceRevision: String): JSONObject {
-        if (!recoveryDraftDirectory.exists()) {
-            return JSONObject().put("state", "none").put("draft", JSONObject.NULL)
-        }
-
-        return try {
-            recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
-                ?.sortedBy { it.name }
-                ?.forEach { file ->
-                    val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
-                    val draft = envelope.optJSONObject("draft") ?: return JSONObject().put("state", "corrupted").put("draft", JSONObject.NULL)
-                    if (draft.optString("resourceType") == resourceType && draft.optString("sourcePath") == sourcePath) {
-                        val state = when {
-                            draft.optInt("schemaVersion", -1) != 1 -> "incompatible"
-                            draft.optString("sourceRevision") != currentSourceRevision -> "stale"
-                            else -> "active"
-                        }
-                        return JSONObject().put("state", state).put("draft", draft)
-                    }
-                }
-            JSONObject().put("state", "none").put("draft", JSONObject.NULL)
-        } catch (_: Exception) {
-            JSONObject().put("state", "corrupted").put("draft", JSONObject.NULL)
-        }
-    }
-
-    private fun findRecoveryDraftByResourceKey(configuration: JSONObject, resourceKey: String): JSONObject? {
-        if (!recoveryDraftDirectory.exists()) {
-            return null
-        }
-
-        return try {
-            recoveryDraftDirectory.listFiles { file -> file.extension == "json" }
-                ?.sortedBy { it.name }
-                ?.forEach { file ->
-                    val envelope = JSONObject(file.readText(StandardCharsets.UTF_8))
-                    val draft = envelope.optJSONObject("draft") ?: return null
-                    if (draft.optInt("schemaVersion", -1) == 1 &&
-                        draft.optString("resourceType") == "WORKOUT" &&
-                        recoveryResourceKey(configuration, draft.optString("resourceType"), draft.optString("sourcePath"), draft.optString("sourceRevision")) == resourceKey) {
-                        return draft
-                    }
-                }
-            null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun saveRecoveryDraft(draft: JSONObject): JSONArray {
-        return try {
-            recoveryDraftDirectory.mkdirs()
-            recoveryTemporaryDirectory.mkdirs()
-            val path = File(recoveryDraftDirectory, recoveryDraftFileName(draft))
-            val temporary = File(recoveryTemporaryDirectory, path.name + ".tmp")
-            temporary.writeText(JSONObject().put("draft", draft).toString(2), StandardCharsets.UTF_8)
-            if (!temporary.renameTo(path)) throw IllegalStateException("Recovery Draft could not be replaced.")
-            JSONArray()
-        } catch (_: Exception) {
-            errorsArray("RECOVERY_DRAFT_SAVE_FAILED", "Recovery Draft could not be saved.")
-        }
-    }
-
-    private fun recoveryDraftFileName(draft: JSONObject): String {
-        val key = listOf(
-            draft.optString("resourceType"),
-            draft.optString("sourcePath"),
-            draft.optString("sourceRevision")
-        ).joinToString("|")
-        return sha256Hex(key) + ".json"
     }
 
     private fun extractWorkoutRecoveryFields(path: String, content: String): JSONArray {

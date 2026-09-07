@@ -119,7 +119,7 @@ class MasterReferenceContractParityTest {
         val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
             .readText()
         val readResolver = "private fun resolveRecoveryResourceForRead"
-        val draftKeyLookup = "findRecoveryDraftByResourceKey(configuration, resourceKey)"
+        val draftKeyLookup = "recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::recoveryResourceKey)"
         val stale = "errorsArray(\"RECOVERY_DRAFT_STALE\", \"Recovery Draft source revision is stale.\")"
         val notFound = "errorsArray(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
         val validation = source.substringAfter("private fun validateRecoveryDraft")
