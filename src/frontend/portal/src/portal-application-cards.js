@@ -13,6 +13,9 @@ export function createApplicationCard(application) {
   const card = document.createElement('a')
   card.className = 'application-card'
   card.href = application.route
+  if (application.portalDescription) {
+    card.title = application.portalDescription
+  }
 
   const header = document.createElement('div')
   header.className = 'application-card-header'
@@ -39,29 +42,62 @@ export function createApplicationCard(application) {
   const pointer = document.createElement('span')
   pointer.className = 'application-pointer'
   pointer.textContent = application.portalPointer ?? ''
-  content.append(category, title, pointer)
+  const description = document.createElement('span')
+  description.className = 'application-description'
+  description.textContent = application.portalDescription ?? ''
+  content.append(category, title, pointer, description)
 
   const footer = document.createElement('div')
   footer.className = 'application-footer'
-  const framework = document.createElement('span')
-  framework.textContent = application.frameworkName ?? ''
-  footer.append(framework)
+  const frameworkLabel = document.createElement('span')
+  frameworkLabel.className = 'framework-label'
+  frameworkLabel.textContent = 'Built with'
+  footer.append(frameworkLabel, ...createFrameworkStackItems(application))
 
   card.append(header, content, footer)
   return card
 }
 
 function createApplicationIcon(application) {
-  if (application.frameworkIconHref) {
-    const icon = document.createElement('img')
-    icon.src = application.frameworkIconHref
-    icon.alt = ''
-    icon.className = 'application-favicon'
-    return icon
-  }
-
   const icon = document.createElement('i')
   icon.className = `mdi ${application.iconClass}`
   icon.setAttribute('aria-hidden', 'true')
   return icon
+}
+
+export function createFrameworkStackDescriptors(application) {
+  if (Array.isArray(application.frameworkIcons) && application.frameworkIcons.length > 0) {
+    return application.frameworkIcons.flatMap((frameworkIcon, index) => {
+      const item = {
+        type: 'framework',
+        name: frameworkIcon.name,
+        href: frameworkIcon.href,
+      }
+
+      return index === 0 ? [item] : [{ type: 'separator', text: ' + ' }, item]
+    })
+  }
+
+  return [{
+    type: 'framework',
+    name: application.frameworkName ?? '',
+    href: application.frameworkIconHref,
+  }]
+}
+
+function createFrameworkStackItems(application) {
+  return createFrameworkStackDescriptors(application).map((descriptor) => {
+    if (descriptor.type === 'separator') {
+      return document.createTextNode(descriptor.text)
+    }
+
+    const frameworkItem = document.createElement('span')
+    frameworkItem.className = 'framework-item'
+    const icon = document.createElement('img')
+    icon.src = descriptor.href
+    icon.alt = ''
+    icon.className = 'framework-icon'
+    frameworkItem.append(icon, document.createTextNode(descriptor.name))
+    return frameworkItem
+  })
 }

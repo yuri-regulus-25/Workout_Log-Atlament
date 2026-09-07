@@ -332,11 +332,7 @@ function createThemeTrigger() {
   icon.className = 'mdi mdi-theme-light-dark'
   icon.setAttribute('aria-hidden', 'true')
 
-  const label = document.createElement('span')
-  label.className = 'atl-theme-trigger-label'
-  label.textContent = 'Theme'
-
-  trigger.append(icon, label)
+  trigger.append(icon)
 
   return trigger
 }

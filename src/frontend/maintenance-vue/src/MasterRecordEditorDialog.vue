@@ -1,14 +1,14 @@
 <template>
   <v-dialog :model-value="open" max-width="720" persistent @update:model-value="emit('update:open', $event)">
     <v-card>
-      <div class="maintenance-dialog-header">
+      <v-toolbar class="maintenance-dialog-toolbar" density="comfortable">
         <v-btn icon="mdi-close" variant="text" aria-label="閉じる" @click="emit('close')" />
-        <v-card-title>{{ title }}</v-card-title>
-        <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="emit('save')">
+        <v-toolbar-title>{{ title }}</v-toolbar-title>
+        <v-divider vertical class="mx-0" />
+        <v-btn variant="text" :loading="saving" :disabled="!canSave" @click="emit('save')">
           {{ dialogMode === 'create' ? '作成' : '更新' }}
         </v-btn>
-      </div>
-      <v-divider />
+      </v-toolbar>
       <v-card-text>
         <v-form class="record-form" @submit.prevent="emit('save')">
           <template v-if="machineDraft">

@@ -1,12 +1,12 @@
 <template>
   <v-dialog :model-value="open" max-width="720" persistent @update:model-value="emit('update:open', $event)">
     <v-card>
-      <div class="maintenance-dialog-header">
+      <v-toolbar class="maintenance-dialog-toolbar" density="comfortable">
         <v-btn icon="mdi-close" variant="text" aria-label="閉じる" @click="emit('update:open', false)" />
-        <v-card-title>未解決参照の解決</v-card-title>
-        <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="emit('resolve')">解決</v-btn>
-      </div>
-      <v-divider />
+        <v-toolbar-title>未解決参照の解決</v-toolbar-title>
+        <v-divider vertical class="mx-0" />
+        <v-btn variant="text" :loading="saving" :disabled="!resolveTargetId" @click="emit('resolve')">解決</v-btn>
+      </v-toolbar>
       <v-card-text>
         <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
           {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトに影響しています。

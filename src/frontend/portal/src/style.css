@@ -277,13 +277,6 @@ body {
   line-height: 1;
 }
 
-.application-favicon {
-  display: block;
-  height: 26px;
-  object-fit: contain;
-  width: 26px;
-}
-
 .application-arrow {
   color: rgb(161, 167, 164);
   font-size: 20px;
@@ -329,17 +322,60 @@ body {
   font-size: 13px;
 }
 
+.application-description {
+  display: block;
+  margin-top: 10px;
+  color: var(--wl-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .application-description {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 160ms, transform 160ms;
+  }
+
+  .application-card:hover .application-description,
+  .application-card:focus-visible .application-description {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 :root[data-theme="dark"] .application-pointer {
   color: var(--wl-text-muted);
 }
 
 .application-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
   margin-top: 22px;
   padding-top: 14px;
   border-top: 1px solid rgb(238, 240, 239);
   color: rgb(150, 156, 153);
   font-size: 11px;
   font-weight: 600;
+}
+
+.framework-label {
+  margin-right: 1px;
+}
+
+.framework-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.framework-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
 }
 
 :root[data-theme="dark"] .application-footer {

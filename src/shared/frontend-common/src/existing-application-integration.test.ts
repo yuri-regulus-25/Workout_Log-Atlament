@@ -105,20 +105,31 @@ describe('Phase 9 existing application integration', () => {
     expect(settings).not.toContain('runRecoveryAction')
   })
 
-  it('keeps Portal cards on hosted application favicons', () => {
+  it('keeps Portal application icons separate from framework favicons', () => {
     const registry = readSource('src/shared/frontend-common/src/navigation/application-registry.js')
     const portalCards = readSource('src/frontend/portal/src/portal-application-cards.js')
+    const portalHtml = readSource('src/frontend/portal/src/index.html')
+    const portalCss = readSource('src/frontend/portal/src/style.css')
     const maintenanceHtml = readSource('src/frontend/maintenance-vue/index.html')
     const maintenanceFavicon = readSource('src/frontend/maintenance-vue/public/favicon.svg')
 
-    for (const id of hostedApplicationIds) {
+    for (const id of hostedApplicationIds.filter((id) => id !== 'maintenance')) {
       expect(registry).toContain(`frameworkIconHref: '/${id}/favicon.svg'`)
     }
+    expect(portalHtml).toContain('Portal - 利用する機能を選択します')
     expect(registry).toContain("frameworkName: 'Vue.js + Vuetify'")
-    expect(registry).toContain("frameworkIconHref: '/maintenance/favicon.svg'")
+    expect(registry).toContain("frameworkIcons: [")
+    expect(registry).toContain("{ name: 'Vue.js', href: '/workouts/favicon.svg' }")
+    expect(registry).toContain("{ name: 'Vuetify', href: '/maintenance/favicon.svg' }")
+    expect(registry).toContain('portalDescription:')
     expect(portalCards).toContain('function createApplicationIcon')
-    expect(portalCards).toContain('application.frameworkIconHref')
-    expect(portalCards).toContain("icon.className = 'application-favicon'")
+    expect(portalCards).toContain('application.iconClass')
+    expect(portalCards).toContain('createFrameworkStackItems')
+    expect(portalCards).toContain("frameworkLabel.textContent = 'Built with'")
+    expect(portalCards).toContain("icon.className = 'framework-icon'")
+    expect(portalCards).toContain('card.title = application.portalDescription')
+    expect(portalCss).toContain('@media (hover: hover) and (pointer: fine)')
+    expect(portalCss).toContain('.application-card:hover .application-description')
     expect(maintenanceHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />')
     expect(maintenanceFavicon).toContain('<svg')
     expect(maintenanceFavicon).toContain('#1867C0')

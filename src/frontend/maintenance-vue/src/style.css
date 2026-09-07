@@ -129,21 +129,26 @@
   color: var(--wl-text) !important;
 }
 
-.maintenance-dialog-header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+.maintenance-dialog-toolbar {
+  background: var(--wl-primary) !important;
+  color: #ffffff !important;
 }
 
-.maintenance-dialog-header .v-card-title {
+.maintenance-dialog-toolbar :is(.v-btn, .v-btn__content, .v-icon, .v-toolbar-title__placeholder) {
+  color: #ffffff !important;
+}
+
+.maintenance-dialog-toolbar .v-toolbar-title {
   min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  color: var(--wl-text-strong);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.maintenance-dialog-toolbar .v-divider {
+  border-color: rgba(255, 255, 255, 0.48) !important;
+}
+
+.recovery-loading .v-progress-circular__overlay,
+.maintenance-table .v-progress-circular__overlay {
+  stroke: var(--wl-primary) !important;
 }
 
 .v-overlay {

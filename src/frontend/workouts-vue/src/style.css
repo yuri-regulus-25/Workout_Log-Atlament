@@ -60,6 +60,15 @@
   align-items: center;
 }
 
+@media (max-width: 900px) {
+  .workout-calendar-header {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
 .calendar-actions {
   display: inline-flex;
   align-items: center;

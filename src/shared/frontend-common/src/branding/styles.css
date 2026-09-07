@@ -72,10 +72,6 @@
   line-height: 1;
 }
 
-.atl-theme-trigger-label {
-  display: none;
-}
-
 .atl-character-trigger {
   cursor: pointer;
   user-select: none;
