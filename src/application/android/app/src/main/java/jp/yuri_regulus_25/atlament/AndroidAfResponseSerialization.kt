@@ -21,6 +21,15 @@ internal fun responseJson(success: Boolean, dataJson: String, errors: JSONArray,
     }
 """.trimIndent()
 
+internal fun okJson(dataJson: String, errorsJson: String = "[]", warningsJson: String = "[]"): String = """
+    {
+      "success": true,
+      "errors": $errorsJson,
+      "warnings": $warningsJson,
+      "data": $dataJson
+    }
+""".trimIndent()
+
 internal fun errorsJson(code: String, message: String): String =
     errorsArray(code, message).toString()
 

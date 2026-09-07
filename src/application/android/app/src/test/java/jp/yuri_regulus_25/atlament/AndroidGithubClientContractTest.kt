@@ -10,6 +10,7 @@ class AndroidGithubClientContractTest {
     fun keepsGithubTransportAndErrorMappingOutOfServerRouting() {
         val client = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidGithubClient.kt").readText()
         val server = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt").readText()
+        val masterWrite = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidMasterWriteService.kt").readText()
 
         assertTrue(client.contains("internal class AndroidGithubClient"))
         assertTrue(client.contains("fun readContentFile("))
@@ -26,7 +27,7 @@ class AndroidGithubClientContractTest {
 
         assertTrue(server.contains("private val githubClient = AndroidGithubClient"))
         assertTrue(server.contains("githubClient.readContentFile"))
-        assertTrue(server.contains("githubClient.writeContentFile"))
+        assertTrue(masterWrite.contains("githubClient.writeContentFile"))
         assertTrue(server.contains("githubClient.writeRecoveryContentFile"))
         assertTrue(server.contains("githubClient.readBranchHead"))
         assertTrue(server.contains("githubClient.postGraphql"))

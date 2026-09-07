@@ -27,6 +27,17 @@ class AndroidAfResponseSerializationTest {
         assertTrue(source.contains("\"data\": ${'$'}dataJson"))
     }
 
+    @Test
+    fun buildsSuccessEnvelopeForSharedServerAndServices() {
+        val source = responseSerializationSource()
+
+        assertTrue(source.contains("internal fun okJson(dataJson: String, errorsJson: String = \"[]\", warningsJson: String = \"[]\")"))
+        assertTrue(source.contains("\"success\": true"))
+        assertTrue(source.contains("\"errors\": ${'$'}errorsJson"))
+        assertTrue(source.contains("\"warnings\": ${'$'}warningsJson"))
+        assertTrue(source.contains("\"data\": ${'$'}dataJson"))
+    }
+
     private fun responseSerializationSource(): String =
         File("src/main/java/jp/yuri_regulus_25/atlament/AndroidAfResponseSerialization.kt").readText()
 }

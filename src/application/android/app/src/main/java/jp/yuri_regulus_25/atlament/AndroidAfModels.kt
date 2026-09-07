@@ -2,6 +2,8 @@ package jp.yuri_regulus_25.atlament
 
 import org.json.JSONArray
 
+internal data class SyncResponse(val status: Int, val body: String, val success: Boolean)
+
 internal data class RuntimeSourceFile(val path: String, val content: String, val revision: String? = null)
 
 internal data class RuntimeBuildResult(val payload: String?, val errors: JSONArray, val warnings: JSONArray)
