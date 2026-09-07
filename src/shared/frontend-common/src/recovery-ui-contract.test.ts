@@ -28,7 +28,10 @@ describe('Maintenance Recovery UI contract', () => {
   })
 
   it('keeps Recovery UI purpose-limited instead of raw Git or raw JSON editing', () => {
-    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const recovery = [
+      readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue'),
+      readSource('src/frontend/maintenance-vue/src/RecoverySourcePanel.vue'),
+    ].join('\n')
 
     expect(recovery).toContain('修復内容を確認')
     expect(recovery).toContain('修復を確定')
@@ -85,6 +88,18 @@ describe('Maintenance Recovery UI contract', () => {
     expect(fieldEditor).toContain('normalizeMachines')
     expect(fieldEditor).toContain('マシンを追加')
     expect(fieldEditor).toContain('セットを追加')
+  })
+
+  it('keeps Recovery source viewing as a secondary read-only path', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const sourcePanel = readSource('src/frontend/maintenance-vue/src/RecoverySourcePanel.vue')
+
+    expect(recovery).toContain('RecoverySourcePanel')
+    expect(sourcePanel).toContain('<v-expansion-panels')
+    expect(sourcePanel).toContain('元データ')
+    expect(sourcePanel).toContain('readOnly')
+    expect(sourcePanel).toContain('修復操作は続行できます')
+    expect(recovery).not.toContain('<pre')
   })
 
   it('keeps Recovery write conflict visible instead of emptying the commit confirmation dialog', () => {
