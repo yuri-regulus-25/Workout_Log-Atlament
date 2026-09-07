@@ -34,6 +34,7 @@ class AndroidLocalhostServer(
     private val runtimeDataBuilder = AndroidRuntimeDataBuilder()
     private val githubClient = AndroidGithubClient { credentialStore.readToken() }
     private val configuredResourceFetcher = AndroidConfiguredResourceFetcher(githubClient, ::validateConfiguration)
+    private val statusComposer = AndroidStatusComposer()
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -186,57 +187,21 @@ class AndroidLocalhostServer(
         return "/" + normalized.joinToString("/")
     }
 
-    private fun statusJson(): String {
-        val operations = operationGate.snapshot()
-        return """
-        {
-          "success": true,
-          "errors": [],
-          "data": {
-            "versions": {
-              "applicationFramework": "${BuildConfig.VERSION_NAME}",
-              "frontendFramework": "${frontendVersionJson().optString("frontend", "unknown")}",
-              "nativePackages": {
-                "windows": {
-                  "version": "${frontendVersionJson().optString("windows", "unknown")}"
-                },
-                "android": {
-                  "versionName": "${BuildConfig.VERSION_NAME}",
-                  "versionCode": ${BuildConfig.VERSION_CODE}
-                }
-              },
-              "build": {
-                "variant": "${BuildConfig.BUILD_TYPE}",
-                "debug": ${BuildConfig.DEBUG}
-              }
-            },
-            "readiness": ${readinessJson()},
-            "runtimeData": ${runtimeDataFactsJson()},
-            "recovery": ${recoveryStatusFactsJson()},
-            "application": {
-              "status": "${applicationStatus()}",
-              "degraded": ${applicationStatus() == "degraded"},
-              "acceptingRequests": true
-            },
-            "operations": {
-              "startup": "${operations.startup}",
-              "manualSync": "${operations.manualSync}",
-              "configurationUpdate": "${operations.configurationUpdate}",
-              "credentialUpdate": "${operations.credentialUpdate}",
-              "shutdown": "${operations.shutdown}"
-            },
-            "components": {
-              "configuration": "${configurationStatus()}",
-              "credential": "${credentialStore.componentStatus()}",
-              "github": "${githubStatus()}",
-              "runtimeData": "${runtimeDataStore.status()}",
-              "hosting": ${hostingStatusJson()}
-            },
-            "requiredActions": ${requiredActionsJson()}
-          }
-        }
-    """.trimIndent()
-    }
+    private fun statusJson(): String = statusComposer.statusJson(
+        AndroidStatusSnapshot(
+            frontendVersion = frontendVersionJson(),
+            operations = operationGate.snapshot(),
+            runtimeDataFactsJson = runtimeDataFactsJson(),
+            recoveryStatusFactsJson = recoveryStatusFactsJson(),
+            hostingStatusJson = hostingStatusJson(),
+            configurationStatus = configurationStatus(),
+            credentialComponentStatus = credentialStore.componentStatus(),
+            credentialState = credentialStore.state(),
+            githubStatus = githubStatus(),
+            runtimeDataStatus = runtimeDataStore.status(),
+            runtimeDataExists = runtimeDataStore.exists()
+        )
+    )
 
 
     private fun frontendVersionJson(): JSONObject = runCatching {
@@ -311,44 +276,6 @@ class AndroidLocalhostServer(
         return runCatching {
             if (validateConfiguration(JSONObject(configurationFile.readText(StandardCharsets.UTF_8))).length() == 0) "available" else "unavailable"
         }.getOrDefault("unavailable")
-    }
-
-    private fun applicationStatus(): String =
-        if (configurationStatus() == "available" && runtimeDataStore.status() == "available" && requiredActionNames().isEmpty()) "ready" else "degraded"
-
-    private fun readinessJson(): String {
-        val requiredActions = requiredActionNames().sorted()
-        val unavailableComponents = mutableListOf<String>()
-        if (configurationStatus() == "unavailable") unavailableComponents.add("configuration")
-        if (credentialStore.componentStatus() == "unavailable") unavailableComponents.add("credential")
-        if (runtimeDataStore.status() == "unavailable") unavailableComponents.add("runtimeData")
-        val degradedComponents = mutableListOf<String>()
-        if (githubStatus() == "degraded") degradedComponents.add("github")
-        val state = when {
-            requiredActions.contains("CONFIGURATION_REQUIRED") || requiredActions.contains("CREDENTIAL_REQUIRED") -> "unconfigured"
-            unavailableComponents.contains("runtimeData") -> "unavailable"
-            applicationStatus() == "degraded" || degradedComponents.isNotEmpty() || unavailableComponents.isNotEmpty() || requiredActions.isNotEmpty() -> "degraded"
-            else -> "ready"
-        }
-        return """
-            {
-              "state": "$state",
-              "requiredActions": ${requiredActions.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "unavailableComponents": ${unavailableComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "degradedComponents": ${degradedComponents.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }}
-            }
-        """.trimIndent()
-    }
-
-    private fun requiredActionsJson(): String =
-        requiredActionNames().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
-
-    private fun requiredActionNames(): List<String> {
-        val actions = mutableListOf("RUNTIME_DATA_REQUIRED")
-        if (runtimeDataStore.exists()) actions.remove("RUNTIME_DATA_REQUIRED")
-        if (credentialStore.state() == "missing") actions.add(0, "CREDENTIAL_REQUIRED")
-        if (configurationStatus() != "available") actions.add(0, "CONFIGURATION_REQUIRED")
-        return actions
     }
 
     private fun loadConfigurationJson(): String = configurationStore.loadJson()
