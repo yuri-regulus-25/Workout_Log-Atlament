@@ -45,6 +45,28 @@ internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted:
 internal fun androidMasterReferenceWarningCode(deleted: Boolean): String =
     if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
 
+internal fun androidNormalizeGitBranchRef(ref: String): String {
+    val trimmed = ref.trim().trim('/')
+    return when {
+        trimmed.isBlank() -> "heads/main"
+        trimmed.startsWith("refs/") -> trimmed.removePrefix("refs/")
+        trimmed.startsWith("heads/") || trimmed.startsWith("tags/") -> trimmed
+        else -> "heads/$trimmed"
+    }
+}
+
+internal data class AndroidRecoveryFileAddition(val path: String, val contents: String)
+internal data class AndroidRecoveryFileDeletion(val path: String)
+
+internal fun androidRecoveryRelocationAddition(replacementPath: String, replacementContent: String): AndroidRecoveryFileAddition =
+    AndroidRecoveryFileAddition(
+        replacementPath.trim('/'),
+        java.util.Base64.getEncoder().encodeToString(replacementContent.toByteArray(StandardCharsets.UTF_8))
+    )
+
+internal fun androidRecoveryRelocationDeletion(sourcePath: String): AndroidRecoveryFileDeletion =
+    AndroidRecoveryFileDeletion(sourcePath.trim('/'))
+
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
@@ -1232,12 +1254,7 @@ class AndroidLocalhostServer(
                 sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery path is outside the configured resource boundary."))
                 return
             }
-            if (resolved.source.path != replacementPath) {
-                sendJson(output, 503, failJson("RECOVERY_WRITE_FAILED", "Android Recovery relocation commit is unavailable in this build."))
-                return
-            }
-
-            val push = pushRecoverySamePath(configuration, resolved.source.path, expectedSourceRevision, replacementContent)
+            val push = pushRecoveryReplacement(configuration, resolved.source.path, expectedSourceRevision, replacementPath, replacementContent)
             val reflection = reflectRecoveryCommit(configuration, push.replacementPath, push.replacementRevision, push.commitRevision)
             val result = JSONObject()
                 .put("committed", true)
@@ -1267,6 +1284,19 @@ class AndroidLocalhostServer(
             completeOperation("recoveryCommit", success)
         }
     }
+
+    private fun pushRecoveryReplacement(
+        configuration: JSONObject,
+        sourcePath: String,
+        expectedSourceRevision: String,
+        replacementPath: String,
+        replacementContent: String
+    ): RecoveryGitWriteResult =
+        if (sourcePath == replacementPath) {
+            pushRecoverySamePath(configuration, sourcePath, expectedSourceRevision, replacementContent)
+        } else {
+            pushRecoveryRelocation(configuration, sourcePath, expectedSourceRevision, replacementPath, replacementContent)
+        }
 
     private fun pushRecoverySamePath(
         configuration: JSONObject,
@@ -1315,6 +1345,95 @@ class AndroidLocalhostServer(
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun pushRecoveryRelocation(
+        configuration: JSONObject,
+        sourcePath: String,
+        expectedSourceRevision: String,
+        replacementPath: String,
+        replacementContent: String
+    ): RecoveryGitWriteResult {
+        val source = readGithubContentFile(configuration, sourcePath)
+        if (contentRevision(source.content) != expectedSourceRevision) {
+            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
+        }
+
+        try {
+            readGithubContentFile(configuration, replacementPath)
+            throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery destination already exists.")
+        } catch (ex: AfException) {
+            if (ex.code != "GITHUB_RESOURCE_NOT_FOUND") throw ex
+        }
+
+        val headSha = readBranchHead(configuration)
+        val commitSha = createRecoveryRelocationCommit(configuration, headSha, sourcePath, replacementPath, replacementContent)
+        return RecoveryGitWriteResult(replacementPath, contentRevision(replacementContent), commitSha)
+    }
+
+    private fun readBranchHead(configuration: JSONObject): String {
+        val repository = configuration.getJSONObject("repository")
+        val owner = repository.optString("owner").trim()
+        val repo = repository.optString("repository").trim()
+        val ref = androidNormalizeGitBranchRef(repository.optString("ref", "main"))
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/repos/${urlPath(owner)}/${urlPath(repo)}/git/ref/${escapeRemotePath(ref)}"
+        val sha = JSONObject(httpGet(url, readCredentialToken(), timeoutSec, ref)).optJSONObject("object")?.optString("sha").orEmpty().trim()
+        if (sha.isBlank()) throw AfException("GITHUB_SERVER_ERROR", "GitHub ref response is invalid.")
+        return sha
+    }
+
+    private fun createRecoveryRelocationCommit(
+        configuration: JSONObject,
+        expectedHeadSha: String,
+        sourcePath: String,
+        replacementPath: String,
+        replacementContent: String
+    ): String {
+        val repository = configuration.getJSONObject("repository")
+        val branchName = androidNormalizeGitBranchRef(repository.optString("ref", "main")).removePrefix("heads/")
+        val addition = androidRecoveryRelocationAddition(replacementPath, replacementContent)
+        val deletion = androidRecoveryRelocationDeletion(sourcePath)
+        val input = JSONObject()
+            .put("branch", JSONObject()
+                .put("repositoryNameWithOwner", "${repository.optString("owner").trim()}/${repository.optString("repository").trim()}")
+                .put("branchName", branchName))
+            .put("expectedHeadOid", expectedHeadSha)
+            .put("message", JSONObject().put("headline", "Recover workout resource"))
+            .put("fileChanges", JSONObject()
+                .put("additions", JSONArray().put(JSONObject()
+                    .put("path", addition.path)
+                    .put("contents", addition.contents)))
+                .put("deletions", JSONArray().put(JSONObject()
+                    .put("path", deletion.path))))
+        val payload = JSONObject()
+            .put("query", """
+                mutation(${'$'}input: CreateCommitOnBranchInput!) {
+                  createCommitOnBranch(input: ${'$'}input) {
+                    commit { oid }
+                  }
+                }
+            """.trimIndent())
+            .put("variables", JSONObject().put("input", input))
+            .toString()
+        val response = postGithubGraphql(configuration, payload)
+        val errors = response.optJSONArray("errors")
+        if (errors != null && errors.length() > 0) {
+            val message = errors.optJSONObject(0)?.optString("message").orEmpty()
+            val type = errors.optJSONObject(0)?.optString("type").orEmpty()
+            if (type == "STALE_DATA" || message.contains("Expected branch to point to", ignoreCase = true)) {
+                throw AfException("RECOVERY_WRITE_CONFLICT", "Remote repository changed before Recovery commit.")
+            }
+            throw AfException("RECOVERY_WRITE_FAILED", message.ifBlank { "Recovery relocation commit failed." })
+        }
+        val commitSha = response.optJSONObject("data")
+            ?.optJSONObject("createCommitOnBranch")
+            ?.optJSONObject("commit")
+            ?.optString("oid")
+            .orEmpty()
+            .trim()
+        if (commitSha.isBlank()) throw AfException("RECOVERY_WRITE_FAILED", "GitHub write result is ambiguous.")
+        return commitSha
     }
 
     private fun reflectRecoveryCommit(
@@ -2631,6 +2750,31 @@ class AndroidLocalhostServer(
             val status = connection.responseCode
             if (status !in 200..299) throw mapGithubError(status, pathForError)
             connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun postGithubGraphql(configuration: JSONObject, payload: String): JSONObject {
+        val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
+        val url = "https://api.github.com/graphql"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = timeoutSec * 1000
+            readTimeout = timeoutSec * 1000
+            doOutput = true
+            setRequestProperty("User-Agent", "Atlament-Android-AF")
+            setRequestProperty("Content-Type", "application/json")
+            readCredentialToken()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        return try {
+            connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                throw mapGithubError(status, "graphql")
+            }
+            val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            JSONObject(response)
         } finally {
             connection.disconnect()
         }
