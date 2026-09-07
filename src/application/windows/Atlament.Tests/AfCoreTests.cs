@@ -399,6 +399,82 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void RecoveryReadAndValidateClassifyOldRevisionDraftAsStale()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new RecoveryService(new RecoveryDraftStore(new WindowsPathProvider(root)));
+            var configuration = Configuration("data");
+            var sourcePath = "workouts/b.json";
+            var sourceRevisionA = "source-revision-a";
+            var sourceRevisionB = "source-revision-b";
+            var sourceA = new RuntimeSourceFile(sourcePath, """
+                {
+                  "schema_version": 1,
+                  "session_id": "stale-draft",
+                  "status": "complete",
+                  "gym_id": "known-gym",
+                  "machines": [
+                    {
+                      "machine_id": "known-machine",
+                      "sets": [
+                        { "set": 1, "weight_kg": 20, "reps": 10 }
+                      ]
+                    }
+                  ]
+                }
+                """, sourceRevisionA);
+            var sourceB = new RuntimeSourceFile(sourcePath, """
+                {
+                  "schema_version": 1,
+                  "session_id": "stale-draft",
+                  "date": "2026-08-25",
+                  "status": "complete",
+                  "gym_id": "known-gym",
+                  "machines": [
+                    {
+                      "machine_id": "known-machine",
+                      "sets": [
+                        { "set": 1, "weight_kg": 20, "reps": 10 }
+                      ]
+                    }
+                  ]
+                }
+                """, sourceRevisionB);
+            var filesA = new[] { sourceA };
+            var filesB = new[] { sourceB };
+            var oldResourceKey = Assert.Single(service.ListBrokenResources(configuration, filesA, MachineMaster, GymMaster)).ResourceKey;
+            var draft = service.CreateDraft(configuration, oldResourceKey, filesA, MachineMaster, GymMaster).Snapshot.Draft!;
+            var autosavedFields = draft.Fields
+                .Select(field => field["fieldPath"]?.GetValue<string>() == "/date"
+                    ? ConfirmedField("/date", JsonValue.Create("2026-08-24"))
+                    : field)
+                .ToArray();
+            Assert.Empty(service.UpdateDraft(configuration, oldResourceKey, new RecoveryDraftUpdate(draft.DraftRevision, autosavedFields), filesA, MachineMaster, GymMaster).Errors);
+
+            var (detail, detailErrors) = service.GetDetail(configuration, oldResourceKey, filesB, MachineMaster, GymMaster);
+            var (draftSnapshot, draftErrors) = service.GetDraft(configuration, oldResourceKey, filesB, MachineMaster, GymMaster);
+            var (validation, validationErrors) = service.ValidateDraft(configuration, oldResourceKey, filesB, MachineMaster, GymMaster);
+
+            Assert.Empty(detailErrors);
+            Assert.NotNull(detail);
+            Assert.Equal(sourceRevisionB, detail!.Inspection.Revision);
+            Assert.Equal("stale", detail.Draft.State);
+            Assert.Equal(sourceRevisionA, detail.Draft.Draft!.SourceRevision);
+            Assert.Empty(draftErrors);
+            Assert.Equal("stale", draftSnapshot.State);
+            Assert.Null(validation);
+            Assert.Contains(validationErrors, error => error.Code == AfErrorCodes.RecoveryDraftStale);
+            Assert.DoesNotContain(validationErrors, error => error.Code == AfErrorCodes.RecoveryResourceNotFound);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void RecoverySourceViewIsReadOnlyAndSizeLimited()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-test-" + Guid.NewGuid().ToString("N"));

@@ -80,4 +80,20 @@ class MasterReferenceContractParityTest {
         assertTrue(source.indexOf(staleKeyLookup) < source.indexOf(notFound))
         assertTrue(source.indexOf(conflict) < source.indexOf(notFound))
     }
+
+    @Test
+    fun recoveryReadAndValidateClassifyOldRevisionDraftAsStaleBeforeNotFound() {
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+            .readText()
+        val readResolver = "private fun resolveRecoveryResourceForRead"
+        val draftKeyLookup = "findRecoveryDraftByResourceKey(configuration, resourceKey)"
+        val stale = "errorsArray(\"RECOVERY_DRAFT_STALE\", \"Recovery Draft source revision is stale.\")"
+        val notFound = "errorsArray(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
+        val validation = source.substringAfter("private fun validateRecoveryDraft")
+
+        assertTrue(source.contains(readResolver))
+        assertTrue(source.contains(draftKeyLookup))
+        assertTrue(validation.indexOf(draftKeyLookup) < validation.indexOf(notFound))
+        assertTrue(validation.contains(stale))
+    }
 }

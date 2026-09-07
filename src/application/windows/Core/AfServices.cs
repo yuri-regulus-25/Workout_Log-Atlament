@@ -428,6 +428,30 @@ public sealed class RecoveryDraftStore
         }
     }
 
+    public IReadOnlyList<RecoveryDraft> List(AfConfiguration configuration)
+    {
+        try
+        {
+            if (!Directory.Exists(_paths.RecoveryDraftRoot))
+            {
+                return Array.Empty<RecoveryDraft>();
+            }
+
+            return Directory.EnumerateFiles(_paths.RecoveryDraftRoot, "*.json")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(ReadEnvelope)
+                .Where(envelope => envelope is not null)
+                .Where(envelope => SameRepository(envelope!.Repository, configuration.Repository))
+                .Select(envelope => envelope!.Draft)
+                .Where(draft => draft.SchemaVersion == 1)
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<RecoveryDraft>();
+        }
+    }
+
     public IReadOnlyList<AfError> Save(AfConfiguration configuration, RecoveryDraft draft)
     {
         try
@@ -589,7 +613,7 @@ public sealed class RecoveryService
         RuntimeSourceFile machinesFile,
         RuntimeSourceFile gymsFile)
     {
-        var resource = ResolveWorkoutResource(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
+        var resource = ResolveWorkoutResourceForRead(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
         if (resource is null)
         {
             return (null, new[] { new AfError(AfErrorCodes.RecoveryResourceNotFound, "Recovery Resource was not found.", true) });
@@ -612,7 +636,7 @@ public sealed class RecoveryService
         RuntimeSourceFile machinesFile,
         RuntimeSourceFile gymsFile)
     {
-        var resource = ResolveWorkoutResource(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
+        var resource = ResolveWorkoutResourceForRead(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
         if (resource is null)
         {
             return (null, new[] { new AfError(AfErrorCodes.RecoveryResourceNotFound, "Recovery Resource was not found.", true) });
@@ -639,7 +663,7 @@ public sealed class RecoveryService
         RuntimeSourceFile machinesFile,
         RuntimeSourceFile gymsFile)
     {
-        var resource = ResolveWorkoutResource(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
+        var resource = ResolveWorkoutResourceForRead(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
         if (resource is null)
         {
             return (new RecoveryDraftSnapshot("none", null), new[] { new AfError(AfErrorCodes.RecoveryResourceNotFound, "Recovery Resource was not found.", true) });
@@ -712,7 +736,7 @@ public sealed class RecoveryService
         RuntimeSourceFile machinesFile,
         RuntimeSourceFile gymsFile)
     {
-        var resource = ResolveWorkoutResource(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
+        var resource = ResolveWorkoutResourceForRead(configuration, resourceKey, workoutFiles, machinesFile, gymsFile);
         if (resource is null)
         {
             return (null, new[] { new AfError(AfErrorCodes.RecoveryResourceNotFound, "Recovery Resource was not found.", true) });
@@ -842,6 +866,33 @@ public sealed class RecoveryService
         RuntimeSourceFile gymsFile) =>
         InspectWorkoutResources(configuration, workoutFiles, machinesFile, gymsFile)
             .FirstOrDefault(resource => resource.ResourceKey == resourceKey);
+
+    private WorkoutRecoveryResource? ResolveWorkoutResourceForRead(
+        AfConfiguration configuration,
+        string resourceKey,
+        IReadOnlyList<RuntimeSourceFile> workoutFiles,
+        RuntimeSourceFile machinesFile,
+        RuntimeSourceFile gymsFile)
+    {
+        var resources = InspectWorkoutResources(configuration, workoutFiles, machinesFile, gymsFile);
+        var current = resources.FirstOrDefault(resource => resource.ResourceKey == resourceKey);
+        if (current is not null)
+        {
+            return current;
+        }
+
+        var draft = _store.List(configuration)
+            .FirstOrDefault(draft =>
+                draft.ResourceType == "WORKOUT" &&
+                BuildResourceKey(configuration, draft.ResourceType, draft.SourcePath, draft.SourceRevision) == resourceKey);
+        if (draft is null)
+        {
+            return null;
+        }
+
+        return resources.FirstOrDefault(resource =>
+            string.Equals(resource.Source.Path, draft.SourcePath, StringComparison.Ordinal));
+    }
 
     private IReadOnlyList<ResourceIssue> DuplicateIssues(
         RuntimeSourceFile candidateFile,
@@ -3496,18 +3547,18 @@ public sealed class AtlamentApplication
                 return (RecoveryStatusCode(detailErrors), new AfResponse<RecoveryCommitResult>(false, detailErrors, null));
             }
 
-            if (detail.Inspection.Health != "broken")
-            {
-                var notBrokenErrors = new[] { new AfError(AfErrorCodes.RecoveryResourceNotBroken, "Recovery target is not Broken.", true) };
-                _operations.Complete("recoveryCommit", false);
-                return (409, new AfResponse<RecoveryCommitResult>(false, notBrokenErrors, null));
-            }
-
             if (!string.Equals(detail.Inspection.Revision, request.ExpectedSourceRevision, StringComparison.Ordinal))
             {
                 var sourceConflictErrors = new[] { new AfError(AfErrorCodes.RecoveryWriteConflict, "Recovery source revision is stale.", true) };
                 _operations.Complete("recoveryCommit", false);
                 return (409, new AfResponse<RecoveryCommitResult>(false, sourceConflictErrors, null));
+            }
+
+            if (detail.Inspection.Health != "broken")
+            {
+                var notBrokenErrors = new[] { new AfError(AfErrorCodes.RecoveryResourceNotBroken, "Recovery target is not Broken.", true) };
+                _operations.Complete("recoveryCommit", false);
+                return (409, new AfResponse<RecoveryCommitResult>(false, notBrokenErrors, null));
             }
 
             var (draft, draftErrors) = _recovery.GetDraft(_configuration, resourceKey, context.WorkoutFiles!, context.MachineMaster!, context.GymMaster!);
