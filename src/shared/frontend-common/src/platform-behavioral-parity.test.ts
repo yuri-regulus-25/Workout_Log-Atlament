@@ -16,7 +16,12 @@ describe('platform behavioral parity contract', () => {
       'src/application/windows/Core/AfServices.cs',
       'src/application/windows/Host/AfHttpHost.cs',
     ].map(readSource).join('\n')
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = [
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRuntimeDataStore.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRuntimeDataBuilder.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidGithubClient.kt',
+    ].map(readSource).join('\n')
     const shared = readSource('src/shared/frontend-common/src/index.ts')
 
     for (const requiredContract of [
@@ -55,7 +60,7 @@ describe('platform behavioral parity contract', () => {
     expect(android).toContain("target.path.substringAfterLast('/')")
     expect(android).toContain('readLocalMasterDocuments')
     expect(android).toContain('fetchConfiguredWorkoutResources')
-    expect(android).toContain('saveRuntimeDataAtomically')
+    expect(android).toContain('saveAtomically')
     expect(windows).toContain('LoadLocalMasterDocuments')
     expect(windows).toContain('FetchWorkoutFilesAsync')
     expect(android).toContain('workoutLogWriteAllowed')
@@ -78,7 +83,11 @@ describe('platform behavioral parity contract', () => {
       'src/application/windows/Core/GithubAccessService.cs',
       'src/application/windows/Core/RecoveryService.cs',
     ].map(readSource).join('\n')
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = [
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidGithubClient.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryDraftStore.kt',
+    ].map(readSource).join('\n')
     const shared = readSource('src/shared/frontend-common/src/index.ts')
     const node = readSource('tools/dev-runtime/development-runtime.mjs')
 

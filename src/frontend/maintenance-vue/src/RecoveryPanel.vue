@@ -70,15 +70,16 @@
         </div>
 
         <section class="recovery-section">
-          <h3>問題</h3>
-          <div class="issue-list">
-            <article v-for="issue in detail.inspection.issues" :key="`${issue.code}:${issue.location?.line ?? ''}:${issue.location?.fieldPath ?? ''}`" class="issue-card">
-              <strong>{{ issueTitle(issue) }}</strong>
-              <p>{{ issue.message }}</p>
-              <span>{{ issueContext(issue) }}</span>
-              <code>{{ issue.code }}</code>
-            </article>
-          </div>
+            <h3>問題</h3>
+            <div class="issue-list">
+              <RecoveryIssueCard
+                v-for="issue in detail.inspection.issues"
+                :key="`${issue.code}:${issue.location?.line ?? ''}:${issue.location?.fieldPath ?? ''}`"
+                :issue="issue"
+                :title="issueTitle(issue)"
+                :context="issueContext(issue)"
+              />
+            </div>
         </section>
 
         <section class="recovery-section">
@@ -92,15 +93,7 @@
             </div>
           </div>
 
-          <v-alert v-if="draftSnapshot?.state === 'stale'" type="warning" variant="tonal" class="status-alert">
-            元データが更新されています。最新の状態から修復をやり直してください。
-          </v-alert>
-          <v-alert v-else-if="draftSnapshot?.state === 'corrupted'" type="error" variant="tonal" class="status-alert">
-            下書きを読み込めません。破棄して新しく作成できます。
-          </v-alert>
-          <v-alert v-else-if="draftSnapshot?.state === 'incompatible'" type="warning" variant="tonal" class="status-alert">
-            この下書きは現在のバージョンでは使用できません。破棄して新しく作成できます。
-          </v-alert>
+          <RecoveryDraftStateAlerts :state="draftSnapshot?.state" />
 
           <div v-if="!activeDraft" class="draft-empty">
             <p>このデータの下書きはまだありません。</p>
@@ -156,12 +149,13 @@
           </v-alert>
           <div v-if="validation" class="validation-detail">
             <div v-if="validation.issues.length > 0" class="issue-list">
-              <article v-for="issue in validation.issues" :key="`${issue.code}:${issue.location?.fieldPath ?? ''}`" class="issue-card">
-                <strong>{{ issueTitle(issue) }}</strong>
-                <p>{{ issue.message }}</p>
-                <span>{{ issueContext(issue) }}</span>
-                <code>{{ issue.code }}</code>
-              </article>
+              <RecoveryIssueCard
+                v-for="issue in validation.issues"
+                :key="`${issue.code}:${issue.location?.fieldPath ?? ''}`"
+                :issue="issue"
+                :title="issueTitle(issue)"
+                :context="issueContext(issue)"
+              />
             </div>
             <v-alert v-if="validation.pathChange" type="warning" variant="tonal" class="status-alert">
               保存場所が変更されます。変更前: {{ validation.pathChange.from }} / 変更後: {{ validation.pathChange.to }}
@@ -227,6 +221,8 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
+import RecoveryDraftStateAlerts from './RecoveryDraftStateAlerts.vue'
+import RecoveryIssueCard from './RecoveryIssueCard.vue'
 import {
   commitRecoveryDraft,
   createRecoveryDraft,

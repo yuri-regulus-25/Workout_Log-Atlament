@@ -16,7 +16,10 @@ describe('Maintenance Recovery UI contract', () => {
 
   it('exposes Recovery from the existing Maintenance app without a new frontend app', () => {
     const app = readSource('src/frontend/maintenance-vue/src/App.vue')
-    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const recovery = [
+      readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue'),
+      readSource('src/frontend/maintenance-vue/src/RecoveryDraftStateAlerts.vue'),
+    ].join('\n')
 
     expect(app).toContain('修復が必要なデータ')
     expect(app).toContain('RecoveryPanel')
@@ -54,6 +57,20 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('この下書きは現在のバージョンでは使用できません')
     expect(recovery).toContain('保存済み・反映失敗')
     expect(recovery).toContain('confirmCommitOpen')
+  })
+
+  it('keeps Recovery issue and draft-state presentation in screen-local components', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const issueCard = readSource('src/frontend/maintenance-vue/src/RecoveryIssueCard.vue')
+    const draftStateAlerts = readSource('src/frontend/maintenance-vue/src/RecoveryDraftStateAlerts.vue')
+
+    expect(recovery).toContain('RecoveryIssueCard')
+    expect(recovery).toContain('RecoveryDraftStateAlerts')
+    expect(issueCard).toContain('issue.message')
+    expect(issueCard).toContain('issue.code')
+    expect(draftStateAlerts).toContain("state === 'stale'")
+    expect(draftStateAlerts).toContain("state === 'corrupted'")
+    expect(draftStateAlerts).toContain("state === 'incompatible'")
   })
 
   it('keeps Recovery write conflict visible instead of emptying the commit confirmation dialog', () => {
