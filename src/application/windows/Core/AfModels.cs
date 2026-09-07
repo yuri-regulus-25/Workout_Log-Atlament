@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Atlament.Core;
 
@@ -109,6 +110,120 @@ public sealed record MasterDocumentWriteResult(
     [property: JsonPropertyName("path")] string Path,
     [property: JsonPropertyName("revision")] string Revision);
 
+public sealed record RecoveryDraft(
+    [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
+    [property: JsonPropertyName("sourcePath")] string SourcePath,
+    [property: JsonPropertyName("sourceRevision")] string SourceRevision,
+    [property: JsonPropertyName("resourceType")] string ResourceType,
+    [property: JsonPropertyName("inspectionVersion")] int InspectionVersion,
+    [property: JsonPropertyName("draftRevision")] int DraftRevision,
+    [property: JsonPropertyName("fields")] IReadOnlyList<JsonObject> Fields,
+    [property: JsonPropertyName("suggestions")] IReadOnlyList<JsonObject> Suggestions);
+
+public sealed record RecoveryDraftSnapshot(
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("draft")] RecoveryDraft? Draft);
+
+public sealed record RecoveryDraftUpdate(
+    [property: JsonPropertyName("expectedDraftRevision")] int? ExpectedDraftRevision,
+    [property: JsonPropertyName("fields")] IReadOnlyList<JsonObject>? Fields);
+
+public sealed record RecoveryCommitRequest(
+    [property: JsonPropertyName("expectedSourceRevision")] string? ExpectedSourceRevision,
+    [property: JsonPropertyName("expectedDraftRevision")] int? ExpectedDraftRevision);
+
+public sealed record ResourceIssueLocation(
+    [property: JsonPropertyName("line")] int? Line,
+    [property: JsonPropertyName("recordId")] string? RecordId,
+    [property: JsonPropertyName("sessionId")] string? SessionId,
+    [property: JsonPropertyName("fieldPath")] string? FieldPath);
+
+public sealed record ResourceIssue(
+    [property: JsonPropertyName("code")] string Code,
+    [property: JsonPropertyName("severity")] string Severity,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("location")] ResourceIssueLocation? Location,
+    [property: JsonPropertyName("details")] JsonObject? Details);
+
+public sealed record ResourceInspection(
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("revision")] string Revision,
+    [property: JsonPropertyName("resourceType")] string ResourceType,
+    [property: JsonPropertyName("inspectionVersion")] int InspectionVersion,
+    [property: JsonPropertyName("health")] string Health,
+    [property: JsonPropertyName("issues")] IReadOnlyList<ResourceIssue> Issues);
+
+public sealed record RecoveryEligibility(
+    [property: JsonPropertyName("eligible")] bool Eligible,
+    [property: JsonPropertyName("reasonCode")] string? ReasonCode);
+
+public sealed record RecoveryCapabilities(
+    [property: JsonPropertyName("sourceView")] bool SourceView,
+    [property: JsonPropertyName("draft")] bool Draft,
+    [property: JsonPropertyName("validate")] bool Validate,
+    [property: JsonPropertyName("commit")] bool Commit);
+
+public sealed record BrokenResourceSummary(
+    [property: JsonPropertyName("resourceKey")] string ResourceKey,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("revision")] string Revision,
+    [property: JsonPropertyName("resourceType")] string ResourceType,
+    [property: JsonPropertyName("health")] string Health,
+    [property: JsonPropertyName("issues")] IReadOnlyList<ResourceIssue> Issues,
+    [property: JsonPropertyName("recoveryEligible")] bool RecoveryEligible,
+    [property: JsonPropertyName("hasDraft")] bool HasDraft);
+
+public sealed record RecoveryResourceDetail(
+    [property: JsonPropertyName("resourceKey")] string ResourceKey,
+    [property: JsonPropertyName("inspection")] ResourceInspection Inspection,
+    [property: JsonPropertyName("eligibility")] RecoveryEligibility Eligibility,
+    [property: JsonPropertyName("capabilities")] RecoveryCapabilities Capabilities,
+    [property: JsonPropertyName("draft")] RecoveryDraftSnapshot Draft);
+
+public sealed record RecoverySourceView(
+    [property: JsonPropertyName("resourceKey")] string ResourceKey,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("revision")] string Revision,
+    [property: JsonPropertyName("resourceType")] string ResourceType,
+    [property: JsonPropertyName("content")] string Content,
+    [property: JsonPropertyName("readOnly")] bool ReadOnly);
+
+public sealed record RecoveryPathChange(
+    [property: JsonPropertyName("from")] string From,
+    [property: JsonPropertyName("to")] string To);
+
+public sealed record RecoveryValidationResult(
+    [property: JsonPropertyName("sourceRevision")] string SourceRevision,
+    [property: JsonPropertyName("draftRevision")] int DraftRevision,
+    [property: JsonPropertyName("health")] string Health,
+    [property: JsonPropertyName("issues")] IReadOnlyList<ResourceIssue> Issues,
+    [property: JsonPropertyName("commitAllowed")] bool CommitAllowed,
+    [property: JsonPropertyName("replacementPath")] string ReplacementPath,
+    [property: JsonPropertyName("replacementContent")] string? ReplacementContent,
+    [property: JsonPropertyName("changeSummary")] IReadOnlyList<string> ChangeSummary,
+    [property: JsonPropertyName("pathChange")] RecoveryPathChange? PathChange);
+
+public sealed record RecoveryReflectionResult(
+    [property: JsonPropertyName("succeeded")] bool Succeeded,
+    [property: JsonPropertyName("health")] string? Health,
+    [property: JsonPropertyName("errors")] IReadOnlyList<AfError> Errors,
+    [property: JsonPropertyName("warnings")] IReadOnlyList<RuntimeWarning> Warnings);
+
+public sealed record RecoveryCommitResult(
+    [property: JsonPropertyName("committed")] bool Committed,
+    [property: JsonPropertyName("sourcePath")] string SourcePath,
+    [property: JsonPropertyName("sourceRevision")] string SourceRevision,
+    [property: JsonPropertyName("replacementPath")] string ReplacementPath,
+    [property: JsonPropertyName("replacementRevision")] string ReplacementRevision,
+    [property: JsonPropertyName("commitRevision")] string CommitRevision,
+    [property: JsonPropertyName("pathChange")] RecoveryPathChange? PathChange,
+    [property: JsonPropertyName("reflection")] RecoveryReflectionResult Reflection);
+
+public sealed record RecoveryGitWriteResult(
+    string ReplacementPath,
+    string ReplacementRevision,
+    string CommitRevision);
+
 public sealed record LocalMasterDocuments(
     [property: JsonPropertyName("machine")] MasterDocumentSnapshot Machine,
     [property: JsonPropertyName("gym")] MasterDocumentSnapshot Gym);
@@ -192,6 +307,7 @@ public sealed record AfStatus(
     [property: JsonPropertyName("versions")] StatusVersions Versions,
     [property: JsonPropertyName("readiness")] ApplicationReadiness Readiness,
     [property: JsonPropertyName("runtimeData")] RuntimeDataStatusFacts RuntimeData,
+    [property: JsonPropertyName("recovery")] RecoveryStatusFacts Recovery,
     [property: JsonPropertyName("application")] ApplicationState Application,
     [property: JsonPropertyName("operations")] OperationStateSnapshot Operations,
     [property: JsonPropertyName("components")] ComponentStateSnapshot Components,
@@ -224,7 +340,15 @@ public sealed record RuntimeDataStatusFacts(
     [property: JsonPropertyName("currentGeneratedAt")] DateTimeOffset? CurrentGeneratedAt,
     [property: JsonPropertyName("latestRemoteRetrieval")] string LatestRemoteRetrieval,
     [property: JsonPropertyName("latestValidation")] string LatestValidation,
-    [property: JsonPropertyName("fallbackActive")] bool FallbackActive);
+    [property: JsonPropertyName("fallbackActive")] bool FallbackActive,
+    [property: JsonPropertyName("quarantinedWorkoutResourceCount")] int QuarantinedWorkoutResourceCount);
+
+public sealed record RecoveryStatusFacts(
+    [property: JsonPropertyName("brokenResourceCount")] int BrokenResourceCount,
+    [property: JsonPropertyName("brokenWorkoutResourceCount")] int BrokenWorkoutResourceCount,
+    [property: JsonPropertyName("brokenMasterResourceCount")] int BrokenMasterResourceCount,
+    [property: JsonPropertyName("recoverableResourceCount")] int RecoverableResourceCount,
+    [property: JsonPropertyName("activeDraftCount")] int ActiveDraftCount);
 
 public sealed record ApplicationState(
     [property: JsonPropertyName("status")] string Status,
@@ -254,7 +378,7 @@ public sealed record HostingComponentState(
     [property: JsonPropertyName("settings")] string Settings,
     [property: JsonPropertyName("maintenance")] string Maintenance);
 
-public sealed record RuntimeSourceFile(string Path, string Content);
+public sealed record RuntimeSourceFile(string Path, string Content, string? Revision = null);
 
 public sealed record RuntimeBuildResult(
     IReadOnlyList<WorkoutSession> Sessions,

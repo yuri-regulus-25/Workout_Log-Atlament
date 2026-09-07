@@ -28,6 +28,7 @@ describe('platform behavioral parity contract', () => {
       'unresolved Master missing/deleted only',
       'Main Gym unconfigured only',
       'runtimeData.fallbackActive',
+      'quarantinedWorkoutResourceCount',
     ]) {
       expect(matrix, requiredContract).toContain(requiredContract)
     }
@@ -36,6 +37,7 @@ describe('platform behavioral parity contract', () => {
       expect(source).toContain('readiness')
       expect(source).toContain('requiredActions')
       expect(source).toContain('fallbackActive')
+      expect(source).toContain('quarantinedWorkoutResourceCount')
       expect(source).toMatch(/RUNTIME_DATA_REQUIRED|RuntimeDataRequired/)
       expect(source).toMatch(/CREDENTIAL_REQUIRED|CredentialRequired/)
     }
@@ -64,5 +66,99 @@ describe('platform behavioral parity contract', () => {
     expect(devRuntime).toContain('localRevision')
     expect(devRuntime).toContain('MASTER_SYNC_REQUIRED')
     expect(devRuntime).not.toContain("fail('MASTER_WRITE_CONFLICT'")
+  })
+
+  it('keeps Recovery public contract truthful across Windows, Android, Node, and frontend-common', () => {
+    const windows = readSource('src/application/windows/Host/AfHttpHost.cs')
+    const windowsCore = [
+      'src/application/windows/Core/AfModels.cs',
+      'src/application/windows/Core/AfServices.cs',
+      'src/application/windows/Core/AfContracts.cs',
+    ].map(readSource).join('\n')
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const shared = readSource('src/shared/frontend-common/src/index.ts')
+    const node = readSource('tools/dev-runtime/development-runtime.mjs')
+
+    for (const endpoint of [
+      '/recovery/resources',
+      '/recovery/resources/',
+      '/source',
+      '/draft',
+      '/validate',
+      '/commit',
+    ]) {
+      expect(windows, endpoint).toContain(endpoint)
+      expect(shared, endpoint).toContain(endpoint)
+      expect(node, endpoint).toContain(endpoint)
+    }
+    expect(android).toContain('/recovery/resources')
+    for (const action of ['source', 'draft', 'validate', 'commit']) {
+      expect(android, action).toContain(`action == "${action}"`)
+    }
+
+    for (const source of [windowsCore, android, shared, node]) {
+      expect(source).toContain('capabilities')
+      expect(source).toContain('expectedSourceRevision')
+      expect(source).toContain('expectedDraftRevision')
+      expect(source).toContain('RECOVERY_UNAVAILABLE')
+      expect(source).toContain('RECOVERY_WRITE_CONFLICT')
+      expect(source).toContain('RECOVERY_REFLECTION_FAILED')
+    }
+
+    expect(shared).toContain('RecoveryCapabilities')
+    expect(shared).toContain('RecoveryCommitRequest')
+    expect(shared).toContain('commit: boolean')
+    expect(android).toContain('.put("commit", eligible)')
+    expect(android).toContain('Recover workout resource')
+    expect(android).toContain('pushRecoveryRelocation')
+    expect(android).toContain('createCommitOnBranch')
+    expect(android).toContain('expectedHeadOid')
+    expect(android).toContain('fileChanges')
+    expect(android).toContain('additions')
+    expect(android).toContain('deletions')
+    expect(android).toContain('https://api.github.com/graphql')
+    expect(android).toContain('Remote repository changed before Recovery commit.')
+    expect(android).not.toContain('Android Recovery commit is unavailable in this build.')
+    expect(android).not.toContain('Android Recovery relocation commit is unavailable in this build.')
+    expect(android).not.toContain('"committed": true')
+
+    expect(windowsCore).toContain('RepositoryWriteOptions')
+    expect(windowsCore).toContain('UnsafeRelaxedJsonEscaping')
+    expect(windowsCore).toContain('WorkoutFieldOrder')
+    expect(windowsCore).toContain('SerializeRepositoryWorkoutObject')
+    expect(android).toContain('androidRecoveryWorkoutFieldOrder')
+    expect(android).toContain('buildRecoveryObject')
+    expect(android).toContain('toString(2) + "\\n"')
+    expect(windowsCore).toContain('MatchesWorkoutResourceKey')
+    expect(windowsCore).toContain('Recovery source revision is stale.')
+    expect(android).toContain('recoveryResourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey')
+    expect(android).toContain('Recovery source revision is stale.')
+  })
+
+  it('keeps Recovery fallback unresolved fields limited to Workout schema required fields', () => {
+    const windows = readSource('src/application/windows/Core/AfServices.cs')
+      .split('private static IEnumerable<JsonObject> UnresolvedWorkoutFields')[1]
+      .split('private static JsonObject RecoveredField')[0]
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+      .split('private fun unresolvedWorkoutFields')[1]
+      .split('private fun recoverableField')[0]
+    const shared = readSource('src/shared/workout-data/src/index.ts')
+      .split('function unresolvedWorkoutFields')[1]
+      .split('function recoverableField')[0]
+
+    for (const source of [windows, android, shared]) {
+      for (const requiredField of ['/schema_version', '/session_id', '/date', '/status', '/gym_id', '/machines']) {
+        expect(source).toContain(requiredField)
+      }
+      expect(source).toContain('/condition')
+      expect(source).toContain('/notes')
+      expect(source).toMatch(/RecoveredAbsentField|state['"]?: 'recovered'|\.put\("state", "recovered"\)/)
+    }
+
+    expect(windows).not.toMatch(/UnresolvedField\("\$\{prefix\}\/condition"\)|UnresolvedField\("\$\{prefix\}\/notes"\)/)
+    expect(android).not.toMatch(/listOf\("\/condition", "\/notes"\)[\s\S]*"unresolved"/)
+    const sharedRequired = shared.split('const required = [')[1].split('].map((fieldPath) => ({')[0]
+    expect(sharedRequired).not.toContain('/condition')
+    expect(sharedRequired).not.toContain('/notes')
   })
 })

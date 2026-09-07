@@ -109,6 +109,14 @@ Write は Local Master snapshot revision と request `expectedRevision` の一�
 
 `/master-write/unresolved` は Local Runtime Data の Runtime warning から unresolved references を生成する。Raw Workout JSON は更新しない。
 
+## Recovery API
+
+Android は Windows / Node / frontend-common と同じ `/api/v1/common/recovery/*` public endpoint set を公開する。Recovery inventory/detail/source/draft/validate は Workout Resource の current remote data と AF-local draft store を使う。Raw JSON write、arbitrary path write、generic Git write、bulk recovery は公開しない。
+
+Android v2.1.0 の Recovery Git commit は truthful capability-gated である。`RecoveryCapabilities.commit` は `false`、`POST /recovery/resources/{resourceKey}/commit` は fake success を返さず `RECOVERY_UNAVAILABLE` を返す。
+
+Status は `runtimeData.quarantinedWorkoutResourceCount` と `recovery.*` facts を公開する。Workout quarantine は Runtime usable + readiness degraded であり、whole-runtime LKG fallback の `fallbackActive` とは別事象である。
+
 ## Version and Packaging
 
 Android version metadata は `src/application/android/app/build.gradle.kts` にある。

@@ -4,6 +4,12 @@ import type {
   MachineMasterItem,
   MachineSet,
   MasterReferenceResolution,
+  ResourceHealth,
+  ResourceInspection,
+  ResourceIssue,
+  ResourceIssueSeverity,
+  RecoveryDraft,
+  RecoveryField,
   RuntimeWarning,
   GymMaster,
   GymMasterItem,
@@ -25,6 +31,7 @@ type MasterLookup = {
 export type WorkoutFile = {
   path: string
   content: string
+  revision?: string
 }
 
 export type WorkoutModuleMap = Record<string, unknown>
@@ -255,14 +262,15 @@ export function loadWorkoutSessionsFromFiles(
   files: WorkoutFile[],
   masterData = sampleMasterData,
 ): WorkoutLoadResult {
-  const result: WorkoutLoadResult = { sessions: [], issues: [], warnings: [], masterData }
+  const result: WorkoutLoadResult = { sessions: [], issues: [], warnings: [], masterData, inspections: [] }
   const masterLookup = createMasterLookup(masterData, result.issues)
 
   for (const file of files) {
-    const parsed = parseWorkoutFile(file.path, file.content, masterLookup)
+    const parsed = parseWorkoutFile(file.path, file.content, masterLookup, file.revision)
     result.sessions.push(...parsed.sessions)
     result.issues.push(...parsed.issues)
     result.warnings?.push(...(parsed.warnings ?? []))
+    result.inspections?.push(...(parsed.inspections ?? []))
   }
 
   result.sessions.sort((a, b) => a.date.localeCompare(b.date) || a.session_id.localeCompare(b.session_id))
@@ -285,22 +293,24 @@ export function parseWorkoutFile(
   path: string,
   content: string,
   masterDataOrLookup: WorkoutMasterData | MasterLookup = sampleMasterData,
+  revision = createContentRevision(content),
 ): WorkoutLoadResult {
   const masterLookup = isMasterLookup(masterDataOrLookup)
     ? masterDataOrLookup
     : createMasterLookup(masterDataOrLookup)
 
   if (path.endsWith('.jsonl')) {
-    return parseWorkoutJsonl(path, content, masterLookup)
+    return parseWorkoutJsonl(path, content, masterLookup, revision)
   }
 
-  return parseWorkoutJson(path, content, masterLookup)
+  return parseWorkoutJson(path, content, masterLookup, revision)
 }
 
 export function parseWorkoutJson(
   path: string,
   content: string,
   masterDataOrLookup: WorkoutMasterData | MasterLookup = sampleMasterData,
+  revision = createContentRevision(content),
 ): WorkoutLoadResult {
   const masterLookup = isMasterLookup(masterDataOrLookup)
     ? masterDataOrLookup
@@ -308,12 +318,14 @@ export function parseWorkoutJson(
 
   try {
     const parsed = JSON.parse(content) as unknown
-    return normalizeWorkoutRecord(parsed, masterLookup, path)
+    const normalized = normalizeWorkoutRecord(parsed, masterLookup, path)
+    return withWorkoutInspection(path, revision, normalized)
   } catch (error) {
-    return {
+    const result = {
       sessions: [],
-      issues: [{ filePath: path, message: getErrorMessage(error) }],
+      issues: [{ filePath: path, message: getErrorMessage(error), code: 'WORKOUT_JSON_INVALID' }],
     }
+    return withWorkoutInspection(path, revision, result)
   }
 }
 
@@ -321,6 +333,7 @@ export function parseWorkoutJsonl(
   path: string,
   content: string,
   masterDataOrLookup: WorkoutMasterData | MasterLookup = sampleMasterData,
+  revision = createContentRevision(content),
 ): WorkoutLoadResult {
   const result: WorkoutLoadResult = { sessions: [], issues: [], warnings: [] }
   const masterLookup = isMasterLookup(masterDataOrLookup)
@@ -346,11 +359,20 @@ export function parseWorkoutJsonl(
           filePath: path,
           line: index + 1,
           message: getErrorMessage(error),
+          code: 'WORKOUT_JSON_INVALID',
         })
       }
     })
 
-  return result
+  if (result.issues.length > 0) {
+    return withWorkoutInspection(path, revision, {
+      sessions: [],
+      issues: result.issues,
+      warnings: [],
+    })
+  }
+
+  return withWorkoutInspection(path, revision, result)
 }
 
 export function normalizeWorkoutRecord(
@@ -368,7 +390,7 @@ export function normalizeWorkoutRecord(
   if (!isRecord(value)) {
     return {
       sessions: [],
-      issues: [{ filePath, line, message: 'Workout session must be an object.' }],
+      issues: [{ filePath, line, message: 'Workout session must be an object.', code: 'WORKOUT_RECORD_NOT_OBJECT' }],
     }
   }
 
@@ -380,17 +402,17 @@ export function normalizeWorkoutRecord(
   const machinesValue = value['machines']
 
   if (schemaVersion === null) {
-    issues.push({ filePath, line, message: 'Missing required numeric field: schema_version.' })
+    issues.push({ filePath, line, message: 'Missing required numeric field: schema_version.', code: 'WORKOUT_REQUIRED_FIELD_INVALID', fieldPath: 'schema_version' })
   }
 
   if (!sessionId) {
-    issues.push({ filePath, line, message: 'Missing required string field: session_id.' })
+    issues.push({ filePath, line, message: 'Missing required string field: session_id.', code: 'WORKOUT_REQUIRED_FIELD_INVALID', fieldPath: 'session_id' })
   }
 
   if (!date) {
-    issues.push({ filePath, line, message: 'Missing required string field: date.' })
+    issues.push({ filePath, line, message: 'Missing required string field: date.', code: 'WORKOUT_REQUIRED_FIELD_INVALID', fieldPath: 'date' })
   } else if (!isIsoDate(date)) {
-    issues.push({ filePath, line, message: 'Invalid date format: expected YYYY-MM-DD.' })
+    issues.push({ filePath, line, message: 'Invalid date format: expected YYYY-MM-DD.', code: 'WORKOUT_FIELD_INVALID', fieldPath: 'date' })
   }
 
   if (!status) {
@@ -398,15 +420,17 @@ export function normalizeWorkoutRecord(
       filePath,
       line,
       message: 'Missing or invalid required string field: status. Expected complete or partial.',
+      code: 'WORKOUT_REQUIRED_FIELD_INVALID',
+      fieldPath: 'status',
     })
   }
 
   if (!gymId) {
-    issues.push({ filePath, line, message: 'Missing required string field: gym_id.' })
+    issues.push({ filePath, line, message: 'Missing required string field: gym_id.', code: 'WORKOUT_REQUIRED_FIELD_INVALID', fieldPath: 'gym_id' })
   }
 
   if (!Array.isArray(machinesValue)) {
-    issues.push({ filePath, line, message: 'Missing required array field: machines.' })
+    issues.push({ filePath, line, message: 'Missing required array field: machines.', code: 'WORKOUT_REQUIRED_FIELD_INVALID', fieldPath: 'machines' })
   }
 
   if (
@@ -478,6 +502,24 @@ export function normalizeWorkoutRecord(
   }
 
   return { sessions: [session], issues, warnings }
+}
+
+export function createWorkoutRecoveryDraft(
+  path: string,
+  revision: string,
+  content: string,
+  inspectionVersion = 1,
+): RecoveryDraft {
+  return {
+    schemaVersion: 1,
+    sourcePath: path,
+    sourceRevision: revision,
+    resourceType: 'WORKOUT',
+    inspectionVersion,
+    draftRevision: 1,
+    fields: extractWorkoutRecoveryFields(path, content),
+    suggestions: [],
+  }
 }
 
 function isMasterResolveIssue(issue: WorkoutParseIssue): boolean {
@@ -1008,6 +1050,170 @@ function parseRuntimeMasterDocuments(masterDocuments: RuntimeWorkoutApiResponse[
       : undefined,
     issues: [...machineResult.issues, ...gymResult.issues],
   }
+}
+
+function extractWorkoutRecoveryFields(path: string, content: string): RecoveryField[] {
+  if (path.endsWith('.jsonl')) {
+    return extractJsonlWorkoutRecoveryFields(content)
+  }
+
+  try {
+    return extractWorkoutObjectFields(JSON.parse(content) as unknown, '')
+  } catch {
+    return unresolvedWorkoutFields('')
+  }
+}
+
+function extractJsonlWorkoutRecoveryFields(content: string): RecoveryField[] {
+  const fields: RecoveryField[] = []
+  content.split(/\r?\n/).forEach((line, index) => {
+    if (!line.trim()) {
+      return
+    }
+
+    const prefix = `/sessions/${index}`
+    try {
+      fields.push(...extractWorkoutObjectFields(JSON.parse(line) as unknown, prefix))
+    } catch {
+      fields.push(...unresolvedWorkoutFields(prefix))
+    }
+  })
+  return fields
+}
+
+function extractWorkoutObjectFields(value: unknown, prefix: string): RecoveryField[] {
+  if (!isRecord(value)) {
+    return unresolvedWorkoutFields(prefix)
+  }
+
+  return [
+    recoverableField(value, `${prefix}/schema_version`, 'schema_version', 'number'),
+    recoverableField(value, `${prefix}/session_id`, 'session_id', 'string'),
+    recoverableField(value, `${prefix}/date`, 'date', 'string'),
+    recoverableField(value, `${prefix}/status`, 'status', 'string'),
+    recoverableField(value, `${prefix}/gym_id`, 'gym_id', 'string'),
+    recoverableField(value, `${prefix}/condition`, 'condition', 'object', true),
+    recoverableField(value, `${prefix}/machines`, 'machines', 'array'),
+    recoverableField(value, `${prefix}/notes`, 'notes', 'array', true),
+  ]
+}
+
+function unresolvedWorkoutFields(prefix: string): RecoveryField[] {
+  const required = [
+    '/schema_version',
+    '/session_id',
+    '/date',
+    '/status',
+    '/gym_id',
+    '/machines',
+  ].map((fieldPath) => ({
+    fieldPath: `${prefix}${fieldPath}`,
+    state: 'unresolved',
+    source: 'original',
+  } satisfies RecoveryField))
+  const optional = ['/condition', '/notes'].map((fieldPath) => ({
+    fieldPath: `${prefix}${fieldPath}`,
+    state: 'recovered',
+    source: 'original',
+  } satisfies RecoveryField))
+  return [...required, ...optional]
+}
+
+function recoverableField(
+  record: UnknownRecord,
+  fieldPath: string,
+  key: string,
+  type: 'string' | 'number' | 'object' | 'array',
+  optional = false,
+): RecoveryField {
+  if (!(key in record)) {
+    return optional
+      ? { fieldPath, state: 'recovered', source: 'original' }
+      : { fieldPath, state: 'unresolved', source: 'original' }
+  }
+
+  const value = record[key]
+  const matches =
+    (type === 'string' && typeof value === 'string') ||
+    (type === 'number' && typeof value === 'number' && Number.isFinite(value)) ||
+    (type === 'object' && (value === null || isRecord(value))) ||
+    (type === 'array' && Array.isArray(value))
+
+  return matches
+    ? { fieldPath, state: 'recovered', source: 'original', value }
+    : { fieldPath, state: 'unresolved', source: 'original' }
+}
+
+function withWorkoutInspection(
+  path: string,
+  revision: string,
+  result: WorkoutLoadResult,
+): WorkoutLoadResult {
+  return {
+    ...result,
+    inspections: [createWorkoutInspection(path, revision, result.issues, result.warnings ?? [])],
+  }
+}
+
+function createWorkoutInspection(
+  path: string,
+  revision: string,
+  issues: WorkoutParseIssue[],
+  warnings: RuntimeWarning[],
+): ResourceInspection {
+  const resourceIssues: ResourceIssue[] = [
+    ...issues.map((issue) => ({
+      code: issue.code ?? 'WORKOUT_RECORD_INVALID',
+      severity: 'broken' as ResourceIssueSeverity,
+      message: issue.message,
+      location: {
+        line: issue.line ?? null,
+        sessionId: issue.sessionId ?? null,
+        fieldPath: issue.fieldPath ?? null,
+      },
+    })),
+    ...warnings.map((warning) => ({
+      code: warning.code,
+      severity: 'warning' as ResourceIssueSeverity,
+      message: warning.message,
+      location: {
+        line: warning.line ?? null,
+        sessionId: warning.sessionId,
+      },
+      details: {
+        referenceKind: warning.referenceKind,
+        resolutionState: warning.resolutionState,
+        originalId: warning.originalId,
+        resolvedId: warning.resolvedId,
+      },
+    })),
+  ]
+
+  return {
+    path,
+    revision,
+    resourceType: 'WORKOUT',
+    inspectionVersion: 1,
+    health: aggregateResourceHealth(resourceIssues),
+    issues: resourceIssues,
+  }
+}
+
+function aggregateResourceHealth(issues: ResourceIssue[]): ResourceHealth {
+  if (issues.some((issue) => issue.severity === 'broken')) {
+    return 'broken'
+  }
+
+  return issues.length > 0 ? 'degraded' : 'healthy'
+}
+
+function createContentRevision(content: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < content.length; index++) {
+    hash ^= content.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `content-fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
 function withCacheBuster(endpoint: string): string {

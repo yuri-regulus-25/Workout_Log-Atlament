@@ -8,7 +8,7 @@
           </div>
         </div>
         <h1 ref="pageHeading" tabindex="-1">Resource Management</h1>
-        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認しま</p>
+        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認します</p>
       </header>
 
       <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
@@ -20,8 +20,9 @@
           <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
             <v-btn value="masters">マスター</v-btn>
             <v-btn value="unresolved">未解決参照</v-btn>
+            <v-btn value="recovery">修復が必要なデータ</v-btn>
           </v-btn-toggle>
-          <v-btn-toggle v-model="selectedType" mandatory density="comfortable" variant="outlined">
+          <v-btn-toggle v-if="viewMode !== 'recovery'" v-model="selectedType" mandatory density="comfortable" variant="outlined">
             <v-btn value="MACHINE_MASTER">マシン</v-btn>
             <v-btn value="GYM_MASTER">ジム</v-btn>
           </v-btn-toggle>
@@ -33,6 +34,8 @@
           <v-spacer />
           <v-btn v-if="viewMode === 'masters'" class="accent-create-button" variant="flat" prepend-icon="mdi-plus-thick" @click="openCreate" >新規作成</v-btn>
         </div>
+
+        <RecoveryPanel v-if="viewMode === 'recovery'" @message="message = $event" />
 
         <p v-if="viewMode === 'unresolved'" class="maintenance-description">
           ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
@@ -86,7 +89,7 @@
         </v-data-table>
 
         <v-data-table
-          v-else
+          v-else-if="viewMode === 'unresolved'"
           class="maintenance-table"
           :headers="unresolvedHeaders"
           :items="visibleUnresolved"
@@ -215,6 +218,7 @@ import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { formatBodyPart } from '@workout-lab/workout-core'
+import RecoveryPanel from './RecoveryPanel.vue'
 import {
   getMasterDocument,
   getUnresolvedMasterReferences,
@@ -247,7 +251,7 @@ type RecordDraft = MachineRecord | GymRecord
 
 const bodyPartValues = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'core', 'cardio', 'other']
 const bodyParts = bodyPartValues.map((bodyPart) => ({ title: formatBodyPart(bodyPart), value: bodyPart }))
-const viewMode = ref<'masters' | 'unresolved'>('masters')
+const viewMode = ref<'masters' | 'unresolved' | 'recovery'>('masters')
 const selectedType = ref<MasterDocumentType>('MACHINE_MASTER')
 const displayMode = ref<'active' | 'deleted' | 'all'>('active')
 const loading = ref(false)

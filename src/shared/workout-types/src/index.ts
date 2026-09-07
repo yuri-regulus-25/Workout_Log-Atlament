@@ -172,6 +172,83 @@ export type WorkoutParseIssue = {
   filePath: string
   message: string
   line?: number
+  code?: string
+  sessionId?: string
+  fieldPath?: string
+}
+
+export type ResourceType = 'WORKOUT' | 'MACHINE_MASTER' | 'GYM_MASTER'
+
+export type ResourceHealth = 'healthy' | 'degraded' | 'broken'
+
+export type ResourceIssueSeverity = 'warning' | 'broken'
+
+export type ResourceIssueLocation = {
+  line?: number | null
+  recordId?: string | null
+  sessionId?: string | null
+  fieldPath?: string | null
+}
+
+export type ResourceIssue = {
+  code: string
+  severity: ResourceIssueSeverity
+  message: string
+  location?: ResourceIssueLocation
+  details?: Record<string, string | number | boolean | null>
+}
+
+export type ResourceInspection = {
+  path: string
+  revision: string
+  resourceType: ResourceType
+  inspectionVersion: number
+  health: ResourceHealth
+  issues: ResourceIssue[]
+}
+
+export type RecoveryDraftState =
+  | 'none'
+  | 'active'
+  | 'stale'
+  | 'incompatible'
+  | 'corrupted'
+
+export type RecoveryFieldSource = 'original' | 'user' | 'suggestion'
+
+export type RecoveryField =
+  | {
+      fieldPath: string
+      state: 'unresolved'
+      source: Exclude<RecoveryFieldSource, 'user'>
+    }
+  | {
+      fieldPath: string
+      state: 'recovered' | 'confirmed'
+      source: RecoveryFieldSource
+      value?: unknown
+    }
+
+export type RecoverySuggestion = {
+  fieldPath: string
+  suggestedValue: unknown
+  message?: string
+}
+
+export type RecoveryDraft = {
+  schemaVersion: 1
+  sourcePath: string
+  sourceRevision: string
+  resourceType: ResourceType
+  inspectionVersion: number
+  draftRevision: number
+  fields: RecoveryField[]
+  suggestions: RecoverySuggestion[]
+}
+
+export type RecoveryDraftSnapshot = {
+  state: RecoveryDraftState
+  draft: RecoveryDraft | null
 }
 
 export type WorkoutLoadResult = {
@@ -179,4 +256,5 @@ export type WorkoutLoadResult = {
   issues: WorkoutParseIssue[]
   warnings?: RuntimeWarning[]
   masterData?: WorkoutMasterData
+  inspections?: ResourceInspection[]
 }

@@ -1,6 +1,6 @@
 # Application Framework Localhost API Inventory
 
-Phase0-B inventory result for the current v2.0.0 release line.
+Inventory result for the current v2.1.0 recovery release line.
 
 ## Scope
 
@@ -29,6 +29,15 @@ Inventory target:
 | `POST /api/v1/common/configuration` | Windows, Android | Settings repository/resource/timeout save actions | Keep |
 | `GET /api/v1/common/credential/status` | Windows, Android | Settings credential panel | Keep |
 | `POST /api/v1/common/credential` | Windows, Android | Settings credential save action | Keep |
+| `GET /api/v1/common/recovery/resources` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `GET /api/v1/common/recovery/resources/{resourceKey}` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `GET /api/v1/common/recovery/resources/{resourceKey}/source` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `GET /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `POST /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `PUT /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `DELETE /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `POST /api/v1/common/recovery/resources/{resourceKey}/validate` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
+| `POST /api/v1/common/recovery/resources/{resourceKey}/commit` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep; capability-gated on Android/Node |
 | `POST /api/v1/common/shutdown` | Windows, Android | Native/application lifecycle control endpoint | Keep |
 | `/api/common/*` | Former Windows, Android, Node dev runtime alias | No current frontend client or runtime loader | Remove |
 | `GET /api/workout-data` | Node dev/runtime preview tooling only | `@workout-lab/workout-data` fallback and Vite/preview dev tooling | Keep as dev-only legacy data endpoint outside native AF contract |
@@ -49,7 +58,8 @@ Retained fields:
 - `versions.nativePackages.android.versionName`: Settings display for Android package version.
 - `versions.nativePackages.android.versionCode`: Settings display for Android package code.
 - `readiness.state`, `readiness.requiredActions`, `readiness.unavailableComponents`, `readiness.degradedComponents`: shared setup/readiness/runtime state contract for frontend gating.
-- `runtimeData.currentAvailable`, `runtimeData.currentGeneratedAt`, `runtimeData.latestRemoteRetrieval`, `runtimeData.latestValidation`, `runtimeData.fallbackActive`: minimum runtime-data freshness and fallback facts for shared recovery policy.
+- `runtimeData.currentAvailable`, `runtimeData.currentGeneratedAt`, `runtimeData.latestRemoteRetrieval`, `runtimeData.latestValidation`, `runtimeData.fallbackActive`, `runtimeData.quarantinedWorkoutResourceCount`: minimum runtime-data freshness, fallback, and Workout quarantine facts for shared recovery policy.
+- `recovery.brokenResourceCount`, `recovery.brokenWorkoutResourceCount`, `recovery.brokenMasterResourceCount`, `recovery.recoverableResourceCount`, `recovery.activeDraftCount`: Recovery inventory and local draft facts for Maintenance UI/status display.
 - `application.status`, `application.degraded`, `application.acceptingRequests`: AF diagnostic/status contract and native test harness.
 - `operations.startup`: Portal startup/runtime gate and AF test harness.
 - `operations.manualSync`: Portal manual sync state display.
@@ -111,3 +121,7 @@ Configured credential failures are runtime failures rather than setup absence. R
 ## Phase8-D Unified Status and Credential Lifecycle
 
 Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, and active fallback. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.
+
+## v2.1.0 Recovery Contract
+
+Recovery adds purpose-specific endpoint parity for Windows, Android, Node development runtime, frontend-common, and Maintenance UI. The API never exposes Raw JSON write, arbitrary path write, generic Git controls, Frontend-held credentials, force push, automatic merge, or bulk recovery. Android and Node must report unsupported Recovery commit through capability/error semantics instead of fake success.
