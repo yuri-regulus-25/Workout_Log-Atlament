@@ -530,6 +530,7 @@ function StatusSection(props: { status: AfStatus | null; credential: CredentialS
       <div class="status-grid">
         <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
         <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
+        <StatusItem label="Build Variant" value={buildIdentitySummary(props.status)} />
         <StatusItem label="Application State" value={displayStatus(props.status?.readiness?.state)} />
         <StatusItem label="Synced Data" value={runtimeDataSummary(props.status)} />
         <StatusItem label="GitHub" value={githubStatus().label} />
@@ -694,6 +695,12 @@ function requiredActionLabel(action: string) {
 function runtimeDataSummary(status: AfStatus | null) {
   if (!status) return '-'
   return status.runtimeData.currentAvailable ? '利用可能' : '利用不可'
+}
+
+function buildIdentitySummary(status: AfStatus | null) {
+  const build = status?.versions?.build
+  if (!build) return '-'
+  return build.debug ? `${build.variant} / 開発用` : `${build.variant} / 通常版`
 }
 
 function resolveGithubStatus(status: AfStatus | null, credential: CredentialStatus | null) {

@@ -43,6 +43,10 @@ export type AfStatus = {
         versionCode: number
       }
     }
+    build?: {
+      variant: string
+      debug: boolean
+    }
   }
   readiness: ApplicationReadiness
   runtimeData: RuntimeDataStatusFacts

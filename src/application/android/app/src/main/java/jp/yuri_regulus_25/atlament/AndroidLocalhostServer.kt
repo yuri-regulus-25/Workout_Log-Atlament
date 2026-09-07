@@ -318,6 +318,10 @@ class AndroidLocalhostServer(
                   "versionName": "${BuildConfig.VERSION_NAME}",
                   "versionCode": ${BuildConfig.VERSION_CODE}
                 }
+              },
+              "build": {
+                "variant": "${BuildConfig.BUILD_TYPE}",
+                "debug": ${BuildConfig.DEBUG}
               }
             },
             "readiness": ${readinessJson()},

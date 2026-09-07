@@ -3110,6 +3110,13 @@ public sealed class AtlamentApplication
         ?? typeof(AtlamentApplication).Assembly.GetName().Version?.ToString()
         ?? "unknown";
 
+    private static readonly BuildIdentity ApplicationBuildIdentity =
+#if DEBUG
+        new("Debug", true);
+#else
+        new("Release", false);
+#endif
+
     private readonly ConfigurationStore _configurationStore;
     private readonly CredentialStore _credentialStore;
     private readonly RuntimeDataStore _runtimeDataStore;
@@ -3177,7 +3184,7 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
-        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions()),
+        new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions(), ApplicationBuildIdentity),
         DetermineReadiness(),
         DetermineRuntimeDataStatus(),
         DetermineRecoveryStatus(),
