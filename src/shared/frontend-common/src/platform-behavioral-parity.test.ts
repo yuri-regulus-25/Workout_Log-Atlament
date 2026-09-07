@@ -134,4 +134,31 @@ describe('platform behavioral parity contract', () => {
     expect(android).toContain('recoveryResourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey')
     expect(android).toContain('Recovery source revision is stale.')
   })
+
+  it('keeps Recovery fallback unresolved fields limited to Workout schema required fields', () => {
+    const windows = readSource('src/application/windows/Core/AfServices.cs')
+      .split('private static IEnumerable<JsonObject> UnresolvedWorkoutFields')[1]
+      .split('private static JsonObject RecoveredField')[0]
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+      .split('private fun unresolvedWorkoutFields')[1]
+      .split('private fun recoverableField')[0]
+    const shared = readSource('src/shared/workout-data/src/index.ts')
+      .split('function unresolvedWorkoutFields')[1]
+      .split('function recoverableField')[0]
+
+    for (const source of [windows, android, shared]) {
+      for (const requiredField of ['/schema_version', '/session_id', '/date', '/status', '/gym_id', '/machines']) {
+        expect(source).toContain(requiredField)
+      }
+      expect(source).toContain('/condition')
+      expect(source).toContain('/notes')
+      expect(source).toMatch(/RecoveredAbsentField|state['"]?: 'recovered'|\.put\("state", "recovered"\)/)
+    }
+
+    expect(windows).not.toMatch(/UnresolvedField\("\$\{prefix\}\/condition"\)|UnresolvedField\("\$\{prefix\}\/notes"\)/)
+    expect(android).not.toMatch(/listOf\("\/condition", "\/notes"\)[\s\S]*"unresolved"/)
+    const sharedRequired = shared.split('const required = [')[1].split('].map((fieldPath) => ({')[0]
+    expect(sharedRequired).not.toContain('/condition')
+    expect(sharedRequired).not.toContain('/notes')
+  })
 })
