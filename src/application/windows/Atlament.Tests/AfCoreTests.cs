@@ -138,6 +138,67 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void InvalidMasterRecordIsExcludedWhileValidRecordsRemainResolved()
+    {
+        var builder = new RuntimeDataBuilder();
+        var machineMaster = new RuntimeSourceFile("master/machines.json", """
+            {
+              "schema_version": 1,
+              "machines": [
+                { "machine_id": "known-machine", "name": "Known Machine", "body_part": "chest", "active": true },
+                { "machine_id": "invalid-machine", "name": "Invalid Machine", "body_part": "unknown", "active": true }
+              ]
+            }
+            """);
+
+        var result = builder.Build(
+            new[]
+            {
+                Workout("workouts/valid.json", "known-gym", "known-machine"),
+                Workout("workouts/excluded.json", "known-gym", "invalid-machine")
+            },
+            machineMaster,
+            GymMaster);
+
+        Assert.False(result.TechnicalInvalid);
+        Assert.Equal(2, result.Sessions.Count);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.RuntimeDataInvalid && error.Message.Contains("Machine master item is invalid", StringComparison.Ordinal));
+        Assert.Equal("Known Machine", result.Sessions.Single(session => session.SessionId == "valid").Machines[0].Name);
+        var excluded = result.Sessions.Single(session => session.SessionId == "excluded").Machines[0];
+        Assert.Equal("invalid_excluded", excluded.Resolution.State);
+        Assert.Null(excluded.Name);
+        Assert.Contains(result.Warnings, warning =>
+            warning.Code == "MASTER_REFERENCE_INVALID_EXCLUDED" &&
+            warning.ResolutionState == "invalid_excluded" &&
+            warning.OriginalId == "invalid-machine");
+    }
+
+    [Fact]
+    public void DuplicateMasterIdsExcludeAllConflictingRecordsWithoutGuessingWinner()
+    {
+        var builder = new RuntimeDataBuilder();
+        var machineMaster = new RuntimeSourceFile("master/machines.json", """
+            {
+              "schema_version": 1,
+              "machines": [
+                { "machine_id": "duplicate-machine", "name": "First", "body_part": "chest", "active": true },
+                { "machine_id": "duplicate-machine", "name": "Second", "body_part": "back", "active": true }
+              ]
+            }
+            """);
+
+        var result = builder.Build(new[] { Workout("workouts/duplicate.json", "known-gym", "duplicate-machine") }, machineMaster, GymMaster);
+
+        Assert.False(result.TechnicalInvalid);
+        var machine = Assert.Single(Assert.Single(result.Sessions).Machines);
+        Assert.Equal("duplicate-machine", machine.MachineId);
+        Assert.Equal("invalid_excluded", machine.Resolution.State);
+        Assert.Null(machine.BodyPart);
+        Assert.Contains(result.Errors, error => error.Message.Contains("duplicate reference key is excluded: duplicate-machine", StringComparison.Ordinal));
+        Assert.Contains(result.Warnings, warning => warning.Code == "MASTER_REFERENCE_INVALID_EXCLUDED" && warning.OriginalId == "duplicate-machine");
+    }
+
+    [Fact]
     public void CurrentRuntimeDataCanStoreCleanBuildOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));

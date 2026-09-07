@@ -19,7 +19,7 @@ export type BodyPart =
   | 'cardio'
   | 'other'
 
-export type MasterReferenceResolutionState = 'resolved' | 'missing' | 'deleted'
+export type MasterReferenceResolutionState = 'resolved' | 'missing' | 'deleted' | 'invalid_excluded'
 
 export type MasterReferenceKind = 'gym' | 'machine'
 
@@ -30,7 +30,7 @@ export type MasterReferenceResolution = {
 }
 
 export type RuntimeWarning = {
-  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED'
+  code: 'MASTER_REFERENCE_MISSING' | 'MASTER_REFERENCE_DELETED' | 'MASTER_REFERENCE_INVALID_EXCLUDED'
   referenceKind: MasterReferenceKind
   resolutionState: Exclude<MasterReferenceResolutionState, 'resolved'>
   originalId: string

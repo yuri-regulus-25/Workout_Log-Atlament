@@ -26,6 +26,8 @@ type UnknownRecord = Record<string, unknown>
 type MasterLookup = {
   machinesById: Map<string, MachineMasterItem>
   gymsById: Map<string, GymMasterItem>
+  excludedMachineIds: Set<string>
+  excludedGymIds: Set<string>
 }
 
 export type WorkoutFile = {
@@ -446,15 +448,16 @@ export function normalizeWorkoutRecord(
   }
 
   const gym = masterLookup.gymsById.get(gymId)
+  const gymInvalidExcluded = !gym && masterLookup.excludedGymIds.has(gymId)
   const normalizedGym = gym
     ? {
         id: gym.gym_id,
         ...(!gym.deleted ? { name: gym.name, short_name: gym.short_name } : {}),
-        resolution: resolveMasterReference(gymId, gym.gym_id, gym.deleted),
+        resolution: resolveMasterReference(gymId, gym.gym_id, gym.deleted, false),
       }
     : {
         id: gymId,
-        resolution: resolveMasterReference(gymId, null, false),
+        resolution: resolveMasterReference(gymId, null, false, gymInvalidExcluded),
       }
   if (!gym || gym.deleted) {
     warnings.push(createReferenceWarning({
@@ -462,6 +465,7 @@ export function normalizeWorkoutRecord(
       originalId: gymId,
       resolvedId: gym?.gym_id ?? null,
       deleted: Boolean(gym?.deleted),
+      invalidExcluded: gymInvalidExcluded,
       sessionId,
       filePath,
       line,
@@ -562,12 +566,14 @@ function normalizeMachine(
   }
 
   const masterMachine = masterLookup.machinesById.get(machineId)
+  const machineInvalidExcluded = !masterMachine && masterLookup.excludedMachineIds.has(machineId)
   if (!masterMachine || masterMachine.deleted) {
     warnings.push(createReferenceWarning({
       referenceKind: 'machine',
       originalId: machineId,
       resolvedId: masterMachine?.machine_id ?? null,
       deleted: Boolean(masterMachine?.deleted),
+      invalidExcluded: machineInvalidExcluded,
       sessionId,
       filePath,
       line,
@@ -601,7 +607,7 @@ function normalizeMachine(
     ...(masterMachine && !masterMachine.deleted
       ? { name: masterMachine.name, body_part: masterMachine.body_part }
       : {}),
-    resolution: resolveMasterReference(machineId, masterMachine?.machine_id ?? null, Boolean(masterMachine?.deleted)),
+    resolution: resolveMasterReference(machineId, masterMachine?.machine_id ?? null, Boolean(masterMachine?.deleted), machineInvalidExcluded),
     sets,
     notes: readStringArray(value, 'notes') ?? [],
   }
@@ -611,7 +617,9 @@ function resolveMasterReference(
   originalId: string,
   resolvedId: string | null,
   deleted: boolean,
+  invalidExcluded: boolean,
 ): MasterReferenceResolution {
+  if (invalidExcluded) return { state: 'invalid_excluded', originalId, resolvedId: null }
   if (!resolvedId) return { state: 'missing', originalId, resolvedId: null }
   return { state: deleted ? 'deleted' : 'resolved', originalId, resolvedId }
 }
@@ -621,6 +629,7 @@ function createReferenceWarning({
   originalId,
   resolvedId,
   deleted,
+  invalidExcluded,
   sessionId,
   filePath,
   line,
@@ -629,15 +638,16 @@ function createReferenceWarning({
   originalId: string
   resolvedId: string | null
   deleted: boolean
+  invalidExcluded: boolean
   sessionId: string
   filePath: string
   line?: number
 }): RuntimeWarning {
-  const resolutionState = deleted ? 'deleted' : 'missing'
+  const resolutionState = invalidExcluded ? 'invalid_excluded' : deleted ? 'deleted' : 'missing'
   const subject = referenceKind === 'gym' ? 'ジム' : 'マシン'
-  const stateText = deleted ? '削除されています' : '存在しません'
+  const stateText = invalidExcluded ? 'Runtime採用対象から除外されています' : deleted ? '削除されています' : '存在しません'
   return {
-    code: deleted ? 'MASTER_REFERENCE_DELETED' : 'MASTER_REFERENCE_MISSING',
+    code: invalidExcluded ? 'MASTER_REFERENCE_INVALID_EXCLUDED' : deleted ? 'MASTER_REFERENCE_DELETED' : 'MASTER_REFERENCE_MISSING',
     referenceKind,
     resolutionState,
     originalId,
@@ -758,11 +768,18 @@ export function normalizeMachineMaster(
   }
 
   const seenIds = new Set<string>()
-  const machines = machinesValue
+  const candidateMachines = machinesValue
     .map((machine, index) => normalizeMachineMasterItem(machine, index, seenIds, issues, filePath))
     .filter((machine): machine is MachineMasterItem => machine !== null)
+  const machines = isolateDuplicateMasterRecords(
+    candidateMachines,
+    (machine) => [machine.machine_id, ...(machine.source_ids ?? [])],
+    'Machine',
+    issues,
+    filePath,
+  )
 
-  return issues.length === 0 ? { master: { schema_version: schemaVersion, machines }, issues } : { issues }
+  return { master: { schema_version: schemaVersion, machines }, issues }
 }
 
 export function normalizeGymMaster(
@@ -791,11 +808,44 @@ export function normalizeGymMaster(
   }
 
   const seenIds = new Set<string>()
-  const gyms = gymsValue
+  const candidateGyms = gymsValue
     .map((gym, index) => normalizeGymMasterItem(gym, index, seenIds, issues, filePath))
     .filter((gym): gym is GymMasterItem => gym !== null)
+  const gyms = isolateDuplicateMasterRecords(
+    candidateGyms,
+    (gym) => [gym.gym_id, ...(gym.source_ids ?? [])],
+    'Gym',
+    issues,
+    filePath,
+  )
 
-  return issues.length === 0 ? { master: { schema_version: schemaVersion, gyms }, issues } : { issues }
+  return { master: { schema_version: schemaVersion, gyms }, issues }
+}
+
+function isolateDuplicateMasterRecords<T>(
+  records: T[],
+  keysOf: (record: T) => string[],
+  label: string,
+  issues: WorkoutParseIssue[],
+  filePath: string,
+): T[] {
+  const keyOwners = new Map<string, T[]>()
+  for (const record of records) {
+    for (const key of keysOf(record)) {
+      const owners = keyOwners.get(key) ?? []
+      owners.push(record)
+      keyOwners.set(key, owners)
+    }
+  }
+
+  const excluded = new Set<T>()
+  for (const [key, owners] of keyOwners) {
+    if (owners.length <= 1) continue
+    issues.push({ filePath, message: `${label} master duplicate reference key is excluded: ${key}.` })
+    owners.forEach((owner) => excluded.add(owner))
+  }
+
+  return records.filter((record) => !excluded.has(record))
 }
 
 function normalizeMachineMasterItem(
@@ -908,6 +958,8 @@ function createMasterLookup(
   return {
     machinesById: createMachineLookup(machineResult.master?.machines ?? []),
     gymsById: createGymLookup(gymResult.master?.gyms ?? []),
+    excludedMachineIds: createExcludedMachineIds(masterData.machines, machineResult.master?.machines ?? []),
+    excludedGymIds: createExcludedGymIds(masterData.gyms, gymResult.master?.gyms ?? []),
   }
 }
 
@@ -922,6 +974,19 @@ function createMachineLookup(machines: MachineMasterItem[]): Map<string, Machine
   return lookup
 }
 
+function createExcludedMachineIds(source: MachineMaster, accepted: MachineMasterItem[]): Set<string> {
+  const acceptedKeys = new Set(accepted.flatMap((machine) => [machine.machine_id, ...(machine.source_ids ?? [])]))
+  const excluded = new Set<string>()
+  for (const machine of Array.isArray(source.machines) ? source.machines : []) {
+    const keys = [readString(machine as UnknownRecord, 'machine_id'), ...(readStringArray(machine as UnknownRecord, 'source_ids') ?? [])]
+      .filter((key): key is string => Boolean(key))
+    for (const key of keys) {
+      if (!acceptedKeys.has(key)) excluded.add(key)
+    }
+  }
+  return excluded
+}
+
 function createGymLookup(gyms: GymMasterItem[]): Map<string, GymMasterItem> {
   const lookup = new Map<string, GymMasterItem>()
   for (const gym of gyms) {
@@ -931,6 +996,19 @@ function createGymLookup(gyms: GymMasterItem[]): Map<string, GymMasterItem> {
     }
   }
   return lookup
+}
+
+function createExcludedGymIds(source: GymMaster, accepted: GymMasterItem[]): Set<string> {
+  const acceptedKeys = new Set(accepted.flatMap((gym) => [gym.gym_id, ...(gym.source_ids ?? [])]))
+  const excluded = new Set<string>()
+  for (const gym of Array.isArray(source.gyms) ? source.gyms : []) {
+    const keys = [readString(gym as UnknownRecord, 'gym_id'), ...(readStringArray(gym as UnknownRecord, 'source_ids') ?? [])]
+      .filter((key): key is string => Boolean(key))
+    for (const key of keys) {
+      if (!acceptedKeys.has(key)) excluded.add(key)
+    }
+  }
+  return excluded
 }
 
 function isMasterLookup(value: WorkoutMasterData | MasterLookup): value is MasterLookup {
