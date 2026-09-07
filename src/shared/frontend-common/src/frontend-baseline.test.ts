@@ -72,7 +72,11 @@ const existingFrontendApps = [
   },
   {
     id: 'analytics',
-    sourceFiles: ['src/frontend/analytics-svelte/src/App.svelte'],
+    sourceFiles: [
+      'src/frontend/analytics-svelte/src/App.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsCharts.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsTables.svelte',
+    ],
     cssFiles: ['src/frontend/analytics-svelte/src/app.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
@@ -235,7 +239,11 @@ describe('cross-frontend test baseline', () => {
       'src/frontend/machines-angular/src/app/app.ts',
       'src/frontend/machines-angular/src/app/app.html',
     ])
-    const analytics = readSource('src/frontend/analytics-svelte/src/App.svelte')
+    const analytics = readSources([
+      'src/frontend/analytics-svelte/src/App.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsCharts.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsTables.svelte',
+    ])
     const workoutFilters = readSource('src/frontend/workouts-vue/src/components/WorkoutFilters.vue')
     const settings = readSources([
       'src/frontend/settings-solid/src/App.tsx',
@@ -255,12 +263,12 @@ describe('cross-frontend test baseline', () => {
     expect(machines).not.toContain('>Clear</button>')
     expect(machines).not.toContain('filteredMachineOptions().length }} / {{ machineOptions().length')
     expect(analytics).toContain('colors: [chartTheme.accent]')
-    expect(analytics).toContain('mainGymVolumeTrendReady')
-    expect(analytics).toContain('{#if mainGymVolumeTrendReady}')
-    expect(analytics).toContain('{#key mainGymVolumeTrendKey}')
+    expect(analytics).toContain('trendReady')
+    expect(analytics).toContain('{#if trendReady}')
+    expect(analytics).toContain('{#key trendKey}')
     expect(analytics).toContain('<p class="muted">データがありません</p>')
     expect(analytics).not.toContain('記録期間全体での週あたり平均セッション数。')
-    expect(analytics).toContain('<h2>ジム</h2>')
+    expect(analytics).toContain("'ジム'")
     expect(workoutFilters).not.toContain('Sort')
     expect(workoutFilters).not.toContain('Newest')
     expect(settings).not.toContain('{step.actionLabel}')

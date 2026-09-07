@@ -1,19 +1,16 @@
 <script lang="ts">
-  import ApexCharts from 'apexcharts'
-  import type { ApexOptions } from 'apexcharts'
-  import { onDestroy, onMount, tick } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
   import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
   import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
-  import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutMasterData, WorkoutSession } from '@workout-lab/workout-types'
+  import AnalyticsCharts from './AnalyticsCharts.svelte'
   import AnalyticsPeriodPanel from './AnalyticsPeriodPanel.svelte'
   import AnalyticsSummary from './AnalyticsSummary.svelte'
+  import AnalyticsTables from './AnalyticsTables.svelte'
   import {
     filterSessionsByDateRange,
-    formatBodyPart,
-    formatDisplayDate,
     getAverageSessionIntervalDays,
     getBodyPartShare,
     getBodyPartSummary,
@@ -48,8 +45,6 @@
   $: recent28Sessions = getRecentSessions(filteredSessions, 28)
   $: mainGymVolumeTrend = getMainGymVolumeTrendMetric(mainGymContext, recent28Sessions)
   $: mainGymVolumeTrendPoints = mainGymVolumeTrend.state === 'available' ? mainGymVolumeTrend.value : []
-  $: mainGymVolumeTrendReady = mainGymVolumeTrend.state === 'available' && mainGymVolumeTrendPoints.length > 0
-  $: mainGymVolumeTrendKey = mainGymVolumeTrendPoints.map((point) => point.sessionId).join('|')
   $: machineVarietyRows = orderByBodyPartDisplayOrder(getBodyPartMachineVariety(recent28Sessions))
   $: totalSets = filteredSessions.reduce((total, session) => total + getTotalSets(session), 0)
   $: totalVolume = getMainGymTotalVolumeMetric(mainGymContext, filteredSessions)
@@ -61,22 +56,11 @@
   $: machineFrequencyRows = getMachineFrequencyRanking(filteredSessions).slice(0, 8)
   $: gymRows = getSessionsByGym(filteredSessions)
   $: bodyPartSetRows = orderByBodyPartDisplayOrder(getSetsByBodyPart(filteredSessions))
-  $: void syncTrendChart(mainGymVolumeTrendReady, mainGymVolumeTrendKey)
-  $: if (bodyPartChart) {
-    bodyPartChart.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
-  }
 
-  let trendChartElement: HTMLDivElement | null = null
-  let bodyPartChartElement: HTMLDivElement
   let shellElement: HTMLElement
   let characterTriggerElement: HTMLParagraphElement
-  let trendChart: ApexCharts | null = null
-  let bodyPartChart: ApexCharts | null = null
-  let renderedMainGymVolumeTrendKey = ''
-  let trendChartSyncRequest = 0
   let navigation: { dispose: () => void } | null = null
   let characterEasterEgg: { dispose: () => void } | null = null
-  let disposeThemeObserver: (() => void) | null = null
 
   onMount(async () => {
     navigation = initializeAppNavigation({
@@ -88,11 +72,6 @@
       host: document.body,
       assetBasePath: '/frontend-common/easter-egg/assets/',
     })
-    disposeThemeObserver = observeThemeChanges(() => {
-      void syncTrendChart(mainGymVolumeTrendReady, mainGymVolumeTrendKey)
-      bodyPartChart?.updateOptions(createBodyPartOptions(bodyPartSummaryRows), false, true)
-    })
-
     try {
       const result = await loadRuntimeWorkoutSessions()
       sessions = result.sessions
@@ -102,132 +81,12 @@
       loadError = error instanceof Error ? error.message : 'Workout data could not be loaded.'
     }
 
-    bodyPartChart = new ApexCharts(
-      bodyPartChartElement,
-      createBodyPartOptions(bodyPartSummaryRows),
-    )
-
-    bodyPartChart.render()
   })
 
   onDestroy(() => {
     navigation?.dispose()
     characterEasterEgg?.dispose()
-    disposeThemeObserver?.()
-    trendChart?.destroy()
-    bodyPartChart?.destroy()
   })
-
-  async function syncTrendChart(ready: boolean, key: string): Promise<void> {
-    const request = ++trendChartSyncRequest
-    await tick()
-
-    if (request !== trendChartSyncRequest) {
-      return
-    }
-
-    if (!ready || !trendChartElement) {
-      trendChart?.destroy()
-      trendChart = null
-      renderedMainGymVolumeTrendKey = ''
-      return
-    }
-
-    if (!trendChart || renderedMainGymVolumeTrendKey !== key) {
-      trendChart?.destroy()
-      trendChart = new ApexCharts(trendChartElement, createTrendOptions(mainGymVolumeTrendPoints))
-      renderedMainGymVolumeTrendKey = key
-      await trendChart.render()
-      return
-    }
-
-    await trendChart.updateOptions(createTrendOptions(mainGymVolumeTrendPoints), false, true)
-  }
-
-  function createTrendOptions(trendPoints: typeof mainGymVolumeTrendPoints): ApexOptions {
-    const chartTheme = getChartTheme()
-
-    return {
-      chart: {
-        type: 'area',
-        height: 320,
-        background: 'transparent',
-        foreColor: chartTheme.textMuted,
-        toolbar: { show: false },
-        zoom: { enabled: false },
-      },
-      colors: [chartTheme.primary],
-      dataLabels: { enabled: false },
-      fill: {
-        gradient: {
-          opacityFrom: chartTheme.mode === 'dark' ? 0.34 : 0.28,
-          opacityTo: chartTheme.mode === 'dark' ? 0.04 : 0.02,
-        },
-        type: 'gradient',
-      },
-      grid: { borderColor: chartTheme.grid },
-      stroke: { curve: 'smooth', width: 3 },
-      theme: { mode: chartTheme.mode },
-      series: [
-        {
-          name: 'Main Gym Total Weight',
-          data: trendPoints.map((point) => point.volume),
-        },
-      ],
-      xaxis: {
-        categories: trendPoints.map((point) => formatDisplayDate(point.date)),
-        axisBorder: { color: chartTheme.border },
-        axisTicks: { color: chartTheme.border },
-        labels: { show: false, style: { colors: chartTheme.textMuted } },
-      },
-      tooltip: {
-        theme: chartTheme.mode,
-        y: {
-          formatter: (value) => `${value.toLocaleString()} kg`,
-        },
-      },
-    }
-  }
-
-  function createBodyPartOptions(sourceSummary: ReturnType<typeof getBodyPartSummary>): ApexOptions {
-    const chartTheme = getChartTheme()
-
-    return {
-      chart: {
-        type: 'bar',
-        height: 320,
-        background: 'transparent',
-        foreColor: chartTheme.textMuted,
-        toolbar: { show: false },
-      },
-      colors: [chartTheme.accent],
-      dataLabels: { enabled: false },
-      grid: { borderColor: chartTheme.grid },
-      plotOptions: {
-        bar: {
-          borderRadius: 8,
-          columnWidth: '44%',
-        },
-      },
-      series: [
-        {
-          name: 'Sets',
-          data: sourceSummary.map((item) => item.sets),
-        },
-      ],
-      xaxis: {
-        categories: sourceSummary.map((item) => formatBodyPart(item.bodyPart)),
-        axisBorder: { color: chartTheme.border },
-        axisTicks: { color: chartTheme.border },
-        labels: { style: { colors: chartTheme.textMuted } },
-      },
-      yaxis: {
-        labels: { style: { colors: chartTheme.textMuted } },
-      },
-      theme: { mode: chartTheme.mode },
-      tooltip: { theme: chartTheme.mode },
-    }
-  }
 
   const bodyPartDisplayOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs'] as const
 
@@ -239,10 +98,6 @@
         (order.get(a.bodyPart) ?? Number.MAX_SAFE_INTEGER) -
         (order.get(b.bodyPart) ?? Number.MAX_SAFE_INTEGER),
     )
-  }
-
-  function formatPercent(value: number): string {
-    return `${Math.round(value * 100)}%`
   }
 
   function formatMainGymMetric(metric: { state: string; value?: number }): string {
@@ -295,220 +150,19 @@
 
   <AnalyticsPeriodPanel bind:selectedPeriod {periodRange} />
 
-  <section class="analytics-chart-grid">
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-chart-bell-curve" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Main Gym Workout Trend</p>
-            <h2>ボリューム推移</h2>
-          </div>
-        </div>
-      </div>
-      {#if mainGymVolumeTrendReady}
-        {#key mainGymVolumeTrendKey}
-          <div bind:this={trendChartElement}></div>
-        {/key}
-      {:else}
-        <p class="muted">データがありません</p>
-      {/if}
-    </article>
+  <AnalyticsCharts
+    trendPoints={mainGymVolumeTrendPoints}
+    {bodyPartSummaryRows}
+  />
 
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-chart-bar" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Body Part Balance</p>
-            <h2>部位別セット数</h2>
-          </div>
-        </div>
-      </div>
-      <div bind:this={bodyPartChartElement}></div>
-    </article>
-  </section>
-
-  <section class="analytics-single-grid">
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-calendar-sync-outline" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Training Frequency</p>
-            <h2>トレーニング頻度</h2>
-          </div>
-        </div>
-      </div>
-      <p class="large-number">{trainingFrequencyPerWeek.toFixed(1)} / week</p>
-    </article>
-  </section>
-
-  <section class="dashboard-grid analytics-table-grid">
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-format-list-numbered-rtl" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Machine Variety</p>
-            <h2>部位別実施マシン数</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table machine-variety-table">
-        <div class="summary-row header">
-          <span>Body Part</span>
-          <span>Machines</span>
-        </div>
-        {#each machineVarietyRows as row}
-          <div class="summary-row">
-            <span>{formatBodyPart(row.bodyPart)}</span>
-            <span>{row.machineCount}</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Body Part Volume - Main Gym</p>
-            <h2>部位別ボリューム - メインジム</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table body-part-volume-table">
-        <div class="summary-row header">
-          <span>Body Part</span>
-          <span>Sets</span>
-          <span>Total Weight</span>
-        </div>
-        {#each mainGymBodyPartSummaryRows as item}
-          <div class="summary-row">
-            <span>{formatBodyPart(item.bodyPart)}</span>
-            <span>{item.sets}</span>
-            <span>{item.volume.toLocaleString()} kg</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-  </section>
-
-  <section class="dashboard-grid analytics-table-grid">
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-chart-donut" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Body Part Share</p>
-            <h2>部位別シェア</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table body-part-share-table">
-        <div class="summary-row header">
-          <span>Body Part</span>
-          <span>Sets</span>
-          <span>Share</span>
-          <span>Last</span>
-        </div>
-        {#each bodyPartShareRows as item}
-          <div class="summary-row">
-            <span>{formatBodyPart(item.bodyPart)}</span>
-            <span>{item.setCount}</span>
-            <span>{formatPercent(item.share)}</span>
-            <span>{formatDisplayDate(bodyPartLastTrainedRows.find((row) => row.bodyPart === item.bodyPart)?.lastTrainedDate ?? '-')}</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-podium" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Machine Ranking</p>
-            <h2>実施マシン頻度</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table machine-ranking-table">
-        <div class="summary-row header">
-          <span>Machine</span>
-          <span>Sessions</span>
-        </div>
-        {#each machineFrequencyRows as item}
-          <div class="summary-row">
-            <span>{item.machineName}</span>
-            <span>{item.sessionCount}</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-  </section>
-
-  <section class="dashboard-grid analytics-table-grid">
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-map-marker-outline" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Gym Sessions</p>
-            <h2>ジム</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table gym-session-table">
-        <div class="summary-row header">
-          <span>Gym</span>
-          <span>Sessions</span>
-        </div>
-        {#each gymRows as item}
-          <div class="summary-row">
-            <span>{item.gymName}</span>
-            <span>{item.sessionCount}</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-arm-flex-outline" aria-hidden="true"></i></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Body Part Sets</p>
-            <h2>部位別セット分布</h2>
-          </div>
-        </div>
-      </div>
-      <div class="summary-table body-part-sets-table">
-        <div class="summary-row header">
-          <span>Body Part</span>
-          <span>Sets</span>
-        </div>
-        {#each bodyPartSetRows as item}
-          <div class="summary-row">
-            <span>{formatBodyPart(item.bodyPart)}</span>
-            <span>{item.setCount}</span>
-          </div>
-        {:else}
-          <p class="muted">データがありません</p>
-        {/each}
-      </div>
-    </article>
-  </section>
+  <AnalyticsTables
+    {trainingFrequencyPerWeek}
+    {machineVarietyRows}
+    {mainGymBodyPartSummaryRows}
+    {bodyPartShareRows}
+    {bodyPartLastTrainedRows}
+    {machineFrequencyRows}
+    {gymRows}
+    {bodyPartSetRows}
+  />
 </main>
