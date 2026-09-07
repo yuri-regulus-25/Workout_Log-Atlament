@@ -48,7 +48,7 @@ class AndroidLocalhostServer(
     private data class MasterRecordCatalog<T>(val lookup: Map<String, T>, val excludedIds: Set<String>, val structuralInvalid: Boolean)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
     private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
-    private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
+    private val assetServer = AndroidAssetServer(context)
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
@@ -150,7 +150,7 @@ class AndroidLocalhostServer(
             if (path.startsWith("/api/")) {
                 handleApi(client.getOutputStream(), method, path, body)
             } else if (method == "GET") {
-                serveAsset(client.getOutputStream(), path)
+                assetServer.serve(client.getOutputStream(), path)
             } else {
                 sendJson(client.getOutputStream(), 405, failJson("METHOD_NOT_ALLOWED", "Only GET is supported for frontend assets."))
             }
@@ -202,49 +202,6 @@ class AndroidLocalhostServer(
             }
         }
         return "/" + normalized.joinToString("/")
-    }
-
-    private fun serveAsset(output: OutputStream, path: String) {
-        val assetPath = resolveAssetPath(path)
-        if (assetPath == null) {
-            sendErrorPage(output, 404)
-            return
-        }
-
-        try {
-            context.assets.open(assetPath).use { stream ->
-                sendStream(output, 200, contentType(assetPath), stream)
-            }
-        } catch (_: java.io.FileNotFoundException) {
-            sendErrorPage(output, 404)
-        } catch (_: Exception) {
-            sendErrorPage(output, 500)
-        }
-    }
-
-    private fun resolveAssetPath(path: String): String? {
-        val normalized = path.trimStart('/')
-        val root = normalized.substringBefore('/')
-        return when {
-            path == "/" || normalized.isEmpty() -> "frontend/index.html"
-            normalized == "error.css" -> "frontend/error.css"
-            normalized == "404.html" || normalized == "500.html" || normalized == "503.html" -> "frontend/$normalized"
-            normalized.startsWith("android/") -> normalized
-            normalized.startsWith("frontend/") -> normalized
-            normalized in appNames -> "frontend/$normalized/index.html"
-            root in appNames && isDefinedMpaRoute(root, normalized.removePrefix("$root/")) -> "frontend/$root/index.html"
-            normalized.contains('.') -> "frontend/$normalized"
-            else -> null
-        }
-    }
-
-    private fun isDefinedMpaRoute(app: String, route: String): Boolean {
-        val normalized = route.trim('/')
-        return when (app) {
-            "workouts" -> normalized.matches(Regex("""\d{4}-\d{2}-\d{2}"""))
-            "machines" -> normalized.matches(Regex("""[A-Za-z0-9][A-Za-z0-9_-]*"""))
-            else -> false
-        }
     }
 
     private fun statusJson(): String = """
@@ -2723,21 +2680,6 @@ class AndroidLocalhostServer(
             }.start()
         }
     }
-    private fun sendErrorPage(output: OutputStream, status: Int) {
-        val assetPath = when (status) {
-            404 -> "frontend/404.html"
-            500 -> "frontend/500.html"
-            503 -> "frontend/503.html"
-            else -> "frontend/500.html"
-        }
-        try {
-            context.assets.open(assetPath).use { stream ->
-                sendStream(output, status, contentType(assetPath), stream)
-            }
-        } catch (_: Exception) {
-            sendText(output, status, "text/plain; charset=utf-8", reason(status))
-        }
-    }
     private fun sendJson(output: OutputStream, status: Int, json: String) {
         sendText(output, status, "application/json; charset=utf-8", json)
     }
@@ -2771,20 +2713,6 @@ class AndroidLocalhostServer(
         409 -> "Conflict"
         501 -> "Not Implemented"
         else -> "Error"
-    }
-
-    private fun contentType(path: String): String = when (path.substringAfterLast('.', "").lowercase()) {
-        "html" -> "text/html; charset=utf-8"
-        "js" -> "text/javascript; charset=utf-8"
-        "css" -> "text/css; charset=utf-8"
-        "json" -> "application/json; charset=utf-8"
-        "svg" -> "image/svg+xml"
-        "png" -> "image/png"
-        "jpg", "jpeg" -> "image/jpeg"
-        "ico" -> "image/x-icon"
-        "woff" -> "font/woff"
-        "woff2" -> "font/woff2"
-        else -> "application/octet-stream"
     }
 
     override fun close() {
