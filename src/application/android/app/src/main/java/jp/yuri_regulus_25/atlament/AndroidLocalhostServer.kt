@@ -107,7 +107,7 @@ class AndroidLocalhostServer(
         if (running.get()) return
 
         val lastError = mutableListOf<Exception>()
-        for (candidate in listOf(14108, 45194)) {
+        for (candidate in androidLocalhostPorts) {
             try {
                 // Match Windows AF port order so Frontend and smoke checks can share the same
                 // primary/secondary localhost assumptions across platforms.

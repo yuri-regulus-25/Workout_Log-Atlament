@@ -1704,6 +1704,12 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void LocalhostEndpointPolicyKeepsPrimaryAndSecondaryPortOrder()
+    {
+        Assert.Equal(new[] { 14108, 45194 }, LocalhostEndpointPolicy.Ports);
+    }
+
+    [Fact]
     public async Task InitialMissingConfigurationCredentialAndRuntimeAreRequiredActions()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-af-test-" + Guid.NewGuid().ToString("N"));

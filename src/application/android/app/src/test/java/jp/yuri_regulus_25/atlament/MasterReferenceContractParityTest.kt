@@ -47,6 +47,11 @@ class MasterReferenceContractParityTest {
     }
 
     @Test
+    fun keepsLocalhostEndpointPrimaryAndSecondaryPortOrderAligned() {
+        assertEquals(listOf(14108, 45194), androidLocalhostPorts)
+    }
+
+    @Test
     fun buildsAtomicRecoveryRelocationFileChanges() {
         val addition = androidRecoveryRelocationAddition(
             "data/workouts/2026/09/2026-09-01.json",
