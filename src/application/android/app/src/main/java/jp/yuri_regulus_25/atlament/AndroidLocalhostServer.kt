@@ -1,7 +1,6 @@
 package jp.yuri_regulus_25.atlament
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import android.util.Base64
 import java.io.BufferedInputStream
 import java.io.BufferedReader
@@ -51,13 +50,8 @@ class AndroidLocalhostServer(
     private val recoveryTemporaryDirectory = File(context.filesDir, "recovery/temporary")
     private val recoveryDraftStore = AndroidRecoveryDraftStore(recoveryDraftDirectory, recoveryTemporaryDirectory)
     private val logDatabaseFile = File(context.filesDir, "log/atlament-log.sqlite")
-    private val operationLock = Object()
-    @Volatile private var startupSyncStatus = "idle"
-    @Volatile private var manualSyncStatus = "idle"
-    @Volatile private var configurationUpdateStatus = "idle"
-    @Volatile private var credentialUpdateStatus = "idle"
-    @Volatile private var recoveryCommitRunning = false
-    @Volatile private var shutdownStatus = "idle"
+    private val afLogStore = AndroidAfLogStore(logDatabaseFile)
+    private val operationGate = AndroidOperationGate()
     @Volatile private var githubComponentStatus = "unknown"
     @Volatile private var latestRemoteRetrieval = "unknown"
     @Volatile private var latestValidation = "unknown"
@@ -85,8 +79,8 @@ class AndroidLocalhostServer(
                 serverSocket = socket
                 port = candidate
                 running.set(true)
-                initializeLog()
-                writeLog("INFO", "HTTP server started on 127.0.0.1:$candidate.")
+                afLogStore.initialize()
+                afLogStore.write("INFO", "HTTP server started on 127.0.0.1:$candidate.")
                 acceptExecutor.execute { acceptLoop(socket) }
                 startStartupSync()
                 return
@@ -196,7 +190,9 @@ class AndroidLocalhostServer(
         return "/" + normalized.joinToString("/")
     }
 
-    private fun statusJson(): String = """
+    private fun statusJson(): String {
+        val operations = operationGate.snapshot()
+        return """
         {
           "success": true,
           "errors": [],
@@ -227,11 +223,11 @@ class AndroidLocalhostServer(
               "acceptingRequests": true
             },
             "operations": {
-              "startup": "$startupSyncStatus",
-              "manualSync": "${manualSyncStatus}",
-              "configurationUpdate": "$configurationUpdateStatus",
-              "credentialUpdate": "$credentialUpdateStatus",
-              "shutdown": "$shutdownStatus"
+              "startup": "${operations.startup}",
+              "manualSync": "${operations.manualSync}",
+              "configurationUpdate": "${operations.configurationUpdate}",
+              "credentialUpdate": "${operations.credentialUpdate}",
+              "shutdown": "${operations.shutdown}"
             },
             "components": {
               "configuration": "${configurationStatus()}",
@@ -244,6 +240,7 @@ class AndroidLocalhostServer(
           }
         }
     """.trimIndent()
+    }
 
 
     private fun frontendVersionJson(): JSONObject = runCatching {
@@ -756,7 +753,7 @@ class AndroidLocalhostServer(
     }
 
     private fun configurationUpdateResponse(updateJson: String): SyncResponse {
-        if (!tryStartOperation("configurationUpdate")) {
+        if (!operationGate.tryStart("configurationUpdate")) {
             return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Configuration update is already running."), false)
         }
 
@@ -786,7 +783,7 @@ class AndroidLocalhostServer(
         } catch (_: Exception) {
             SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Configuration update failed."), false)
         } finally {
-            completeOperation("configurationUpdate", success)
+            operationGate.complete("configurationUpdate", success)
         }
     }
 
@@ -1017,7 +1014,7 @@ class AndroidLocalhostServer(
     }
 
     private fun sendRecoveryCommit(output: OutputStream, resourceKey: String, body: String) {
-        if (!tryStartOperation("recoveryCommit")) {
+        if (!operationGate.tryStart("recoveryCommit")) {
             sendJson(output, 409, failJson("OPERATION_ALREADY_RUNNING", "Recovery commit is already running."))
             return
         }
@@ -1116,7 +1113,7 @@ class AndroidLocalhostServer(
         } catch (_: Exception) {
             sendJson(output, 500, failJson("COMMON_INTERNAL_ERROR", "Recovery commit failed."))
         } finally {
-            completeOperation("recoveryCommit", success)
+            operationGate.complete("recoveryCommit", success)
         }
     }
 
@@ -1275,7 +1272,7 @@ class AndroidLocalhostServer(
     }
 
     private fun credentialUpdateResponse(updateJson: String): SyncResponse {
-        if (!tryStartOperation("credentialUpdate")) {
+        if (!operationGate.tryStart("credentialUpdate")) {
             return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Credential update is already running."), false)
         }
 
@@ -1292,7 +1289,7 @@ class AndroidLocalhostServer(
         } catch (_: Exception) {
             SyncResponse(500, failJson("CREDENTIAL_SAVE_FAILED", "Credential could not be saved."), false)
         } finally {
-            completeOperation("credentialUpdate", success)
+            operationGate.complete("credentialUpdate", success)
         }
     }
 
@@ -1311,7 +1308,7 @@ class AndroidLocalhostServer(
     }
 
     private fun manualSyncResponse(): SyncResponse {
-        if (!tryStartOperation("manualSync")) {
+        if (!operationGate.tryStart("manualSync")) {
             return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Sync is already running."), false)
         }
 
@@ -1321,30 +1318,30 @@ class AndroidLocalhostServer(
             success = response.success
             response
         } catch (ex: Exception) {
-            writeLog("ERROR", "Manual sync failed: ${ex.message.orEmpty()}")
+            afLogStore.write("ERROR", "Manual sync failed: ${ex.message.orEmpty()}")
             SyncResponse(500, failJson("COMMON_INTERNAL_ERROR", "Sync failed."), false)
         } finally {
-            completeOperation("manualSync", success)
+            operationGate.complete("manualSync", success)
         }
     }
 
     private fun startStartupSync() {
-        if (!tryStartOperation("startup")) return
+        if (!operationGate.tryStart("startup")) return
         requestExecutor.execute {
             try {
                 if (configurationStatus() != "available" || credentialStore.state() != "available") {
-                    writeLog("INFO", "Startup sync skipped because configuration or credential is unavailable.")
-                    completeOperation("startup", true)
+                    afLogStore.write("INFO", "Startup sync skipped because configuration or credential is unavailable.")
+                    operationGate.complete("startup", true)
                     return@execute
                 }
 
                 val response = syncRuntimeData()
                 val success = response.success
-                if (!success) writeLog("WARN", "Startup sync completed without remote runtime update.")
-                completeOperation("startup", success)
+                if (!success) afLogStore.write("WARN", "Startup sync completed without remote runtime update.")
+                operationGate.complete("startup", success)
             } catch (ex: Exception) {
-                writeLog("ERROR", "Startup sync failed: ${ex.message.orEmpty()}")
-                completeOperation("startup", false)
+                afLogStore.write("ERROR", "Startup sync failed: ${ex.message.orEmpty()}")
+                operationGate.complete("startup", false)
             }
         }
     }
@@ -1362,7 +1359,7 @@ class AndroidLocalhostServer(
             githubComponentStatus = "available"
             latestRemoteRetrieval = "succeeded"
             latestValidation = "succeeded"
-            writeLog("INFO", "Runtime data synchronized from GitHub.")
+            afLogStore.write("INFO", "Runtime data synchronized from GitHub.")
             SyncResponse(200, okJson("""
                 {
                   "degraded": ${build.errors.length() > 0}
@@ -1372,14 +1369,14 @@ class AndroidLocalhostServer(
             githubComponentStatus = "degraded"
             latestRemoteRetrieval = "failed"
             latestValidation = "skipped"
-            writeLog("WARN", "Remote sync failed: ${ex.message}")
+            afLogStore.write("WARN", "Remote sync failed: ${ex.message}")
             failedSync(errorsArray(ex.code, ex.message))
         } catch (ex: Exception) {
             githubComponentStatus = "degraded"
             latestRemoteRetrieval = "failed"
             latestValidation = "skipped"
             val message = ex.message ?: "GitHub sync failed."
-            writeLog("WARN", "Remote sync failed: $message")
+            afLogStore.write("WARN", "Remote sync failed: $message")
             failedSync(errorsArray("GITHUB_CONNECTION_FAILED", message))
         }
     }
@@ -1811,57 +1808,6 @@ class AndroidLocalhostServer(
         }
     }
 
-    private fun tryStartOperation(name: String): Boolean = synchronized(operationLock) {
-        // All write-like operations share one gate because configuration, credential, and sync can
-        // affect the same Status API state observed by Portal.
-        if (shutdownStatus == "running" && name != "shutdown") return@synchronized false
-        if (name in setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate", "recoveryCommit")) {
-            if (startupSyncStatus == "running" || manualSyncStatus == "running" || configurationUpdateStatus == "running" || credentialUpdateStatus == "running" || recoveryCommitRunning) {
-                return@synchronized false
-            }
-        }
-        when (name) {
-            "startup" -> {
-                if (startupSyncStatus == "running") return@synchronized false
-                startupSyncStatus = "running"
-            }
-            "manualSync" -> {
-                if (manualSyncStatus == "running") return@synchronized false
-                manualSyncStatus = "running"
-            }
-            "configurationUpdate" -> {
-                if (configurationUpdateStatus == "running") return@synchronized false
-                configurationUpdateStatus = "running"
-            }
-            "credentialUpdate" -> {
-                if (credentialUpdateStatus == "running") return@synchronized false
-                credentialUpdateStatus = "running"
-            }
-            "recoveryCommit" -> {
-                if (recoveryCommitRunning) return@synchronized false
-                recoveryCommitRunning = true
-            }
-            "shutdown" -> {
-                if (shutdownStatus == "running") return@synchronized false
-                shutdownStatus = "running"
-            }
-            else -> return@synchronized false
-        }
-        true
-    }
-
-    private fun completeOperation(name: String, success: Boolean) = synchronized(operationLock) {
-        val status = if (success) "completed" else "failed"
-        when (name) {
-            "startup" -> startupSyncStatus = status
-            "manualSync" -> manualSyncStatus = status
-            "configurationUpdate" -> configurationUpdateStatus = status
-            "credentialUpdate" -> credentialUpdateStatus = status
-            "recoveryCommit" -> recoveryCommitRunning = false
-            "shutdown" -> shutdownStatus = status
-        }
-    }
-
     private fun runtimeDataHasRetainedErrors(): Boolean = runtimeDataStore.status() == "degraded"
 
     private fun githubStatus(): String = githubComponentStatus
@@ -2015,8 +1961,8 @@ class AndroidLocalhostServer(
     private fun sendShutdown(output: OutputStream) {
         val already = shutdownRequested.getAndSet(true)
         if (!already) {
-            tryStartOperation("shutdown")
-            completeOperation("shutdown", true)
+            operationGate.tryStart("shutdown")
+            operationGate.complete("shutdown", true)
         }
         sendJson(output, 200, okJson("{ \"accepted\": true, \"alreadyShuttingDown\": $already }"))
         if (!already) {
@@ -2063,40 +2009,12 @@ class AndroidLocalhostServer(
     }
 
     override fun close() {
-        writeLog("INFO", "HTTP server stopped.")
+        afLogStore.write("INFO", "HTTP server stopped.")
         running.set(false)
         serverSocket?.close()
         serverSocket = null
         acceptExecutor.shutdownNow()
         requestExecutor.shutdownNow()
-    }
-
-    private fun initializeLog() {
-        logDatabaseFile.parentFile?.mkdirs()
-        SQLiteDatabase.openOrCreateDatabase(logDatabaseFile, null).use { database ->
-            database.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS af_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    level TEXT NOT NULL,
-                    message TEXT NOT NULL
-                )
-                """.trimIndent()
-            )
-        }
-    }
-
-    private fun writeLog(level: String, message: String) {
-        runCatching {
-            logDatabaseFile.parentFile?.mkdirs()
-            SQLiteDatabase.openOrCreateDatabase(logDatabaseFile, null).use { database ->
-                database.execSQL(
-                    "INSERT INTO af_log(level, message) VALUES(?, ?)",
-                    arrayOf(level, message)
-                )
-            }
-        }
     }
 }
 
