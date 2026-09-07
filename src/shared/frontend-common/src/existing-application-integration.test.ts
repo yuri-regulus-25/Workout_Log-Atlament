@@ -89,7 +89,10 @@ describe('Phase 9 existing application integration', () => {
     const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
     const portal = readSource('src/frontend/portal/src/main.js')
-    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settings = [
+      readSource('src/frontend/settings-solid/src/App.tsx'),
+      readSource('src/frontend/settings-solid/src/SettingsSetupAssistant.tsx'),
+    ].join('\n')
     const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
 
     expect(typedPolicy).toContain('runtimeData?.fallbackActive ?? false')

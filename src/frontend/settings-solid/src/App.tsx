@@ -25,17 +25,11 @@ import {
   resolveCredentialLimitDate,
   type CredentialExpiryPreset,
 } from './credential-expiry'
+import { buildSetupSteps } from './setup-assistant'
+import { SettingsSetupAssistant } from './SettingsSetupAssistant'
+import { SettingsStatusSection } from './SettingsStatusSection'
 import {
-  buildSetupSteps,
-  isSetupReady,
-  type SetupStep,
-} from './setup-assistant'
-import {
-  buildIdentitySummary,
   displayStatus,
-  requiredActionLabel,
-  resolveGithubStatus,
-  runtimeDataSummary,
   toMessage,
   type Message,
 } from './settings-status-presentation'
@@ -288,12 +282,12 @@ function App() {
       </Show>
 
       <section class="settings-grid">
-        <SetupAssistant
+        <SettingsSetupAssistant
           status={status()}
           steps={setupSteps()}
         />
 
-        <StatusSection status={status()} credential={credential()} />
+        <SettingsStatusSection status={status()} credential={credential()} />
 
         <section class="panel repository-panel">
           <div class="panel-header">
@@ -449,88 +443,6 @@ function App() {
         </section>
       </section>
     </main>
-  )
-}
-
-function SetupAssistant(props: {
-  status: AfStatus | null
-  steps: SetupStep[]
-}) {
-  const ready = createMemo(() => isSetupReady(props.status))
-  const readiness = createMemo(() => props.status?.readiness)
-
-  return (
-    <section class={`panel wide-panel setup-panel ${ready() ? 'ready' : 'active'}`}>
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-progress-check" aria-hidden="true" /></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Initial Setup</p>
-            <h2>セットアップ</h2>
-          </div>
-        </div>
-        <span class={`status-pill ${readiness()?.state ?? 'unknown'}`}>{displayStatus(readiness()?.state)}</span>
-      </div>
-      <div class="setup-summary">
-        <strong>Status: {ready() ? 'Finish' : 'Not Finish'}</strong>
-      </div>
-      <div class="setup-steps">
-        <For each={props.steps}>
-          {(step) => (
-            <article class={`setup-step ${step.state}`}>
-              <div class="setup-step__status" aria-hidden="true">
-                <i class={`mdi ${step.state === 'complete' ? 'mdi-check' : step.state === 'current' ? 'mdi-arrow-right' : 'mdi-lock-outline'}`} />
-              </div>
-              <div class="setup-step__body">
-                <strong>{step.label}</strong>
-                <span>{step.detail}</span>
-              </div>
-            </article>
-          )}
-        </For>
-      </div>
-      <Show when={(readiness()?.requiredActions.length ?? 0) > 0}>
-        <div class="required-actions">
-          <p class="eyebrow">Required Actions</p>
-          <For each={readiness()?.requiredActions ?? []}>{(action) => <span>{requiredActionLabel(action)}</span>}</For>
-        </div>
-      </Show>
-    </section>
-  )
-}
-
-function StatusSection(props: { status: AfStatus | null; credential: CredentialStatus | null }) {
-  const githubStatus = createMemo(() => resolveGithubStatus(props.status, props.credential))
-
-  return (
-    <section class="panel wide-panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-information-outline" aria-hidden="true" /></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Application Framework Status</p>
-            <h2>アプリケーション状況</h2>
-          </div>
-        </div>
-      </div>
-      <div class="status-grid">
-        <StatusItem label="Application Framework Version" value={props.status?.versions?.applicationFramework ?? '-'} />
-        <StatusItem label="Frontend Framework Version" value={props.status?.versions?.frontendFramework ?? '-'} />
-        <StatusItem label="Build Variant" value={buildIdentitySummary(props.status)} />
-        <StatusItem label="Application State" value={displayStatus(props.status?.readiness?.state)} />
-        <StatusItem label="Synced Data" value={runtimeDataSummary(props.status)} />
-        <StatusItem label="GitHub" value={githubStatus().label} />
-      </div>
-    </section>
-  )
-}
-
-function StatusItem(props: { label: string; value: string }) {
-  return (
-    <div class="status-item">
-      <span>{props.label}</span>
-      <strong>{props.value}</strong>
-    </div>
   )
 }
 

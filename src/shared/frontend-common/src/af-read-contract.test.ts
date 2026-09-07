@@ -23,7 +23,7 @@ describe('AF read contract refinement', () => {
       expect(readSource(sourcePath), sourcePath).toMatch(/applicationFramework|ApplicationFramework/)
       expect(readSource(sourcePath), sourcePath).toMatch(/nativePackages|NativePackage/)
     }
-    expect(readSource('src/frontend/settings-solid/src/App.tsx')).toMatch(/applicationFramework|ApplicationFramework/)
+    expect(readSource('src/frontend/settings-solid/src/SettingsStatusSection.tsx')).toMatch(/applicationFramework|ApplicationFramework/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/nativePackages|NativePackage/)
 
     expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/AfStatus = \{\s*version:/)
@@ -45,7 +45,7 @@ describe('AF read contract refinement', () => {
 
   it('keeps build identity as an additive shared Status API field', () => {
     const frontendContract = readSource('src/shared/frontend-common/src/index.ts')
-    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settings = readSource('src/frontend/settings-solid/src/SettingsStatusSection.tsx')
     const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
     const windowsModels = readSource('src/application/windows/Core/AfModels.cs')
     const windowsServices = readSource('src/application/windows/Core/AfServices.cs')
