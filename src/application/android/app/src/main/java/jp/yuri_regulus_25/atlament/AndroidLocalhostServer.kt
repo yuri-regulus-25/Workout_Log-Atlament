@@ -1223,6 +1223,14 @@ class AndroidLocalhostServer(
             val resources = inspectWorkoutRecoveryResources()
             val resolved = resources.firstOrNull { it.resourceKey == resourceKey }
             if (resolved == null) {
+                val staleSource = resources.firstOrNull {
+                    recoveryResourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey
+                }
+                if (staleSource != null && sourceRevision(staleSource.source) != expectedSourceRevision) {
+                    sendJson(output, 409, failJson("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale."))
+                    return
+                }
+
                 sendJson(output, 404, failJson("RECOVERY_RESOURCE_NOT_FOUND", "Recovery Resource was not found."))
                 return
             }

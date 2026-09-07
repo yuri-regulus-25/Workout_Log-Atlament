@@ -1,8 +1,10 @@
 package jp.yuri_regulus_25.atlament
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class MasterReferenceContractParityTest {
     @Test
@@ -48,5 +50,19 @@ class MasterReferenceContractParityTest {
             listOf("schema_version", "session_id", "date", "status", "gym_id", "condition", "machines", "notes"),
             androidRecoveryWorkoutFieldOrder
         )
+    }
+
+    @Test
+    fun recoveryCommitClassifiesOldRevisionResourceKeyAsWriteConflictBeforeNotFound() {
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+            .readText()
+            .substringAfter("private fun sendRecoveryCommit")
+        val staleKeyLookup = "recoveryResourceKey(configuration, \"WORKOUT\", it.source.path, expectedSourceRevision) == resourceKey"
+        val conflict = "failJson(\"RECOVERY_WRITE_CONFLICT\", \"Recovery source revision is stale.\")"
+        val notFound = "failJson(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
+
+        assertTrue(source.contains(staleKeyLookup))
+        assertTrue(source.indexOf(staleKeyLookup) < source.indexOf(notFound))
+        assertTrue(source.indexOf(conflict) < source.indexOf(notFound))
     }
 }

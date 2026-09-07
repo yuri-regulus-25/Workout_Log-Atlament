@@ -834,6 +834,121 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public async Task RecoveryCommitReturnsWriteConflictWhenSourceRevisionAdvancedAfterValidation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-commit-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new WindowsPathProvider(root);
+            var configuration = Configuration("data");
+            Assert.Empty(new ConfigurationStore(paths).Save(configuration));
+            Assert.Equal("available", new CredentialStore(paths).Save(new CredentialUpdate("token", "2026-12-31")).State);
+            var sourcePath = "data/workouts/2026/08/2026-08-24.json";
+            var brokenSource = """
+                {
+                  "schema_version": 1,
+                  "session_id": "recover-me",
+                  "status": "complete",
+                  "gym_id": "known-gym",
+                  "machines": [
+                    {
+                      "machine_id": "known-machine",
+                      "sets": [
+                        { "set": 1, "weight_kg": 20, "reps": 10 }
+                      ]
+                    }
+                  ]
+                }
+                """;
+            var remoteUpdatedSource = """
+                {
+                  "schema_version": 1,
+                  "session_id": "recover-me",
+                  "date": "2026-08-25",
+                  "status": "complete",
+                  "gym_id": "known-gym",
+                  "machines": [
+                    {
+                      "machine_id": "known-machine",
+                      "sets": [
+                        { "set": 1, "weight_kg": 20, "reps": 10 }
+                      ]
+                    }
+                  ]
+                }
+                """;
+            var recovery = new RecoveryService(new RecoveryDraftStore(paths));
+            var preFiles = new[] { new RuntimeSourceFile(sourcePath, brokenSource, ContentRevision(brokenSource)) };
+            var resourceKey = Assert.Single(recovery.ListBrokenResources(configuration, preFiles, MachineMaster, GymMaster)).ResourceKey;
+            var draft = recovery.CreateDraft(configuration, resourceKey, preFiles, MachineMaster, GymMaster).Snapshot.Draft!;
+            var fields = draft.Fields
+                .Select(field => field["fieldPath"]?.GetValue<string>() == "/date"
+                    ? ConfirmedField("/date", JsonValue.Create("2026-08-24"))
+                    : field)
+                .ToArray();
+            Assert.Empty(recovery.UpdateDraft(configuration, resourceKey, new RecoveryDraftUpdate(draft.DraftRevision, fields), preFiles, MachineMaster, GymMaster).Errors);
+            Assert.True(recovery.ValidateDraft(configuration, resourceKey, preFiles, MachineMaster, GymMaster).Result!.CommitAllowed);
+
+            var putCount = 0;
+            var http = new RecordingHttpMessageHandler(request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? "";
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""[{ "path": "{{sourcePath}}", "type": "file" }]""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/workouts/2026/08/2026-08-24.json?ref=master", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""{ "sha": "updated-source-blob-sha", "content": "{{EncodeContent(remoteUpdatedSource)}}" }""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/machines.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""{ "sha": "machine-sha", "content": "{{EncodeContent(MachineMaster.Content)}}" }""");
+                }
+
+                if (request.Method == HttpMethod.Get && url.Contains("/contents/data/master/gyms.json", StringComparison.Ordinal))
+                {
+                    return JsonResponse($$"""{ "sha": "gym-sha", "content": "{{EncodeContent(GymMaster.Content)}}" }""");
+                }
+
+                if (request.Method == HttpMethod.Put)
+                {
+                    putCount++;
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+            var application = new AtlamentApplication(
+                new ConfigurationStore(paths),
+                new CredentialStore(paths),
+                new RuntimeDataStore(paths),
+                new RuntimeDataBuilder(),
+                new GithubAccessService(new HttpClient(http)),
+                new HostingStatusService(paths),
+                new AfLog(paths),
+                recovery);
+
+            var commit = await application.CommitRecoveryDraftAsync(
+                resourceKey,
+                new RecoveryCommitRequest(ContentRevision(brokenSource), draft.DraftRevision + 1),
+                CancellationToken.None);
+
+            Assert.Equal(409, commit.StatusCode);
+            Assert.False(commit.Response.Success);
+            Assert.Contains(commit.Response.Errors, error => error.Code == AfErrorCodes.RecoveryWriteConflict);
+            Assert.Equal(0, putCount);
+            Assert.Equal("stale", recovery.LoadDraft(configuration, "WORKOUT", sourcePath, ContentRevision(remoteUpdatedSource)).State);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task RecoveryCommitRejectsInvalidCandidateWithoutGitWrite()
     {
         var root = Path.Combine(Path.GetTempPath(), "atlament-recovery-commit-test-" + Guid.NewGuid().ToString("N"));

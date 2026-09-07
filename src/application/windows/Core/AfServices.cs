@@ -546,6 +546,9 @@ public sealed class RecoveryService
 
     public int CountActiveDrafts(AfConfiguration configuration) => _store.CountActive(configuration);
 
+    public bool MatchesWorkoutResourceKey(AfConfiguration configuration, string resourceKey, RuntimeSourceFile source, string sourceRevision) =>
+        BuildResourceKey(configuration, "WORKOUT", source.Path, sourceRevision) == resourceKey;
+
     public IReadOnlyList<BrokenResourceSummary> ListBrokenResources(
         AfConfiguration configuration,
         IReadOnlyList<RuntimeSourceFile> workoutFiles,
@@ -3470,6 +3473,16 @@ public sealed class AtlamentApplication
             var (detail, detailErrors) = _recovery!.GetDetail(_configuration, resourceKey, context.WorkoutFiles!, context.MachineMaster!, context.GymMaster!);
             if (detailErrors.Count > 0 || detail is null)
             {
+                var staleSource = context.WorkoutFiles!.FirstOrDefault(file =>
+                    _recovery.MatchesWorkoutResourceKey(_configuration, resourceKey, file, request.ExpectedSourceRevision!));
+                if (staleSource is not null &&
+                    !string.Equals(ResolveRuntimeSourceRevision(staleSource), request.ExpectedSourceRevision, StringComparison.Ordinal))
+                {
+                    var sourceConflictErrors = new[] { new AfError(AfErrorCodes.RecoveryWriteConflict, "Recovery source revision is stale.", true) };
+                    _operations.Complete("recoveryCommit", false);
+                    return (409, new AfResponse<RecoveryCommitResult>(false, sourceConflictErrors, null));
+                }
+
                 _operations.Complete("recoveryCommit", false);
                 return (RecoveryStatusCode(detailErrors), new AfResponse<RecoveryCommitResult>(false, detailErrors, null));
             }
