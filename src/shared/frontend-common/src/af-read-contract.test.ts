@@ -15,7 +15,7 @@ describe('AF read contract refinement', () => {
       'src/shared/frontend-common/src/index.ts',
       'src/application/windows/Core/AfModels.cs',
       'src/application/windows/Core/AfServices.cs',
-      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt',
       'tools/dev-runtime/development-runtime.mjs',
     ] as const
 
@@ -29,7 +29,7 @@ describe('AF read contract refinement', () => {
     expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/AfStatus = \{\s*version:/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/status\?\.version(?!s)/)
     expect(readSource('src/application/windows/Core/AfModels.cs')).not.toMatch(/AfStatus\(\s*\[property: JsonPropertyName\("version"\)\]/)
-    expect(readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')).not.toContain('"version": "${BuildConfig.VERSION_NAME}"')
+    expect(readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt')).not.toContain('"version": "${BuildConfig.VERSION_NAME}"')
     expect(readSource('tools/dev-runtime/development-runtime.mjs')).not.toContain('version: versions.applicationFramework')
   })
 
@@ -49,7 +49,7 @@ describe('AF read contract refinement', () => {
     const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
     const windowsModels = readSource('src/application/windows/Core/AfModels.cs')
     const windowsServices = readSource('src/application/windows/Core/AfServices.cs')
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt')
 
     expect(frontendContract).toContain('build?:')
     expect(frontendContract).toContain('variant: string')

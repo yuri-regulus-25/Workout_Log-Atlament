@@ -56,6 +56,33 @@
   margin-bottom: 16px;
 }
 
+.workout-calendar-header {
+  align-items: center;
+}
+
+.calendar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-actions button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--wl-input-border);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-primary-strong);
+  cursor: pointer;
+}
+
+.calendar-actions button:disabled {
+  cursor: not-allowed;
+  opacity: var(--wl-disabled-opacity);
+}
+
 .workout-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -71,7 +98,18 @@
   border-radius: var(--wl-radius-inner);
   background: var(--wl-surface-muted);
   color: var(--wl-text-muted);
+  cursor: default;
+  font: inherit;
   padding: 8px;
+  text-align: left;
+}
+
+.calendar-day:not(:disabled) {
+  cursor: pointer;
+}
+
+.calendar-day:not(:disabled):hover {
+  border-color: var(--wl-primary);
 }
 
 .calendar-day span,
