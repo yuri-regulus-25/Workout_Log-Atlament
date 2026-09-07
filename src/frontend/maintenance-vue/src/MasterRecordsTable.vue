@@ -8,7 +8,7 @@
     no-data-text="データがありません"
     hover
     density="comfortable"
-    @click:row="(event, row) => $emit('row-click', event, row)"
+    @click:row="handleRowClick"
   >
     <template #item.state="{ item }">
       <v-chip :color="item.deleted ? 'error' : item.active ? 'success' : 'warning'" size="small" variant="tonal">
@@ -30,7 +30,7 @@
           size="small"
           :disabled="item.deleted || !item.active"
           aria-label="メインジムに設定"
-          @click.stop="$emit('request-main-gym', item)"
+          @click.stop="emitMainGymRequest(item)"
         />
         <v-btn icon="mdi-content-copy" variant="text" size="small" aria-label="コピーして作成" @click.stop="$emit('copy', item)" />
         <v-btn
@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { formatBodyPart } from '@workout-lab/workout-core'
 import type { MasterDocumentType } from '@workout-lab/frontend-common'
-import { isGym, isMachine, type RecordDraft } from './maintenance-master-records'
+import { isGym, isMachine, type GymRecord, type RecordDraft } from './maintenance-master-records'
 
 defineProps<{
   type: MasterDocumentType
@@ -58,10 +58,18 @@ defineProps<{
   loading: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'row-click': [event: MouseEvent, row: { item?: RecordDraft | { raw?: RecordDraft } }]
   copy: [record: RecordDraft]
   'request-lifecycle-toggle': [record: RecordDraft]
-  'request-main-gym': [record: RecordDraft]
+  'request-main-gym': [record: GymRecord]
 }>()
+
+function handleRowClick(event: MouseEvent, row: { item?: RecordDraft | { raw?: RecordDraft } }) {
+  emit('row-click', event, row)
+}
+
+function emitMainGymRequest(record: RecordDraft) {
+  if (isGym(record)) emit('request-main-gym', record)
+}
 </script>
