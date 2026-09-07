@@ -73,6 +73,20 @@ describe('Maintenance Recovery UI contract', () => {
     expect(draftStateAlerts).toContain("state === 'incompatible'")
   })
 
+  it('keeps Recovery draft field editing in a screen-local component', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const fieldEditor = readSource('src/frontend/maintenance-vue/src/RecoveryFieldEditor.vue')
+
+    expect(recovery).toContain('RecoveryFieldEditor')
+    expect(recovery).not.toContain('field-card')
+    expect(fieldEditor).toContain('field-card')
+    expect(fieldEditor).toContain('fieldStateLabel')
+    expect(fieldEditor).toContain('suggestionLabel')
+    expect(fieldEditor).toContain('normalizeMachines')
+    expect(fieldEditor).toContain('マシンを追加')
+    expect(fieldEditor).toContain('セットを追加')
+  })
+
   it('keeps Recovery write conflict visible instead of emptying the commit confirmation dialog', () => {
     const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
     const commitDraft = recovery.slice(recovery.indexOf('async function commitDraft'))
