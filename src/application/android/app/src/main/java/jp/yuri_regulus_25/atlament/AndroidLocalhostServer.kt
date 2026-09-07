@@ -36,14 +36,15 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted: Boolean): String = when {
+internal fun androidMasterReferenceResolutionState(resolvedId: String?, deleted: Boolean, invalidExcluded: Boolean = false): String = when {
+    invalidExcluded -> "invalid_excluded"
     resolvedId.isNullOrBlank() -> "missing"
     deleted -> "deleted"
     else -> "resolved"
 }
 
-internal fun androidMasterReferenceWarningCode(deleted: Boolean): String =
-    if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
+internal fun androidMasterReferenceWarningCode(deleted: Boolean, invalidExcluded: Boolean = false): String =
+    if (invalidExcluded) "MASTER_REFERENCE_INVALID_EXCLUDED" else if (deleted) "MASTER_REFERENCE_DELETED" else "MASTER_REFERENCE_MISSING"
 
 internal fun androidNormalizeGitBranchRef(ref: String): String {
     val trimmed = ref.trim().trim('/')
@@ -95,6 +96,7 @@ class AndroidLocalhostServer(
     private data class MasterWriteTarget(val type: String, val path: String)
     private data class MasterDocument(val type: String, val path: String, val revision: String, val content: String)
     private data class GithubContent(val revision: String, val content: String)
+    private data class MasterRecordCatalog<T>(val lookup: Map<String, T>, val excludedIds: Set<String>, val structuralInvalid: Boolean)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
     private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
     private class AfException(val code: String, override val message: String) : Exception(message)
@@ -2374,7 +2376,7 @@ class AndroidLocalhostServer(
         val machines = parseMachineMaster(RuntimeSourceFile(machineMaster.path, machineMaster.content), errors)
         val gyms = parseGymMaster(RuntimeSourceFile(gymMaster.path, gymMaster.content), errors)
         if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (errors.length() > 0) return RuntimeBuildResult(null, errors, warnings)
+        if (machines.structuralInvalid || gyms.structuralInvalid || workoutFiles.isEmpty()) return RuntimeBuildResult(null, errors, warnings)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->
@@ -2502,16 +2504,17 @@ class AndroidLocalhostServer(
         return RuntimeFetchedResources(workoutFiles, machineMaster, gymMaster)
     }
 
-    private fun parseMachineMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, MachineMasterItem> {
+    private fun parseMachineMaster(file: RuntimeSourceFile, errors: JSONArray): MasterRecordCatalog<MachineMasterItem> {
         return try {
             val root = JSONObject(file.content)
             val items = root.optJSONArray("machines")
             if (!root.has("schema_version") || items == null) {
                 errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master contract is invalid."))
-                return emptyMap()
+                return MasterRecordCatalog(emptyMap(), emptySet(), structuralInvalid = true)
             }
 
-            val result = linkedMapOf<String, MachineMasterItem>()
+            val candidates = mutableListOf<MachineMasterItem>()
+            val excludedIds = linkedSetOf<String>()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("machine_id").orEmpty().trim()
@@ -2521,39 +2524,30 @@ class AndroidLocalhostServer(
                 val hasActive = item?.has("active") == true
                 if (id.isBlank() || name.isBlank() || bodyPart !in bodyParts || !hasActive) {
                     errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master item is invalid."))
-                    return emptyMap()
-                }
-                if (result.containsKey(id)) {
-                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine_id: $id."))
-                    return emptyMap()
+                    addRecoverableMasterKeys(item, "machine_id", excludedIds)
+                    continue
                 }
                 val record = MachineMasterItem(id, sourceIds, name, bodyPart, item?.optBoolean("deleted", false) ?: false)
-                result[id] = record
-                for (sourceId in sourceIds) {
-                    if (result.containsKey(sourceId)) {
-                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate machine source_id: $sourceId."))
-                        return emptyMap()
-                    }
-                    result[sourceId] = record
-                }
+                candidates.add(record)
             }
-            result
+            buildMasterCatalog(candidates, { it.id }, { it.sourceIds }, excludedIds, file.path, "Machine", errors)
         } catch (_: Exception) {
             errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Machine master JSON is invalid."))
-            emptyMap()
+            MasterRecordCatalog(emptyMap(), emptySet(), structuralInvalid = true)
         }
     }
 
-    private fun parseGymMaster(file: RuntimeSourceFile, errors: JSONArray): Map<String, GymMasterItem> {
+    private fun parseGymMaster(file: RuntimeSourceFile, errors: JSONArray): MasterRecordCatalog<GymMasterItem> {
         return try {
             val root = JSONObject(file.content)
             val items = root.optJSONArray("gyms")
             if (!root.has("schema_version") || items == null) {
                 errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master contract is invalid."))
-                return emptyMap()
+                return MasterRecordCatalog(emptyMap(), emptySet(), structuralInvalid = true)
             }
 
-            val result = linkedMapOf<String, GymMasterItem>()
+            val candidates = mutableListOf<GymMasterItem>()
+            val excludedIds = linkedSetOf<String>()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index)
                 val id = item?.optString("gym_id").orEmpty().trim()
@@ -2562,36 +2556,72 @@ class AndroidLocalhostServer(
                 val hasActive = item?.has("active") == true
                 if (id.isBlank() || name.isBlank() || !hasActive) {
                     errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master item is invalid."))
-                    return emptyMap()
-                }
-                if (result.containsKey(id)) {
-                    errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate gym_id: $id."))
-                    return emptyMap()
+                    addRecoverableMasterKeys(item, "gym_id", excludedIds)
+                    continue
                 }
                 val shortName = item?.optString("short_name")?.takeIf { it.isNotBlank() }
                 val record = GymMasterItem(id, sourceIds, name, shortName, item?.optBoolean("deleted", false) ?: false)
-                result[id] = record
-                for (sourceId in sourceIds) {
-                    if (result.containsKey(sourceId)) {
-                        errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Duplicate gym source_id: $sourceId."))
-                        return emptyMap()
-                    }
-                    result[sourceId] = record
-                }
+                candidates.add(record)
             }
-            result
+            buildMasterCatalog(candidates, { it.id }, { it.sourceIds }, excludedIds, file.path, "Gym", errors)
         } catch (_: Exception) {
             errors.put(errorJson("RUNTIME_DATA_INVALID", "${file.path}: Gym master JSON is invalid."))
-            emptyMap()
+            MasterRecordCatalog(emptyMap(), emptySet(), structuralInvalid = true)
         }
+    }
+
+    private fun <T> buildMasterCatalog(
+        candidates: List<T>,
+        idOf: (T) -> String,
+        sourceIdsOf: (T) -> List<String>,
+        excludedIds: MutableSet<String>,
+        filePath: String,
+        label: String,
+        errors: JSONArray
+    ): MasterRecordCatalog<T> {
+        val ownersByKey = linkedMapOf<String, MutableList<T>>()
+        candidates.forEach { candidate ->
+            candidateKeys(idOf(candidate), sourceIdsOf(candidate)).forEach { key ->
+                ownersByKey.getOrPut(key) { mutableListOf() }.add(candidate)
+            }
+        }
+
+        val excludedRecords = linkedSetOf<T>()
+        ownersByKey.forEach { (key, owners) ->
+            if (owners.size > 1) {
+                errors.put(errorJson("RUNTIME_DATA_INVALID", "$filePath: $label master duplicate reference key is excluded: $key."))
+                excludedRecords.addAll(owners)
+            }
+        }
+
+        val lookup = linkedMapOf<String, T>()
+        candidates.forEach { candidate ->
+            val keys = candidateKeys(idOf(candidate), sourceIdsOf(candidate))
+            if (candidate in excludedRecords) {
+                excludedIds.addAll(keys)
+            } else {
+                keys.forEach { key -> lookup[key] = candidate }
+            }
+        }
+
+        return MasterRecordCatalog(lookup, excludedIds, structuralInvalid = false)
+    }
+
+    private fun candidateKeys(id: String, sourceIds: List<String>): List<String> =
+        (listOf(id) + sourceIds).map { it.trim() }.filter { it.isNotBlank() }.distinct()
+
+    private fun addRecoverableMasterKeys(item: JSONObject?, idField: String, excludedIds: MutableSet<String>) {
+        val id = item?.optString(idField).orEmpty().trim()
+        if (id.isNotBlank()) excludedIds.add(id)
+        excludedIds.addAll(readStringList(item?.optJSONArray("source_ids")))
     }
 
     private fun buildSession(
         filePath: String,
         line: Int?,
         content: String,
-        machines: Map<String, MachineMasterItem>,
-        gyms: Map<String, GymMasterItem>,
+        machines: MasterRecordCatalog<MachineMasterItem>,
+        gyms: MasterRecordCatalog<GymMasterItem>,
         errors: JSONArray,
         warnings: JSONArray
     ): JSONObject? {
@@ -2618,9 +2648,10 @@ class AndroidLocalhostServer(
             return null
         }
 
-        val gym = gyms[gymId]
+        val gym = gyms.lookup[gymId]
+        val gymInvalidExcluded = gym == null && gymId in gyms.excludedIds
         if (gym == null || gym.deleted) {
-            warnings.put(referenceWarningJson("gym", gymId, gym?.id, gym?.deleted ?: false, sessionId, filePath, line))
+            warnings.put(referenceWarningJson("gym", gymId, gym?.id, gym?.deleted ?: false, gymInvalidExcluded, sessionId, filePath, line))
         }
 
         val normalizedMachines = JSONArray()
@@ -2635,7 +2666,7 @@ class AndroidLocalhostServer(
 
         val normalizedGym = JSONObject()
             .put("id", gym?.id ?: gymId)
-            .put("resolution", referenceResolutionJson(gymId, gym?.id, gym?.deleted ?: false))
+            .put("resolution", referenceResolutionJson(gymId, gym?.id, gym?.deleted ?: false, gymInvalidExcluded))
         if (gym != null && !gym.deleted) {
             normalizedGym
                 .put("name", gym.name)
@@ -2657,7 +2688,7 @@ class AndroidLocalhostServer(
         filePath: String,
         line: Int?,
         item: JSONObject?,
-        masters: Map<String, MachineMasterItem>,
+        masters: MasterRecordCatalog<MachineMasterItem>,
         errors: JSONArray,
         warnings: JSONArray,
         sessionId: String
@@ -2669,9 +2700,10 @@ class AndroidLocalhostServer(
             return null
         }
 
-        val master = masters[machineId]
+        val master = masters.lookup[machineId]
+        val invalidExcluded = master == null && machineId in masters.excludedIds
         if (master == null || master.deleted) {
-            warnings.put(referenceWarningJson("machine", machineId, master?.id, master?.deleted ?: false, sessionId, filePath, line))
+            warnings.put(referenceWarningJson("machine", machineId, master?.id, master?.deleted ?: false, invalidExcluded, sessionId, filePath, line))
         }
 
         val sets = JSONArray()
@@ -2693,7 +2725,7 @@ class AndroidLocalhostServer(
 
         val normalized = JSONObject()
             .put("machine_id", master?.id ?: machineId)
-            .put("resolution", referenceResolutionJson(machineId, master?.id, master?.deleted ?: false))
+            .put("resolution", referenceResolutionJson(machineId, master?.id, master?.deleted ?: false, invalidExcluded))
             .put("sets", sets)
             .put("notes", readStringArray(item.optJSONArray("notes")))
         if (master != null && !master.deleted) {
@@ -2704,9 +2736,9 @@ class AndroidLocalhostServer(
         return normalized
     }
 
-    private fun referenceResolutionJson(originalId: String, resolvedId: String?, deleted: Boolean): JSONObject {
+    private fun referenceResolutionJson(originalId: String, resolvedId: String?, deleted: Boolean, invalidExcluded: Boolean): JSONObject {
         return JSONObject()
-            .put("state", androidMasterReferenceResolutionState(resolvedId, deleted))
+            .put("state", androidMasterReferenceResolutionState(resolvedId, deleted, invalidExcluded))
             .put("originalId", originalId)
             .put("resolvedId", resolvedId ?: JSONObject.NULL)
     }
@@ -2716,15 +2748,16 @@ class AndroidLocalhostServer(
         originalId: String,
         resolvedId: String?,
         deleted: Boolean,
+        invalidExcluded: Boolean,
         sessionId: String,
         filePath: String,
         line: Int?
     ): JSONObject {
-        val resolutionState = if (deleted) "deleted" else "missing"
+        val resolutionState = if (invalidExcluded) "invalid_excluded" else if (deleted) "deleted" else "missing"
         val subject = if (referenceKind == "gym") "ジム" else "マシン"
-        val stateText = if (deleted) "削除されています" else "存在しません"
+        val stateText = if (invalidExcluded) "Runtime採用対象から除外されています" else if (deleted) "削除されています" else "存在しません"
         return JSONObject()
-            .put("code", androidMasterReferenceWarningCode(deleted))
+            .put("code", androidMasterReferenceWarningCode(deleted, invalidExcluded))
             .put("referenceKind", referenceKind)
             .put("resolutionState", resolutionState)
             .put("originalId", originalId)
