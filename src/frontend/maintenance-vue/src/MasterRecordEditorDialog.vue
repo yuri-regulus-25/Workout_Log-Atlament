@@ -6,7 +6,7 @@
         <v-toolbar-title>{{ title }}</v-toolbar-title>
         <v-divider vertical class="mx-0" />
         <v-btn variant="text" :loading="saving" :disabled="!canSave" @click="emit('save')">
-          {{ dialogMode === 'create' ? '作成' : '更新' }}
+          {{ dialogMode === 'create' ? '登録する' : '更新する' }}
         </v-btn>
       </v-toolbar>
       <v-card-text>

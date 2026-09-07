@@ -88,17 +88,6 @@
         @save="saveDialog"
       />
 
-      <v-dialog v-model="discardOpen" max-width="420">
-        <v-card>
-          <v-card-title>変更を破棄しますか?</v-card-title>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="discardOpen = false">キャンセル</v-btn>
-            <v-btn color="error" @click="discardDraft">破棄</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-
       <v-dialog v-model="confirmOpen" max-width="460">
         <v-card>
           <v-card-title>{{ confirmTitle }}</v-card-title>
@@ -167,7 +156,6 @@ const machines = ref<MachineRecord[]>([])
 const gyms = ref<GymRecord[]>([])
 const unresolved = ref<UnresolvedMasterReference[]>([])
 const dialogOpen = ref(false)
-const discardOpen = ref(false)
 const confirmOpen = ref(false)
 const resolveOpen = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -176,7 +164,6 @@ const gymDraft = ref<GymRecord | null>(null)
 const pendingOperation = ref<{ kind: 'lifecycle' | 'main-gym'; record: RecordDraft } | null>(null)
 const selectedUnresolved = ref<UnresolvedMasterReference | null>(null)
 const resolveTargetId = ref('')
-const originalDraft = ref('')
 const aliasText = ref('')
 const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
 const shell = ref<HTMLElement | null>(null)
@@ -271,7 +258,6 @@ const idError = computed(() => {
   return records.value.some((record) => recordId(record) === id) ? 'IDはすでに存在します。' : ''
 })
 
-const dirty = computed(() => activeDraft.value !== null && JSON.stringify(activeDraft.value) !== originalDraft.value)
 const canSave = computed(() => activeDraft.value !== null && !idError.value && recordId(activeDraft.value) && activeDraft.value.name.trim())
 
 async function loadAll() {
@@ -317,7 +303,6 @@ function openCreate() {
     ? { gym_id: '', source_ids: [], name: '', short_name: '', active: true, deleted: false, main: false }
     : null
   aliasText.value = ''
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
@@ -327,7 +312,6 @@ function openEdit(record: RecordDraft) {
   machineDraft.value = isMachine(record) ? cloneMachineRecord(record) : null
   gymDraft.value = isGym(record) ? cloneGymRecord(record) : null
   aliasText.value = machineDraft.value ? machineDraft.value.aliases.join(', ') : ''
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
@@ -354,7 +338,6 @@ function openCopy(record: RecordDraft) {
     machineDraft.value = null
     aliasText.value = ''
   }
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
@@ -383,7 +366,6 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
     machineDraft.value = null
     aliasText.value = ''
   }
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
@@ -440,15 +422,6 @@ async function confirmOperation() {
 }
 
 function closeDialog() {
-  if (dirty.value) {
-    discardOpen.value = true
-    return
-  }
-  resetDialog()
-}
-
-function discardDraft() {
-  discardOpen.value = false
   resetDialog()
 }
 
@@ -456,7 +429,6 @@ function resetDialog() {
   dialogOpen.value = false
   machineDraft.value = null
   gymDraft.value = null
-  originalDraft.value = ''
   originalDraftWasCopied.value = false
   aliasText.value = ''
 }

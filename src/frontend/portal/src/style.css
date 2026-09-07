@@ -23,6 +23,13 @@ body {
   background: linear-gradient(135deg, var(--wl-primary) 0%, var(--wl-primary) 12%, var(--wl-primary-strong) 100%);
 }
 
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .portal,
+.atl-theme-dark body,
+.atl-theme-dark .portal {
+  background: linear-gradient(100deg, var(--wl-shell-primary) 0%, var(--wl-shell-primary) 8%, var(--wl-shell-primary-strong) 100%);
+}
+
 .portal-container {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -373,8 +380,8 @@ body {
 
 .framework-icon {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
 }
 
