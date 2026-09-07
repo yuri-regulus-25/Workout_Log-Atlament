@@ -53,6 +53,7 @@ class AndroidLocalhostServer(
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
     private val resourceKinds = setOf("file", "directory")
     private val configurationFile = File(context.filesDir, "configuration/af-settings.json")
+    private val configurationStore = AndroidConfigurationStore(configurationFile)
     private val credentialStore = AndroidCredentialStore(context)
     private val runtimeDataFile = File(context.filesDir, "runtime/current/runtime-workouts.json")
     private val recoveryDraftDirectory = File(context.filesDir, "recovery/drafts")
@@ -416,11 +417,7 @@ class AndroidLocalhostServer(
         return actions
     }
 
-    private fun loadConfigurationJson(): String = if (configurationFile.exists()) {
-        configurationFile.readText(StandardCharsets.UTF_8)
-    } else {
-        defaultConfigurationJson()
-    }
+    private fun loadConfigurationJson(): String = configurationStore.loadJson()
 
     private fun masterWriteBoundaryJson(): String {
         val configuration = JSONObject(loadConfigurationJson())
@@ -880,13 +877,13 @@ class AndroidLocalhostServer(
         var success = false
         return try {
             val update = if (updateJson.isBlank()) JSONObject() else JSONObject(updateJson)
-            val merged = JSONObject(mergeConfigurationJson(update.toString()))
+            val merged = JSONObject(configurationStore.mergeJson(update.toString()))
             val validationErrors = validateConfiguration(merged)
             if (validationErrors.length() > 0) {
                 return SyncResponse(400, responseJson(false, "null", validationErrors), false)
             }
 
-            val saveErrors = saveConfigurationAtomically(merged.toString(2))
+            val saveErrors = configurationStore.saveAtomically(merged.toString(2))
             if (saveErrors.length() > 0) {
                 return SyncResponse(500, responseJson(false, "null", saveErrors), false)
             }
@@ -955,23 +952,6 @@ class AndroidLocalhostServer(
 
     private fun validateRange(value: Int, min: Int, max: Int, name: String, errors: JSONArray) {
         if (value < min || value > max) errors.put(errorJson("CONFIG_INVALID", "$name is out of range."))
-    }
-
-    private fun saveConfigurationAtomically(json: String): JSONArray {
-        return try {
-            configurationFile.parentFile?.mkdirs()
-            val temporary = File(configurationFile.parentFile, configurationFile.name + ".tmp")
-            temporary.writeText(json, StandardCharsets.UTF_8)
-            if (configurationFile.exists() && !configurationFile.delete()) {
-                throw IllegalStateException("Existing configuration could not be replaced.")
-            }
-            if (!temporary.renameTo(configurationFile)) {
-                throw IllegalStateException("Temporary configuration could not be moved.")
-            }
-            JSONArray()
-        } catch (_: Exception) {
-            errorsArray("CONFIG_SAVE_FAILED", "Configuration could not be saved.")
-        }
     }
 
     private fun checkRemoteConfiguration(configuration: JSONObject): JSONArray {
@@ -1453,51 +1433,6 @@ class AndroidLocalhostServer(
           "errors": $errorsJson,
           "warnings": $warningsJson,
           "data": $dataJson
-        }
-    """.trimIndent()
-
-    private fun mergeConfigurationJson(updateJson: String): String {
-        val current = JSONObject(loadConfigurationJson())
-        if (updateJson.isBlank()) return current.toString(2)
-
-        val update = JSONObject(updateJson)
-        update.optJSONObject("repository")?.let { patch ->
-            val repository = current.getJSONObject("repository")
-            patch.keys().forEach { key ->
-                if (!patch.isNull(key)) repository.put(key, patch.get(key))
-            }
-        }
-        update.optJSONArray("resources")?.let { resources ->
-            current.put("resources", resources)
-        }
-        update.optJSONObject("timeouts")?.let { patch ->
-            val timeouts = current.getJSONObject("timeouts")
-            patch.keys().forEach { key ->
-                if (!patch.isNull(key)) timeouts.put(key, patch.get(key))
-            }
-        }
-        return current.toString(2)
-    }
-    private fun defaultConfigurationJson(): String = """
-        {
-          "schemaVersion": 1,
-          "repository": {
-            "owner": "",
-            "repository": "",
-            "ref": "main",
-            "rootPath": ""
-          },
-          "resources": [
-            { "type": "WORKOUT", "path": "workouts/", "resourceKind": "directory", "required": true, "emptyAllowed": false },
-            { "type": "MACHINE_MASTER", "path": "master/machines.json", "resourceKind": "file", "required": true, "emptyAllowed": false },
-            { "type": "GYM_MASTER", "path": "master/gyms.json", "resourceKind": "file", "required": true, "emptyAllowed": false }
-          ],
-          "timeouts": {
-            "githubRequestTimeoutSec": 10,
-            "syncOperationTimeoutSec": 60,
-            "generalApiTimeoutSec": 30,
-            "shutdownTimeoutSec": 10
-          }
         }
     """.trimIndent()
 
