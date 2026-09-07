@@ -89,7 +89,10 @@ const existingFrontendApps = [
   },
   {
     id: 'maintenance',
-    sourceFiles: ['src/frontend/maintenance-vue/src/App.vue'],
+    sourceFiles: [
+      'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
+    ],
     cssFiles: ['src/frontend/maintenance-vue/src/style.css'],
     stateMarkers: {
       loading: /:loading="loading"/,
@@ -232,6 +235,7 @@ describe('cross-frontend test baseline', () => {
     ])
     const maintenance = readSources([
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
       'src/frontend/maintenance-vue/src/style.css',
     ])
 

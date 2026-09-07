@@ -41,52 +41,17 @@
           ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
         </p>
 
-        <v-data-table
+        <MasterRecordsTable
           v-if="viewMode === 'masters'"
-          :class="['maintenance-table', 'master-table', selectedType === 'MACHINE_MASTER' ? 'machine-master-table' : 'gym-master-table']"
+          :type="selectedType"
           :headers="tableHeaders"
-          :items="visibleRecords"
+          :records="visibleRecords"
           :loading="loading"
-          item-value="id"
-          no-data-text="データがありません"
-          hover
-          density="comfortable"
-          @click:row="onRowClick"
-        >
-          <template #item.state="{ item }">
-            <v-chip :color="item.deleted ? 'error' : item.active ? 'success' : 'warning'" size="small" variant="tonal">
-              {{ item.deleted ? '削除済み' : item.active ? '有効' : '無効' }}
-            </v-chip>
-          </template>
-          <template #item.main="{ item }">
-            <v-icon v-if="isGym(item) && item.main" icon="mdi-star" color="primary" aria-hidden="true" />
-          </template>
-          <template #item.body_part="{ item }">
-            {{ isMachine(item) ? formatBodyPart(item.body_part) : '' }}
-          </template>
-          <template #item.actions="{ item }">
-            <div class="row-actions" @click.stop>
-              <v-btn
-                v-if="isGym(item)"
-                :icon="item.main ? 'mdi-star' : 'mdi-star-outline'"
-                variant="text"
-                size="small"
-                :disabled="item.deleted || !item.active"
-              aria-label="メインジムに設定"
-                @click.stop="requestMainGym(item)"
-              />
-              <v-btn icon="mdi-content-copy" variant="text" size="small" aria-label="コピーして作成" @click.stop="openCopy(item)" />
-              <v-btn
-                :icon="item.deleted ? 'mdi-restore' : 'mdi-delete-outline'"
-                variant="text"
-                size="small"
-              :aria-label="item.deleted ? '復元' : '削除'"
-                :disabled="isGym(item) && item.main && !item.deleted"
-                @click.stop="requestLifecycleToggle(item)"
-              />
-            </div>
-          </template>
-        </v-data-table>
+          @row-click="onRowClick"
+          @copy="openCopy"
+          @request-lifecycle-toggle="requestLifecycleToggle"
+          @request-main-gym="requestMainGym"
+        />
 
         <v-data-table
           v-else-if="viewMode === 'unresolved'"
@@ -218,6 +183,7 @@ import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { formatBodyPart } from '@workout-lab/workout-core'
+import MasterRecordsTable from './MasterRecordsTable.vue'
 import RecoveryPanel from './RecoveryPanel.vue'
 import {
   cloneRecordDraft,
