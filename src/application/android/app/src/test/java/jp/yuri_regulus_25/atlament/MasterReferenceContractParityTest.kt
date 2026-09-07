@@ -47,6 +47,17 @@ class MasterReferenceContractParityTest {
     }
 
     @Test
+    fun classifiesGithubHttpErrorsWithAndroidAfCodes() {
+        assertEquals("GITHUB_UNAUTHORIZED", androidMapGithubError(401, "master/machines.json").code)
+        assertEquals("GITHUB_FORBIDDEN", androidMapGithubError(403, "master/machines.json").code)
+        assertEquals("GITHUB_RESOURCE_NOT_FOUND", androidMapGithubError(404, "master/machines.json").code)
+        assertEquals("GitHub resource not found: master/machines.json.", androidMapGithubError(404, "master/machines.json").message)
+        assertEquals("GITHUB_RATE_LIMIT", androidMapGithubError(429, "master/machines.json").code)
+        assertEquals("GITHUB_CONNECTION_FAILED", androidMapGithubError(500, "master/machines.json").code)
+        assertEquals("GitHub server error: HTTP 500.", androidMapGithubError(500, "master/machines.json").message)
+    }
+
+    @Test
     fun keepsLocalhostEndpointPrimaryAndSecondaryPortOrderAligned() {
         assertEquals(listOf(14108, 45194), androidLocalhostPorts)
     }

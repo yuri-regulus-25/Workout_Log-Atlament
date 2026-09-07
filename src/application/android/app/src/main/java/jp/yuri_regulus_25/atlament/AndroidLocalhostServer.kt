@@ -36,16 +36,6 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal fun androidNormalizeGitBranchRef(ref: String): String {
-    val trimmed = ref.trim().trim('/')
-    return when {
-        trimmed.isBlank() -> "heads/main"
-        trimmed.startsWith("refs/") -> trimmed.removePrefix("refs/")
-        trimmed.startsWith("heads/") || trimmed.startsWith("tags/") -> trimmed
-        else -> "heads/$trimmed"
-    }
-}
-
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
@@ -66,7 +56,6 @@ class AndroidLocalhostServer(
     private data class MasterRecordCatalog<T>(val lookup: Map<String, T>, val excludedIds: Set<String>, val structuralInvalid: Boolean)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
     private data class GymMasterItem(val id: String, val sourceIds: List<String>, val name: String, val shortName: String?, val deleted: Boolean)
-    private class AfException(val code: String, override val message: String) : Exception(message)
     private val appNames = setOf("dashboard", "workouts", "machines", "analytics", "settings", "maintenance")
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
     private val resourceTypes = setOf("WORKOUT", "MACHINE_MASTER", "GYM_MASTER")
@@ -729,7 +718,7 @@ class AndroidLocalhostServer(
             val status = connection.responseCode
             if (status !in 200..299) {
                 if (status == 409) throw AfException("MASTER_SYNC_REQUIRED", "Master document must be synchronized before saving.")
-                throw mapGithubError(status, path)
+                throw androidMapGithubError(status, path)
             }
             val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             val savedRevision = JSONObject(response).optJSONObject("content")?.optString("sha").orEmpty().trim()
@@ -1327,7 +1316,7 @@ class AndroidLocalhostServer(
             val status = connection.responseCode
             if (status !in 200..299) {
                 if (status == 409) throw AfException("RECOVERY_WRITE_CONFLICT", "Recovery source revision is stale.")
-                throw mapGithubError(status, path)
+                throw androidMapGithubError(status, path)
             }
             val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             val json = JSONObject(response)
@@ -2817,7 +2806,7 @@ class AndroidLocalhostServer(
 
         return try {
             val status = connection.responseCode
-            if (status !in 200..299) throw mapGithubError(status, pathForError)
+            if (status !in 200..299) throw androidMapGithubError(status, pathForError)
             connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
@@ -2840,7 +2829,7 @@ class AndroidLocalhostServer(
             connection.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) {
-                throw mapGithubError(status, "graphql")
+                throw androidMapGithubError(status, "graphql")
             }
             val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             JSONObject(response)
@@ -2889,14 +2878,6 @@ class AndroidLocalhostServer(
         return false
     }
 
-    private fun mapGithubError(status: Int, path: String): AfException = when (status) {
-        401 -> AfException("GITHUB_UNAUTHORIZED", "GitHub token is unauthorized.")
-        403 -> AfException("GITHUB_FORBIDDEN", "GitHub access is forbidden.")
-        404 -> AfException("GITHUB_RESOURCE_NOT_FOUND", "GitHub resource not found: $path.")
-        429 -> AfException("GITHUB_RATE_LIMIT", "GitHub rate limit reached.")
-        else -> AfException("GITHUB_CONNECTION_FAILED", "GitHub server error: HTTP $status.")
-    }
-
     private fun sendShutdown(output: OutputStream) {
         val already = shutdownRequested.getAndSet(true)
         if (!already) {
@@ -2912,35 +2893,6 @@ class AndroidLocalhostServer(
             }.start()
         }
     }
-    private fun failJson(code: String, message: String): String = """
-        {
-          "success": false,
-          "errors": ${errorsJson(code, message)},
-          "warnings": [],
-          "data": null
-        }
-    """.trimIndent()
-
-    private fun responseJson(success: Boolean, dataJson: String, errors: JSONArray, warnings: JSONArray = JSONArray()): String = """
-        {
-          "success": $success,
-          "errors": ${errors.toString()},
-          "warnings": ${warnings.toString()},
-          "data": $dataJson
-        }
-    """.trimIndent()
-
-    private fun errorsJson(code: String, message: String): String =
-        errorsArray(code, message).toString()
-
-    private fun errorsArray(code: String, message: String): JSONArray =
-        JSONArray().put(errorJson(code, message))
-
-    private fun errorJson(code: String, message: String): JSONObject =
-        JSONObject()
-            .put("code", code)
-            .put("message", message)
-            .put("recoverable", true)
     private fun sendErrorPage(output: OutputStream, status: Int) {
         val assetPath = when (status) {
             404 -> "frontend/404.html"
