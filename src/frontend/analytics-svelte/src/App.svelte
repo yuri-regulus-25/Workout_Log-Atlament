@@ -8,6 +8,8 @@
   import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens'
   import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
   import type { WorkoutMasterData, WorkoutSession } from '@workout-lab/workout-types'
+  import AnalyticsPeriodPanel from './AnalyticsPeriodPanel.svelte'
+  import AnalyticsSummary from './AnalyticsSummary.svelte'
   import {
     filterSessionsByDateRange,
     formatBodyPart,
@@ -34,14 +36,6 @@
   let sessions: WorkoutSession[] = []
   let masterData: WorkoutMasterData | undefined
   let selectedPeriod: PeriodPreset = '28d'
-  const periodOptions: Array<{ value: PeriodPreset; label: string }> = [
-    { value: '7d', label: '7 Days' },
-    { value: '28d', label: '28 Days' },
-    { value: 'month', label: 'Current Month' },
-    { value: '3m', label: '3 Months' },
-    { value: '6m', label: '6 Months' },
-    { value: 'all', label: 'Entire Period' },
-  ]
   let loadError: string | null = null
   $: periodRange = resolvePeriodRange(selectedPeriod, sessions)
   $: filteredSessions = filterSessionsByDateRange(sessions, periodRange)
@@ -284,24 +278,12 @@
     </p>
   </header>
 
-  <section class="metric-grid" aria-label="Analytics summary">
-    <article class="metric-card">
-      <span>Period workouts</span>
-      <strong>{filteredSessions.length} {filteredSessions.length > 1 ? "Sessions" : "Session"}</strong>
-    </article>
-    <article class="metric-card">
-      <span>Total sets</span>
-      <strong>{totalSets} {totalSets > 1 ? "Sets" : "Set"}</strong>
-    </article>
-    <article class="metric-card">
-      <span>Main Gym weight</span>
-      <strong>{formatMainGymMetric(totalVolume)}</strong>
-    </article>
-    <article class="metric-card">
-      <span>Average interval</span>
-      <strong>{averageInterval}</strong>
-    </article>
-  </section>
+  <AnalyticsSummary
+    filteredSessionCount={filteredSessions.length}
+    {totalSets}
+    mainGymWeight={formatMainGymMetric(totalVolume)}
+    {averageInterval}
+  />
 
   {#if loadError}
     <section class="panel">
@@ -311,25 +293,7 @@
     </section>
   {/if}
 
-  <section class="panel analytics-period-panel">
-    <div class="panel-header">
-      <div class="card-heading">
-        <div class="card-heading__icon"><i class="mdi mdi-calendar-range-outline" aria-hidden="true"></i></div>
-        <div class="card-heading__text">
-          <p class="eyebrow">Global Period</p>
-          <h2>{formatDisplayDate(periodRange.startDate)} - {formatDisplayDate(periodRange.endDate)}</h2>
-        </div>
-      </div>
-      <label class="field period-field">
-        <span>Period</span>
-        <select bind:value={selectedPeriod}>
-          {#each periodOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-      </label>
-    </div>
-  </section>
+  <AnalyticsPeriodPanel bind:selectedPeriod {periodRange} />
 
   <section class="analytics-chart-grid">
     <article class="panel">
