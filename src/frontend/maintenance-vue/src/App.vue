@@ -379,15 +379,24 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
 
 async function resolveToExisting() {
   if (!selectedUnresolved.value || !resolveTargetId.value) return
-  const unresolvedItem = selectedUnresolved.value
-  const targetId = resolveTargetId.value
-  const next = records.value.map((record) => {
-    if (recordId(record) !== targetId) return record
-    const sourceIds = new Set([...(record.source_ids ?? []), unresolvedItem.referenceId])
-    return { ...record, source_ids: Array.from(sourceIds).sort() }
-  })
-  await saveRecords(unresolvedItem.type, next)
-  resolveOpen.value = false
+  saving.value = true
+  try {
+    const unresolvedItem = selectedUnresolved.value
+    const targetId = resolveTargetId.value
+    const next = records.value.map((record) => {
+      if (recordId(record) !== targetId) return record
+      const sourceIds = new Set([...(record.source_ids ?? []), unresolvedItem.referenceId])
+      return { ...record, source_ids: Array.from(sourceIds).sort() }
+    })
+    await saveRecords(unresolvedItem.type, next)
+    resolveOpen.value = false
+    message.value = { type: 'success', text: '参照先を設定しました' }
+  } catch (error) {
+    reportDiagnostic('Unresolved reference resolution failed.', error)
+    message.value = { type: 'error', text: '設定に失敗しました' }
+  } finally {
+    saving.value = false
+  }
 }
 
 function requestLifecycleToggle(record: RecordDraft) {

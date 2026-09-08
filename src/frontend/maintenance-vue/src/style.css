@@ -3,6 +3,19 @@
 @import "@workout-lab/frontend-common/branding.css";
 @import "@workout-lab/frontend-common/easter-egg.css";
 
+:root {
+  --maintenance-info-bg: rgba(224, 247, 255, 0.9);
+  --maintenance-info-border: rgba(14, 165, 233, 0.34);
+  --maintenance-info-text: #075985;
+}
+
+:root[data-theme="dark"],
+.atl-theme-dark {
+  --maintenance-info-bg: rgba(56, 189, 248, 0.22);
+  --maintenance-info-border: rgba(125, 211, 252, 0.48);
+  --maintenance-info-text: #bae6fd;
+}
+
 #app {
   min-height: 100vh;
 }
@@ -82,8 +95,9 @@
 
 .v-alert.text-info,
 .maintenance-snackbar.bg-info {
-  background: var(--wl-info-bg) !important;
-  color: var(--wl-info-text) !important;
+  background: var(--maintenance-info-bg) !important;
+  border-color: var(--maintenance-info-border) !important;
+  color: var(--maintenance-info-text) !important;
 }
 
 .maintenance-panel {
@@ -181,12 +195,17 @@
   color: var(--wl-text) !important;
 }
 
-.maintenance-dialog-toolbar {
+.maintenance-dialog-toolbar,
+.v-toolbar.maintenance-dialog-toolbar,
+.v-overlay-container .maintenance-dialog-toolbar {
   background: var(--wl-primary) !important;
+  background-color: var(--wl-primary) !important;
+  background-image: none !important;
   color: #ffffff !important;
 }
 
-.maintenance-dialog-toolbar :is(.v-btn, .v-btn__content, .v-icon, .v-toolbar-title__placeholder) {
+.maintenance-dialog-toolbar :is(.v-btn, .v-btn__content, .v-icon, .v-toolbar-title__placeholder),
+.v-overlay-container .maintenance-dialog-toolbar :is(.v-btn, .v-btn__content, .v-icon, .v-toolbar-title__placeholder) {
   color: #ffffff !important;
 }
 

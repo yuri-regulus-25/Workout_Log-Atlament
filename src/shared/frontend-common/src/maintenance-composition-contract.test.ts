@@ -28,6 +28,8 @@ describe('Maintenance composition contract', () => {
     expect(app).toContain('saveDialog')
     expect(app).toContain('resolveToExisting')
     expect(app).toContain('syncWorkoutData')
+    expect(app).toContain('参照先を設定しました')
+    expect(app).toContain('設定に失敗しました')
     expect(app).not.toContain('<v-form class="record-form"')
     expect(app).not.toContain('affectedHeaders')
     expect(app).not.toContain('mdi-eye-outline')
@@ -38,7 +40,9 @@ describe('Maintenance composition contract', () => {
     expect(dialogFrame).toContain('maintenance-dialog-toolbar')
     expect(resolution).toContain('selectedUnresolved.affectedWorkouts')
     expect(resolution).toContain('参照先の登録情報を選択')
+    expect(resolution).toContain('class="status-alert mb-4"')
     expect(resolution).toContain('データ内の行番号')
+    expect(resolution).toContain("affectedHeaders.filter((header) => header.key !== 'line')")
     expect(resolution).toContain('このワークアウト記録が未登録のIDを参照しています。')
   })
 

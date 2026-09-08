@@ -10,7 +10,7 @@
     @close="emit('update:open', false)"
     @primary="emit('resolve')"
   >
-    <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
+    <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert mb-4">
       {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトから参照されています。
     </v-alert>
     <v-select
@@ -26,7 +26,7 @@
     <v-data-table
       v-if="selectedUnresolved"
       class="maintenance-table compact-table"
-      :headers="affectedHeaders"
+        :headers="visibleAffectedHeaders"
       :items="selectedUnresolved.affectedWorkouts"
       :items-per-page-text="'Show Items'"
       density="compact"
@@ -45,10 +45,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
 import type { UnresolvedMasterReference } from '@workout-lab/frontend-common'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   selectedUnresolved: UnresolvedMasterReference | null
   resolveTargetId: string
@@ -67,4 +68,9 @@ const affectedHeaders = [
   { title: 'データ内の行番号', key: 'line' },
   { title: 'メッセージ', key: 'message' },
 ]
+
+const visibleAffectedHeaders = computed(() => {
+  const hasLine = props.selectedUnresolved?.affectedWorkouts.some((workout) => workout.line !== null && workout.line !== undefined)
+  return hasLine ? affectedHeaders : affectedHeaders.filter((header) => header.key !== 'line')
+})
 </script>
