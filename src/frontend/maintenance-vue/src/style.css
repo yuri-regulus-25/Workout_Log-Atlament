@@ -65,6 +65,11 @@
   color: var(--wl-primary) !important;
 }
 
+.v-switch .v-selection-control--dirty .v-switch__track,
+.v-switch .v-selection-control--dirty .v-switch__thumb {
+  background-color: var(--wl-primary) !important;
+}
+
 .v-field__prepend-inner,
 .v-field__append-inner,
 .v-input__prepend,

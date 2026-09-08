@@ -35,7 +35,7 @@ describe('Maintenance composition contract', () => {
     expect(app).not.toContain('mdi-eye-outline')
     expect(editor).toContain('v-model.trim="machineDraft.machine_id"')
     expect(editor).toContain('v-model.trim="gymDraft.gym_id"')
-    expect(editor).toContain('label="有効" color="primary" inset')
+    expect(editor).toContain('label="有効" color="var(--wl-primary)" inset')
     expect(editor).toContain('MaintenanceDialogFrame')
     expect(dialogFrame).toContain('maintenance-dialog-toolbar')
     expect(dialogFrame).toContain('background: var(--wl-primary)')

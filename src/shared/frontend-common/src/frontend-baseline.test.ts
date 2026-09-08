@@ -381,7 +381,7 @@ describe('cross-frontend test baseline', () => {
     expect(maintenance).not.toContain('label="Machine ID"')
     expect(maintenance).not.toContain('label="Gym ID"')
     expect(maintenance).toContain('label="ID" variant="outlined"')
-    expect(maintenance).toContain('label="有効" color="primary" inset')
+    expect(maintenance).toContain('label="有効" color="var(--wl-primary)" inset')
     expect(maintenance).toContain('accent-create-button')
     expect(maintenance).toContain('--maintenance-accent-action-bg: var(--wl-accent)')
     expect(maintenance).toContain('--maintenance-accent-selection-bg: var(--wl-primary-soft)')

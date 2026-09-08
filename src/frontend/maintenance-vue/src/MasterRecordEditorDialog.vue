@@ -16,14 +16,14 @@
         <v-text-field v-model.trim="machineDraft.name" label="名前" variant="outlined" density="compact" />
         <v-select v-model="machineDraft.body_part" label="部位" variant="outlined" :items="bodyParts" item-title="title" item-value="value" density="compact" />
         <v-text-field :model-value="aliasText" label="別名" variant="outlined" density="compact" @update:model-value="emit('update:aliasText', String($event))" />
-        <v-switch v-model="machineDraft.active" label="有効" color="primary" inset density="compact" />
+        <v-switch v-model="machineDraft.active" label="有効" color="var(--wl-primary)" inset density="compact" />
         <v-chip v-if="machineDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
       </template>
       <template v-if="gymDraft">
         <v-text-field v-model.trim="gymDraft.gym_id" label="ID" variant="outlined" :error-messages="idError" :disabled="dialogMode === 'edit'" density="compact" />
         <v-text-field v-model.trim="gymDraft.name" label="名前" variant="outlined" density="compact" />
         <v-text-field v-model.trim="gymDraft.short_name" label="短縮名" variant="outlined" density="compact" />
-        <v-switch v-model="gymDraft.active" label="有効" color="primary" inset density="compact" />
+        <v-switch v-model="gymDraft.active" label="有効" color="var(--wl-primary)" inset density="compact" />
         <v-chip v-if="gymDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
         <v-chip v-if="gymDraft.main" color="primary" variant="tonal">メインジム</v-chip>
       </template>
