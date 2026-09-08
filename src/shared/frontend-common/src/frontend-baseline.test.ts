@@ -391,6 +391,7 @@ describe('cross-frontend test baseline', () => {
     expect(maintenance).toContain('background: var(--maintenance-accent-selection-bg)')
     expect(maintenance).toContain('<MaintenanceDialogFrame')
     expect(maintenance).toContain('maintenance-dialog-toolbar')
+    expect(maintenance).toContain('background: var(--wl-primary)')
     expect(maintenance).toContain('<v-divider vertical class="mx-0"')
     expect(maintenance).toContain("'登録する'")
     expect(maintenance).toContain("'更新する'")
