@@ -1,46 +1,51 @@
 <template>
-  <v-dialog :model-value="open" max-width="720" persistent @update:model-value="emit('update:open', $event)">
-    <v-card>
-      <v-toolbar class="maintenance-dialog-toolbar" density="comfortable">
-        <v-btn icon="mdi-close" variant="text" aria-label="閉じる" @click="emit('update:open', false)" />
-        <v-toolbar-title>未解決参照の解決</v-toolbar-title>
-        <v-divider vertical class="mx-0" />
-        <v-btn variant="text" :loading="saving" :disabled="!resolveTargetId" @click="emit('resolve')">解決</v-btn>
-      </v-toolbar>
-      <v-card-text>
-        <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
-          {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトに影響しています。
-        </v-alert>
-        <v-select
-          :model-value="resolveTargetId"
-          label="解決先の登録情報"
-          variant="outlined"
-          :items="resolveOptions"
-          item-title="title"
-          item-value="value"
-          @update:model-value="emit('update:resolveTargetId', String($event))"
-        />
-        <v-data-table
-          v-if="selectedUnresolved"
-          class="maintenance-table compact-table"
-          :headers="affectedHeaders"
-          :items="selectedUnresolved.affectedWorkouts"
-          :items-per-page-text="'Show Items'"
-          density="compact"
-        >
-          <template #item.message="{ item }">
-            <div class="affected-message">
-              <span>{{ item.message }}</span>
-              <span>メンテナンスを行う必要があります。</span>
-            </div>
-          </template>
-        </v-data-table>
-      </v-card-text>
-    </v-card>
-  </v-dialog>
+  <MaintenanceDialogFrame
+    :open="open"
+    title="参照先の登録情報を選択"
+    primary-label="解決する"
+    :primary-disabled="!resolveTargetId"
+    :busy="saving"
+    persistent
+    @update:open="emit('update:open', $event)"
+    @close="emit('update:open', false)"
+    @primary="emit('resolve')"
+  >
+    <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
+      {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトから参照されています。
+    </v-alert>
+    <v-select
+      :model-value="resolveTargetId"
+      label="解決先の登録情報"
+      variant="outlined"
+      :items="resolveOptions"
+      item-title="title"
+      item-value="value"
+      density="compact"
+      @update:model-value="emit('update:resolveTargetId', String($event))"
+    />
+    <v-data-table
+      v-if="selectedUnresolved"
+      class="maintenance-table compact-table"
+      :headers="affectedHeaders"
+      :items="selectedUnresolved.affectedWorkouts"
+      :items-per-page-text="'Show Items'"
+      density="compact"
+    >
+      <template #item.line="{ item }">
+        {{ item.line ?? '不明' }}
+      </template>
+      <template #item.message="{ item }">
+        <div class="affected-message">
+          <span>{{ item.message }}</span>
+          <span>このワークアウト記録が未登録のIDを参照しています。</span>
+        </div>
+      </template>
+    </v-data-table>
+  </MaintenanceDialogFrame>
 </template>
 
 <script setup lang="ts">
+import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
 import type { UnresolvedMasterReference } from '@workout-lab/frontend-common'
 
 defineProps<{
@@ -59,7 +64,7 @@ const emit = defineEmits<{
 
 const affectedHeaders = [
   { title: 'ワークアウト', key: 'filePath' },
-  { title: '行', key: 'line' },
+  { title: 'データ内の行番号', key: 'line' },
   { title: 'メッセージ', key: 'message' },
 ]
 </script>

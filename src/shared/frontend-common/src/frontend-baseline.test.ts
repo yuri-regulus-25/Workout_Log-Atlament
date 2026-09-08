@@ -102,6 +102,9 @@ const existingFrontendApps = [
     id: 'maintenance',
     sourceFiles: [
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceDialogFrame.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceLoadingOverlay.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceSnackbar.vue',
       'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
       'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
       'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
@@ -330,6 +333,9 @@ describe('cross-frontend test baseline', () => {
     ])
     const maintenance = readSources([
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceDialogFrame.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceLoadingOverlay.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceSnackbar.vue',
       'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
       'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
       'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
@@ -383,13 +389,17 @@ describe('cross-frontend test baseline', () => {
     expect(maintenance).toContain('color-mix(in srgb, var(--wl-primary) 68%, black)')
     expect(maintenance).toContain('background: var(--maintenance-accent-action-bg)')
     expect(maintenance).toContain('background: var(--maintenance-accent-selection-bg)')
-    expect(maintenance).toContain('<v-toolbar class="maintenance-dialog-toolbar"')
-    expect(maintenance).toContain('<v-divider vertical class="mx-0" />')
+    expect(maintenance).toContain('<MaintenanceDialogFrame')
+    expect(maintenance).toContain('maintenance-dialog-toolbar')
+    expect(maintenance).toContain('<v-divider vertical class="mx-0"')
     expect(maintenance).toContain("'登録する'")
     expect(maintenance).toContain("'更新する'")
     expect(maintenance).toContain('function closeDialog()')
     expect(maintenance).not.toContain('変更を破棄しますか')
     expect(maintenance).not.toContain('discardOpen')
+    expect(maintenance).toContain('<MaintenanceSnackbar')
+    expect(maintenance).toContain('<MaintenanceLoadingOverlay')
+    expect(maintenance).not.toContain('v-alert v-if="message"')
     expect(maintenance).toContain('.v-progress-circular__overlay')
     expect(maintenance).toContain('stroke: var(--wl-primary)')
     expect(maintenance).not.toContain('green-darken')

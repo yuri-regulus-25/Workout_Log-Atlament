@@ -2,10 +2,6 @@
   <v-app>
     <main ref="shell" :class="['app-shell', 'maintenance-shell', pageTransitionClassName]">
       <div data-application-shell-content>
-        <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
-          {{ message.text }}
-        </v-alert>
-
         <section class="panel wide maintenance-panel">
           <div class="maintenance-toolbar">
             <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
@@ -64,9 +60,12 @@
             </template>
             <template #item.actions="{ item }">
               <div class="row-actions" @click.stop>
-              <v-btn icon="mdi-eye-outline" variant="text" size="small" aria-label="確認" @click.stop="inspectUnresolved(item)" />
-              <v-btn icon="mdi-link-variant" variant="text" size="small" aria-label="既存マスターへ解決" @click.stop="openResolve(item)" />
-              <v-btn icon="mdi-plus" variant="text" size="small" aria-label="新規作成" @click.stop="createFromUnresolved(item)" />
+                <v-btn prepend-icon="mdi-link-variant" variant="text" size="small" aria-label="既存の登録情報へ解決する" @click.stop="openResolve(item)">
+                  解決
+                </v-btn>
+                <v-btn prepend-icon="mdi-plus" variant="text" size="small" aria-label="この参照IDで新しい登録情報を作成する" @click.stop="createFromUnresolved(item)">
+                  新規
+                </v-btn>
               </div>
             </template>
           </v-data-table>
@@ -88,17 +87,17 @@
         @save="saveDialog"
       />
 
-      <v-dialog v-model="confirmOpen" max-width="460">
-        <v-card>
-          <v-card-title>{{ confirmTitle }}</v-card-title>
-          <v-card-text>{{ confirmText }}</v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="confirmOpen = false">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" @click="confirmOperation">実行</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <MaintenanceDialogFrame
+        v-model:open="confirmOpen"
+        :title="confirmTitle"
+        :primary-label="confirmPrimaryLabel"
+        :busy="saving"
+        max-width="460"
+        @close="confirmOpen = false"
+        @primary="confirmOperation"
+      >
+        <p class="confirmation-copy">{{ confirmText }}</p>
+      </MaintenanceDialogFrame>
 
       <UnresolvedReferenceResolutionDialog
         v-model:open="resolveOpen"
@@ -108,6 +107,9 @@
         :saving="saving"
         @resolve="resolveToExisting"
       />
+
+      <MaintenanceSnackbar :message="message" @clear="message = null" />
+      <MaintenanceLoadingOverlay :active="saving" label="更新しています" />
     </main>
   </v-app>
 </template>
@@ -117,6 +119,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import { formatBodyPart } from '@workout-lab/workout-core'
+import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
+import MaintenanceLoadingOverlay from './MaintenanceLoadingOverlay.vue'
+import MaintenanceSnackbar from './MaintenanceSnackbar.vue'
 import MasterRecordEditorDialog from './MasterRecordEditorDialog.vue'
 import MasterRecordsTable from './MasterRecordsTable.vue'
 import RecoveryPanel from './RecoveryPanel.vue'
@@ -138,6 +143,7 @@ import {
 import {
   getMasterDocument,
   getUnresolvedMasterReferences,
+  syncWorkoutData,
   updateMasterDocument,
   type MasterDocumentType,
   type UnresolvedMasterReference,
@@ -165,7 +171,7 @@ const pendingOperation = ref<{ kind: 'lifecycle' | 'main-gym'; record: RecordDra
 const selectedUnresolved = ref<UnresolvedMasterReference | null>(null)
 const resolveTargetId = ref('')
 const aliasText = ref('')
-const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
+const message = ref<{ type: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null)
 const shell = ref<HTMLElement | null>(null)
 let navigation: { dispose: () => void } | null = null
 let shellNavigation: { dispose: () => void; focusTitle: () => void } | null = null
@@ -206,7 +212,7 @@ const originalDraftWasCopied = ref(false)
 
 const confirmTitle = computed(() => {
   if (!pendingOperation.value) return ''
-  return '確認'
+  return pendingOperation.value.kind === 'main-gym' ? 'メインジムを変更します' : '登録情報の状態を変更します'
 })
 
 const confirmText = computed(() => {
@@ -214,6 +220,8 @@ const confirmText = computed(() => {
   if (pendingOperation.value.kind === 'main-gym') return '選択した有効なジムをメインジムにし、現在のメインジムを解除します。'
   return '本当に更新しますか？'
 })
+
+const confirmPrimaryLabel = computed(() => pendingOperation.value?.kind === 'main-gym' ? 'メインジムにする' : '更新する')
 
 const records = computed(() => selectedType.value === 'MACHINE_MASTER' ? machines.value : gyms.value)
 const visibleUnresolved = computed(() => unresolved.value.filter((item) => item.type === selectedType.value))
@@ -491,7 +499,16 @@ async function saveMainGym(record: GymRecord) {
     if (!result.success || !result.data) throw result
     gyms.value = next
     gymRevision.value = result.data.revision
-    message.value = { type: 'success', text: 'メインジムを更新しました。' }
+    const syncResult = await syncWorkoutData()
+    if (!syncResult.success || !syncResult.data) {
+      await loadAll()
+      message.value = { type: 'warning', text: 'メインジムは更新されましたが、同期結果を確認できませんでした。再読み込み後の表示を確認してください。' }
+      return
+    }
+    await loadAll()
+    message.value = syncResult.data.degraded
+      ? { type: 'warning', text: 'メインジムを更新しました。一部データは確認が必要です。' }
+      : { type: 'success', text: 'メインジムを更新しました。' }
   } catch (error) {
     reportDiagnostic('Main Gym update failed.', error)
     message.value = { type: 'error', text: toUserFacingMasterWriteError(error) }

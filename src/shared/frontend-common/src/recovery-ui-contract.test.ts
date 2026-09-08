@@ -45,12 +45,13 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).not.toContain('replacementPath =')
   })
 
-  it('models draft autosave, validation invalidation, conflicts, confirmation, and reflection failure', () => {
+  it('models explicit draft save, validation invalidation, conflicts, confirmation, and reflection failure', () => {
     const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
 
     expect(recovery).toContain('expectedDraftRevision: draft.draftRevision')
-    expect(recovery).toContain('autosaveInFlight')
-    expect(recovery).toContain('autosavePending')
+    expect(recovery).toContain('下書きを保存')
+    expect(recovery).toContain('hasUnsavedDraftChanges')
+    expect(recovery).toContain('canValidateDraft')
     expect(recovery).toContain('cloneRecoveryFields(draft.fields)')
     expect(recovery).toContain('const draft = activeDraft.value')
     expect(recovery).toContain('validationInvalidated.value = validation.value !== null')
@@ -60,6 +61,8 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('この下書きは現在のバージョンでは使用できません')
     expect(recovery).toContain('保存済み・反映失敗')
     expect(recovery).toContain('confirmCommitOpen')
+    expect(recovery).not.toContain('setTimeout')
+    expect(recovery).not.toContain('scheduleAutosave')
   })
 
   it('keeps Recovery issue and draft-state presentation in screen-local components', () => {
@@ -149,6 +152,16 @@ describe('Maintenance Recovery UI contract', () => {
       expectedSourceRevision: 'source-a',
       expectedDraftRevision: 3,
     })
+  })
+
+  it('uses the shared Maintenance dialog and loading overlay for Recovery write operations', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+
+    expect(recovery).toContain('MaintenanceDialogFrame')
+    expect(recovery).toContain('MaintenanceLoadingOverlay')
+    expect(recovery).toContain('operationBusy')
+    expect(recovery).toContain('修復内容を保存します')
+    expect(recovery).not.toContain('<v-card-title>修復を確定しますか?')
   })
 
   it('does not fake Recovery commit success in the Node development runtime', () => {

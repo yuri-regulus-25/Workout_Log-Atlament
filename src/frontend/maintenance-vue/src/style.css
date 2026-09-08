@@ -34,6 +34,58 @@
   margin: 0;
 }
 
+.bg-primary {
+  background-color: var(--wl-primary) !important;
+  color: #ffffff !important;
+}
+
+.text-primary {
+  color: var(--wl-primary) !important;
+}
+
+.v-progress-circular__overlay {
+  stroke: var(--wl-primary) !important;
+}
+
+.v-switch .v-selection-control--dirty .v-selection-control__input,
+.v-switch .v-selection-control--dirty .v-switch__track {
+  color: var(--wl-primary) !important;
+}
+
+.v-field__prepend-inner,
+.v-field__append-inner,
+.v-input__prepend,
+.v-input__append {
+  color: var(--wl-text-muted) !important;
+}
+
+.v-alert.text-success,
+.maintenance-snackbar.bg-success {
+  background: var(--wl-success-bg) !important;
+  border-color: var(--wl-success-border) !important;
+  color: var(--wl-success-text) !important;
+}
+
+.v-alert.text-warning,
+.maintenance-snackbar.bg-warning {
+  background: var(--wl-warning-bg) !important;
+  border-color: var(--wl-warning-border) !important;
+  color: var(--wl-warning-text) !important;
+}
+
+.v-alert.text-error,
+.maintenance-snackbar.bg-error {
+  background: var(--wl-error-bg) !important;
+  border-color: var(--wl-error-border) !important;
+  color: var(--wl-error-text) !important;
+}
+
+.v-alert.text-info,
+.maintenance-snackbar.bg-info {
+  background: var(--wl-info-bg) !important;
+  color: var(--wl-info-text) !important;
+}
+
 .maintenance-panel {
   display: grid;
   gap: 16px;
@@ -146,6 +198,39 @@
   border-color: rgba(255, 255, 255, 0.48) !important;
 }
 
+.maintenance-dialog-body {
+  display: grid;
+  gap: 12px;
+  padding: 18px !important;
+}
+
+.maintenance-dialog-card {
+  overflow: hidden;
+}
+
+.confirmation-copy {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.maintenance-loading-overlay {
+  align-items: center;
+  justify-content: center;
+}
+
+.maintenance-loading-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 220px;
+  padding: 18px 20px;
+  border: 1px solid var(--wl-border);
+  border-radius: 8px;
+  background: var(--wl-surface-raised);
+  color: var(--wl-text-strong);
+  box-shadow: var(--wl-shadow-card);
+}
+
 .recovery-loading .v-progress-circular__overlay,
 .maintenance-table .v-progress-circular__overlay {
   stroke: var(--wl-primary) !important;
@@ -158,8 +243,8 @@
 .row-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 2px;
-  width: 88px;
+  gap: 4px;
+  min-width: 128px;
 }
 
 .record-form {

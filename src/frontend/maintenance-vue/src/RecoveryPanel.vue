@@ -86,7 +86,17 @@
           <div class="recovery-section-header">
             <h3>修復内容</h3>
             <div class="draft-actions">
-              <span class="autosave-state" role="status">{{ autosaveText }}</span>
+              <span class="autosave-state" role="status">{{ draftSaveText }}</span>
+              <v-btn
+                v-if="activeDraft"
+                variant="outlined"
+                color="primary"
+                prepend-icon="mdi-content-save-outline"
+                :disabled="!canSaveDraft"
+                @click="saveDraft"
+              >
+                下書きを保存
+              </v-btn>
               <v-btn v-if="draftSnapshot?.state === 'active'" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="discardDialogOpen = true">
                 下書きを破棄
               </v-btn>
@@ -97,7 +107,7 @@
 
           <div v-if="!activeDraft" class="draft-empty">
             <p>このデータの下書きはまだありません。</p>
-            <v-btn color="primary" prepend-icon="mdi-file-edit-outline" :loading="draftLoading" @click="createDraft">下書きを作成</v-btn>
+            <v-btn color="primary" prepend-icon="mdi-file-edit-outline" @click="createDraft">下書きを作成</v-btn>
           </div>
 
           <RecoveryFieldEditor
@@ -115,8 +125,7 @@
             <v-btn
               color="primary"
               prepend-icon="mdi-check-decagram-outline"
-              :loading="validating"
-              :disabled="!activeDraft || !canEditDraft"
+              :disabled="!canValidateDraft"
               @click="validateDraft"
             >
               修復内容を確認
@@ -146,7 +155,6 @@
               color="primary"
               prepend-icon="mdi-source-commit"
               :disabled="!canCommit"
-              :loading="committing"
               @click="confirmCommitOpen = true"
             >
               修復を確定
@@ -163,40 +171,46 @@
       </template>
     </div>
 
-    <v-dialog v-model="discardDialogOpen" max-width="440">
-      <v-card>
-        <v-card-title>下書きを破棄しますか?</v-card-title>
-        <v-card-text>破棄するのはこの画面の下書きだけです。Git上のデータは削除されません。</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="discardDialogOpen = false">キャンセル</v-btn>
-          <v-btn color="error" :loading="draftLoading" @click="discardDraft">下書きを破棄</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <MaintenanceDialogFrame
+      v-model:open="discardDialogOpen"
+      title="下書きを破棄しますか?"
+      primary-label="下書きを破棄"
+      :busy="draftLoading"
+      max-width="440"
+      @close="discardDialogOpen = false"
+      @primary="discardDraft"
+    >
+      <p class="confirmation-copy">破棄するのはこの画面の下書きだけです。Git上のデータは削除されません。</p>
+    </MaintenanceDialogFrame>
 
-    <v-dialog v-model="confirmCommitOpen" max-width="560" persistent>
-      <v-card>
-        <v-card-title>修復を確定しますか?</v-card-title>
-        <v-card-text v-if="detail && validation" class="commit-confirmation">
-          <p>対象データ: {{ displayPath(detail.inspection.path) }}</p>
-          <p>保存先: {{ validation.replacementPath }}</p>
-          <p>確認結果: {{ validationTitle }}</p>
-          <p v-if="validation.pathChange">保存場所が変更されます: {{ validation.pathChange.from }} → {{ validation.pathChange.to }}</p>
-          <p v-if="validation.issues.length > 0">確認事項: {{ validation.issues.length }}件</p>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" :disabled="committing" @click="confirmCommitOpen = false">キャンセル</v-btn>
-          <v-btn color="primary" :loading="committing" :disabled="!canCommit" @click="commitDraft">修復を確定</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <MaintenanceDialogFrame
+      v-model:open="confirmCommitOpen"
+      title="修復内容を保存します"
+      primary-label="修復を確定"
+      :primary-disabled="!canCommit"
+      :busy="committing"
+      persistent
+      max-width="560"
+      @close="confirmCommitOpen = false"
+      @primary="commitDraft"
+    >
+      <div v-if="detail && validation" class="commit-confirmation">
+        <p>対象データ: {{ displayPath(detail.inspection.path) }}</p>
+        <p>保存先: {{ validation.replacementPath }}</p>
+        <p>確認結果: {{ validationTitle }}</p>
+        <p v-if="validation.pathChange">保存場所が変更されます: {{ validation.pathChange.from }} → {{ validation.pathChange.to }}</p>
+        <p v-if="validation.issues.length > 0">確認事項: {{ validation.issues.length }}件</p>
+      </div>
+    </MaintenanceDialogFrame>
+
+    <MaintenanceLoadingOverlay :active="operationBusy" label="処理しています" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
+import MaintenanceLoadingOverlay from './MaintenanceLoadingOverlay.vue'
 import RecoveryDraftStateAlerts from './RecoveryDraftStateAlerts.vue'
 import RecoveryFieldEditor from './RecoveryFieldEditor.vue'
 import RecoveryIssueCard from './RecoveryIssueCard.vue'
@@ -223,7 +237,7 @@ import {
 } from '@workout-lab/frontend-common'
 
 type FieldChange = { value: unknown }
-type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
+type DraftSaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
 
 const emit = defineEmits<{
   message: [{ type: 'success' | 'error' | 'warning'; text: string }]
@@ -246,20 +260,19 @@ const errorText = ref('')
 const sourceError = ref(false)
 const discardDialogOpen = ref(false)
 const confirmCommitOpen = ref(false)
-const autosaveState = ref<AutosaveState>('idle')
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null
-let autosaveInFlight = false
-let autosavePending = false
+const draftSaveState = ref<DraftSaveState>('idle')
+const hasUnsavedDraftChanges = ref(false)
 
 const activeDraft = computed(() => draftSnapshot.value?.state === 'active' ? draftSnapshot.value.draft : null)
 const canEditDraft = computed(() => draftSnapshot.value?.state === 'active')
-const autosaveText = computed(() => {
+const draftSaveText = computed(() => {
   if (!activeDraft.value) return ''
-  if (autosaveState.value === 'saving') return '保存中...'
-  if (autosaveState.value === 'saved') return '下書きを保存しました'
-  if (autosaveState.value === 'conflict') return '別の変更が反映されたため、下書きを更新できませんでした'
-  if (autosaveState.value === 'failed') return '保存できませんでした'
-  return '入力すると下書きに保存されます'
+  if (draftSaveState.value === 'saving') return '保存中...'
+  if (draftSaveState.value === 'conflict') return '別の変更が反映されたため、下書きを更新できませんでした'
+  if (draftSaveState.value === 'failed') return '保存できませんでした'
+  if (hasUnsavedDraftChanges.value) return '未保存の変更があります'
+  if (draftSaveState.value === 'saved') return '下書きを保存しました'
+  return '変更後は下書きを保存してください'
 })
 const validationAlertType = computed(() => validation.value?.health === 'broken' ? 'error' : validation.value?.health === 'degraded' ? 'warning' : 'success')
 const validationTitle = computed(() => {
@@ -268,7 +281,10 @@ const validationTitle = computed(() => {
   if (validation.value.health === 'degraded') return '修復できますが、確認事項があります'
   return 'まだ修復できない項目があります'
 })
-const canCommit = computed(() => Boolean(validation.value?.commitAllowed && activeDraft.value && !validationInvalidated.value && !committing.value))
+const canSaveDraft = computed(() => Boolean(activeDraft.value && canEditDraft.value && hasUnsavedDraftChanges.value && !draftLoading.value))
+const canValidateDraft = computed(() => Boolean(activeDraft.value && canEditDraft.value && !hasUnsavedDraftChanges.value && !validating.value))
+const canCommit = computed(() => Boolean(validation.value?.commitAllowed && activeDraft.value && !hasUnsavedDraftChanges.value && !validationInvalidated.value && !committing.value))
+const operationBusy = computed(() => draftLoading.value || validating.value || committing.value)
 
 onMounted(() => {
   window.addEventListener('popstate', restoreFromLocation)
@@ -278,7 +294,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', restoreFromLocation)
-  resetAutosaveQueue()
 })
 
 watch(selectedResourceKey, (value) => {
@@ -305,7 +320,6 @@ function selectResource(resource: BrokenResourceSummary) {
 }
 
 function returnToList() {
-  resetAutosaveQueue()
   selectedResourceKey.value = ''
   detail.value = null
   draftSnapshot.value = null
@@ -323,7 +337,6 @@ function restoreFromLocation() {
 
 async function reloadDetail() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   detailLoading.value = true
   errorText.value = ''
   sourceView.value = null
@@ -335,6 +348,8 @@ async function reloadDetail() {
     if (!result.success || !result.data) throw result
     detail.value = result.data
     draftSnapshot.value = result.data.draft
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'idle'
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
   } finally {
@@ -344,13 +359,13 @@ async function reloadDetail() {
 
 async function createDraft() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await createRecoveryDraft(selectedResourceKey.value)
     if (!result.success || !result.data) throw result
     draftSnapshot.value = result.data
-    autosaveState.value = 'saved'
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'saved'
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
   } finally {
@@ -365,55 +380,31 @@ function updateField(fieldPath: string, change: FieldChange) {
     ? { fieldPath, state: 'confirmed', source: 'user', value: change.value }
     : field)
   validationInvalidated.value = validation.value !== null
-  scheduleAutosave()
-}
-
-function scheduleAutosave() {
-  if (autosaveInFlight) {
-    autosavePending = true
-    return
-  }
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = setTimeout(() => {
-    void saveDraft()
-  }, 450)
+  hasUnsavedDraftChanges.value = true
+  draftSaveState.value = 'idle'
 }
 
 async function saveDraft() {
   if (!selectedResourceKey.value) return
-  if (autosaveInFlight) {
-    autosavePending = true
-    return
-  }
   const draft = activeDraft.value
   if (!draft) return
   const fields = cloneRecoveryFields(draft.fields)
-  autosaveInFlight = true
-  autosaveState.value = 'saving'
+  draftLoading.value = true
+  draftSaveState.value = 'saving'
   try {
     const result = await updateRecoveryDraft(selectedResourceKey.value, {
       expectedDraftRevision: draft.draftRevision,
       fields,
     })
     if (!result.success || !result.data) throw result
-    draftSnapshot.value = autosavePending && activeDraft.value
-      ? {
-          ...result.data,
-          draft: result.data.draft
-            ? { ...result.data.draft, fields: activeDraft.value.fields }
-            : result.data.draft,
-        }
-      : result.data
-    autosaveState.value = 'saved'
+    draftSnapshot.value = result.data
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'saved'
   } catch (error) {
-    autosaveState.value = firstAfErrorCode(error) === 'RECOVERY_DRAFT_CONFLICT' ? 'conflict' : 'failed'
-    if (autosaveState.value === 'conflict') void reloadDetail()
+    draftSaveState.value = firstAfErrorCode(error) === 'RECOVERY_DRAFT_CONFLICT' ? 'conflict' : 'failed'
+    if (draftSaveState.value === 'conflict') void reloadDetail()
   } finally {
-    autosaveInFlight = false
-    if (autosavePending && autosaveState.value === 'saved') {
-      autosavePending = false
-      void saveDraft()
-    }
+    draftLoading.value = false
   }
 }
 
@@ -421,16 +412,8 @@ function cloneRecoveryFields(fields: RecoveryField[]): RecoveryField[] {
   return JSON.parse(JSON.stringify(fields)) as RecoveryField[]
 }
 
-function resetAutosaveQueue() {
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = null
-  autosaveInFlight = false
-  autosavePending = false
-}
-
 async function discardDraft() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await deleteRecoveryDraft(selectedResourceKey.value)
@@ -438,6 +421,8 @@ async function discardDraft() {
     draftSnapshot.value = result.data
     validation.value = null
     validationInvalidated.value = false
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'idle'
     discardDialogOpen.value = false
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
@@ -447,7 +432,7 @@ async function discardDraft() {
 }
 
 async function validateDraft() {
-  if (!selectedResourceKey.value) return
+  if (!selectedResourceKey.value || hasUnsavedDraftChanges.value) return
   validating.value = true
   try {
     const result = await validateRecoveryDraft(selectedResourceKey.value)
