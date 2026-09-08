@@ -64,6 +64,8 @@ describe('Maintenance composition contract', () => {
     expect(snackbar).not.toContain('#actions')
     expect(snackbar).not.toContain('閉じる')
     expect(overlay).toContain('<v-overlay')
+    expect(overlay).toContain(':z-index="2600"')
+    expect(overlay).not.toContain('contained')
     expect(overlay).toContain('<v-progress-circular')
   })
 })
