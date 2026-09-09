@@ -61,6 +61,7 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('この下書きは現在のバージョンでは使用できません')
     expect(recovery).toContain('保存済み・反映失敗')
     expect(recovery).toContain('confirmCommitOpen')
+    expect(recovery).not.toContain('下書きを保存しました')
     expect(recovery).not.toContain('setTimeout')
     expect(recovery).not.toContain('scheduleAutosave')
   })
@@ -96,12 +97,15 @@ describe('Maintenance Recovery UI contract', () => {
   it('keeps Recovery source viewing as a secondary read-only path', () => {
     const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
     const sourcePanel = readSource('src/frontend/maintenance-vue/src/RecoverySourcePanel.vue')
+    const style = readSource('src/frontend/maintenance-vue/src/style.css')
 
     expect(recovery).toContain('RecoverySourcePanel')
     expect(sourcePanel).toContain('<v-expansion-panels')
     expect(sourcePanel).toContain('元データ')
     expect(sourcePanel).toContain('readOnly')
     expect(sourcePanel).toContain('修復操作は続行できます')
+    expect(style).toContain('.source-panel :is(.v-expansion-panel, .v-expansion-panel-title, .v-expansion-panel-text, .v-expansion-panel-text__wrapper)')
+    expect(style).toContain('background: var(--wl-surface) !important')
     expect(recovery).not.toContain('<pre')
   })
 
@@ -160,8 +164,24 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('MaintenanceDialogFrame')
     expect(recovery).toContain('MaintenanceLoadingOverlay')
     expect(recovery).toContain('operationBusy')
+    expect(recovery).toContain('recoveryOverlayActive')
+    expect(recovery).toContain('recoveryOverlayLabel')
     expect(recovery).toContain('修復内容を保存します')
+    expect(recovery).toContain('primary-label="破棄する"')
     expect(recovery).not.toContain('<v-card-title>修復を確定しますか?')
+  })
+
+  it('uses design tokens for Recovery action and field affordance colors', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const style = readSource('src/frontend/maintenance-vue/src/style.css')
+
+    expect(recovery).toContain('class="recovery-primary-action"')
+    expect(recovery).not.toContain('<v-btn color="primary" prepend-icon="mdi-file-edit-outline"')
+    expect(recovery).not.toContain('color="primary"\n              prepend-icon="mdi-check-decagram-outline"')
+    expect(style).toContain('.recovery-primary-action')
+    expect(style).toContain('background: var(--wl-primary-strong) !important')
+    expect(style).toContain('input[type="date"]::-webkit-calendar-picker-indicator')
+    expect(style).toContain('filter: brightness(0) invert(1)')
   })
 
   it('does not fake Recovery commit success in the Node development runtime', () => {

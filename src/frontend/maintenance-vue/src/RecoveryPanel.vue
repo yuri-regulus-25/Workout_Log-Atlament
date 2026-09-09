@@ -55,12 +55,7 @@
         {{ errorText }}
       </v-alert>
 
-      <div v-if="detailLoading" class="recovery-loading">
-        <v-progress-circular indeterminate color="primary" />
-        <span>修復内容を読み込んでいます</span>
-      </div>
-
-      <template v-else-if="detail">
+      <template v-if="detail">
         <div class="recovery-detail-title">
           <div>
             <h2>{{ displayPath(detail.inspection.path) }}</h2>
@@ -86,7 +81,7 @@
           <div class="recovery-section-header">
             <h3>修復内容</h3>
             <div class="draft-actions">
-              <span class="autosave-state" role="status">{{ draftSaveText }}</span>
+              <span v-if="draftSaveText" class="autosave-state" role="status">{{ draftSaveText }}</span>
               <v-btn
                 v-if="activeDraft"
                 variant="outlined"
@@ -107,7 +102,7 @@
 
           <div v-if="!activeDraft" class="draft-empty">
             <p>このデータの下書きはまだありません。</p>
-            <v-btn color="primary" prepend-icon="mdi-file-edit-outline" @click="createDraft">下書きを作成</v-btn>
+            <v-btn class="recovery-primary-action" prepend-icon="mdi-file-edit-outline" @click="createDraft">下書きを作成</v-btn>
           </div>
 
           <RecoveryFieldEditor
@@ -123,7 +118,7 @@
           <div class="recovery-section-header">
             <h3>確認結果</h3>
             <v-btn
-              color="primary"
+              class="recovery-primary-action"
               prepend-icon="mdi-check-decagram-outline"
               :disabled="!canValidateDraft"
               @click="validateDraft"
@@ -152,7 +147,7 @@
               保存場所が変更されます。変更前: {{ validation.pathChange.from }} / 変更後: {{ validation.pathChange.to }}
             </v-alert>
             <v-btn
-              color="primary"
+              class="recovery-primary-action"
               prepend-icon="mdi-source-commit"
               :disabled="!canCommit"
               @click="confirmCommitOpen = true"
@@ -174,7 +169,7 @@
     <MaintenanceDialogFrame
       v-model:open="discardDialogOpen"
       title="下書きを破棄しますか?"
-      primary-label="下書きを破棄"
+      primary-label="破棄する"
       :busy="draftLoading"
       max-width="440"
       @close="discardDialogOpen = false"
@@ -186,7 +181,7 @@
     <MaintenanceDialogFrame
       v-model:open="confirmCommitOpen"
       title="修復内容を保存します"
-      primary-label="修復を確定"
+      primary-label="修復する"
       :primary-disabled="!canCommit"
       :busy="committing"
       persistent
@@ -203,7 +198,7 @@
       </div>
     </MaintenanceDialogFrame>
 
-    <MaintenanceLoadingOverlay :active="operationBusy" label="処理しています" />
+    <MaintenanceLoadingOverlay :active="recoveryOverlayActive" :label="recoveryOverlayLabel" />
   </section>
 </template>
 
@@ -271,7 +266,6 @@ const draftSaveText = computed(() => {
   if (draftSaveState.value === 'conflict') return '別の変更が反映されたため、下書きを更新できませんでした'
   if (draftSaveState.value === 'failed') return '保存できませんでした'
   if (hasUnsavedDraftChanges.value) return '未保存の変更があります'
-  if (draftSaveState.value === 'saved') return '下書きを保存しました'
   return '変更後は下書きを保存してください'
 })
 const validationAlertType = computed(() => validation.value?.health === 'broken' ? 'error' : validation.value?.health === 'degraded' ? 'warning' : 'success')
@@ -285,6 +279,8 @@ const canSaveDraft = computed(() => Boolean(activeDraft.value && canEditDraft.va
 const canValidateDraft = computed(() => Boolean(activeDraft.value && canEditDraft.value && !hasUnsavedDraftChanges.value && !validating.value))
 const canCommit = computed(() => Boolean(validation.value?.commitAllowed && activeDraft.value && !hasUnsavedDraftChanges.value && !validationInvalidated.value && !committing.value))
 const operationBusy = computed(() => draftLoading.value || validating.value || committing.value)
+const recoveryOverlayActive = computed(() => detailLoading.value || operationBusy.value)
+const recoveryOverlayLabel = computed(() => detailLoading.value ? '修復内容を読み込んでいます' : '処理しています')
 
 onMounted(() => {
   window.addEventListener('popstate', restoreFromLocation)

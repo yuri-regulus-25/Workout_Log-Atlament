@@ -30,17 +30,10 @@
 }
 
 .maintenance-shell {
-  --maintenance-accent-action-bg: var(--wl-accent);
-  --maintenance-accent-selection-bg: var(--wl-primary-soft);
-  --maintenance-accent-selection-fg: var(--wl-primary-strong);
+  --maintenance-accent-action-bg: var(--wl-primary-strong);
+  --maintenance-accent-selection-bg: var(--wl-primary-strong);
+  --maintenance-accent-selection-fg: #ffffff;
   display: block;
-}
-
-:root[data-theme="dark"] .maintenance-shell,
-.atl-theme-dark .maintenance-shell {
-  --maintenance-accent-action-bg: color-mix(in srgb, var(--wl-primary) 68%, black);
-  --maintenance-accent-selection-bg: color-mix(in srgb, var(--wl-primary) 68%, black);
-  --maintenance-accent-selection-fg: var(--wl-text-strong);
 }
 
 .status-alert {
@@ -173,6 +166,19 @@
   color: #ffffff !important;
 }
 
+.recovery-primary-action {
+  background: var(--wl-primary-strong) !important;
+  color: #ffffff !important;
+}
+
+.recovery-primary-action :is(.v-btn__content, .v-icon) {
+  color: #ffffff !important;
+}
+
+.recovery-primary-action.v-btn--disabled {
+  opacity: 0.48;
+}
+
 .maintenance-table {
   background: var(--wl-surface) !important;
   border-radius: 8px;
@@ -229,8 +235,8 @@
 .maintenance-dialog-toolbar,
 .v-toolbar.maintenance-dialog-toolbar,
 .v-overlay-container .maintenance-dialog-toolbar {
-  background: var(--wl-primary) !important;
-  background-color: var(--wl-primary) !important;
+  background: var(--wl-primary-strong) !important;
+  background-color: var(--wl-primary-strong) !important;
   background-image: none !important;
   color: #ffffff !important;
 }
@@ -463,6 +469,12 @@
   padding: 8px 10px;
 }
 
+:root[data-theme="dark"] .field-control input[type="date"]::-webkit-calendar-picker-indicator,
+.atl-theme-dark .field-control input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1);
+  opacity: 1;
+}
+
 .field-control textarea {
   resize: vertical;
 }
@@ -537,6 +549,15 @@
 
 .source-panel {
   border-radius: 8px;
+}
+
+.source-panel :is(.v-expansion-panel, .v-expansion-panel-title, .v-expansion-panel-text, .v-expansion-panel-text__wrapper) {
+  background: var(--wl-surface) !important;
+  color: var(--wl-text) !important;
+}
+
+.source-panel .v-expansion-panel {
+  border: 1px solid var(--wl-border);
 }
 
 .source-view {

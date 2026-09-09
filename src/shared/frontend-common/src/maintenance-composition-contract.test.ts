@@ -38,7 +38,7 @@ describe('Maintenance composition contract', () => {
     expect(editor).toContain('label="有効" color="var(--wl-primary)" inset')
     expect(editor).toContain('MaintenanceDialogFrame')
     expect(dialogFrame).toContain('maintenance-dialog-toolbar')
-    expect(dialogFrame).toContain('background: var(--wl-primary)')
+    expect(dialogFrame).toContain('background: var(--wl-primary-strong)')
     expect(resolution).toContain('selectedUnresolved.affectedWorkouts')
     expect(resolution).toContain('参照先の登録情報を選択')
     expect(resolution).toContain('class="status-alert mb-4"')
