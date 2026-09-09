@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { applicationRoutes, applications, drawerApplications, portalCardApplications } from './navigation/application-registry.js'
 
 const repoRoot = process.cwd()
-const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'] as const
+const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
 const excludedApplicationIds = ['training-map', 'compare', 'report', 'data-explorer', 'about', 'developer-mode'] as const
 
 function readSource(relativePath: string): string {
@@ -17,7 +17,7 @@ describe('Phase 9 existing application integration', () => {
     expect(portalCardApplications.map((application) => application.id)).toEqual([...hostedApplicationIds])
     expect(drawerApplications.map((application) => application.id)).toEqual(['portal', ...hostedApplicationIds])
     expect(portalCardApplications[2]?.id).toBe('machines')
-    expect(portalCardApplications[5]?.id).toBe('maintenance')
+    expect(portalCardApplications[4]?.id).toBe('maintenance')
 
     for (const application of applications) {
       expect(application.route).toBe(applicationRoutes[application.id])
@@ -49,7 +49,7 @@ describe('Phase 9 existing application integration', () => {
   })
 
   it('keeps Windows and Android hosting reachable for the same existing applications and direct routes', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/HostingStatusService.cs')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
     const buildRegistry = readSource('tools/application-registry.mjs')
 
@@ -72,7 +72,8 @@ describe('Phase 9 existing application integration', () => {
 
     expect(maintenance).toContain("currentRouteId: 'maintenance'")
     expect(maintenance).toContain('app-shell')
-    expect(maintenance).toContain('page-hero')
+    expect(maintenance).toContain('data-application-shell-content')
+    expect(maintenance).toContain("title: 'Resource Management'")
     expect(maintenance).toContain('pageTransitionClassName')
     expect(maintenance).not.toContain('aria-label="Refresh"')
     expect(maintenanceCss).toContain('@import "@workout-lab/shared-styles/css"')
@@ -88,28 +89,55 @@ describe('Phase 9 existing application integration', () => {
   it('keeps runtime status presentation bound to AF readiness and runtimeData facts', () => {
     const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
-    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const portal = readSource('src/frontend/portal/src/portal-status-notice.js')
+    const settings = [
+      readSource('src/frontend/settings-solid/src/App.tsx'),
+      readSource('src/frontend/settings-solid/src/SettingsSetupAssistant.tsx'),
+    ].join('\n')
+    const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
 
     expect(typedPolicy).toContain('runtimeData?.fallbackActive ?? false')
     expect(browserPolicy).toContain('runtimeData?.fallbackActive ?? false')
     expect(portal).toContain('status?.runtimeData?.fallbackActive === true')
-    expect(settings).toContain("status.runtimeData.currentAvailable ? '利用可能' : '利用不可'")
+    expect(settingsPresentation).toContain("status.runtimeData.currentAvailable ? '利用可能' : '利用不可'")
     expect(settings).toContain('requiredActionLabel')
     expect(settings).not.toContain('deriveApplicationAccessPolicy')
     expect(settings).not.toContain('runRecoveryAction')
   })
 
-  it('keeps Portal Maintenance card framework icons source-controlled', () => {
+  it('keeps Portal application icons separate from framework favicons', () => {
     const registry = readSource('src/shared/frontend-common/src/navigation/application-registry.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
+    const portalCards = readSource('src/frontend/portal/src/portal-application-cards.js')
+    const portalHtml = readSource('src/frontend/portal/src/index.html')
+    const portalCss = readSource('src/frontend/portal/src/style.css')
+    const maintenanceHtml = readSource('src/frontend/maintenance-vue/index.html')
+    const maintenanceFavicon = readSource('src/frontend/maintenance-vue/public/favicon.svg')
 
+    for (const id of hostedApplicationIds.filter((id) => id !== 'maintenance')) {
+      expect(registry).toContain(`frameworkIconHref: '/${id}/favicon.svg'`)
+    }
+    expect(portalHtml).toContain('Portal - 利用する機能を選択します')
     expect(registry).toContain("frameworkName: 'Vue.js + Vuetify'")
     expect(registry).toContain("frameworkIcons: [")
-    expect(registry).toContain("./assets/logo_vuetify.svg")
-    expect(portal).toContain('createFrameworkStackItems')
-    expect(portal).toContain("document.createTextNode(' + ')")
-    expect(portal).toContain("frameworkItem.className = 'framework-item'")
+    expect(registry).toContain("{ name: 'Vue.js', href: '/workouts/favicon.svg' }")
+    expect(registry).toContain("{ name: 'Vuetify', href: '/maintenance/favicon.svg' }")
+    expect(registry).toContain('portalDescription:')
+    expect(portalCards).toContain('function createApplicationIcon')
+    expect(portalCards).toContain('application.iconClass')
+    expect(portalCards).toContain('createFrameworkStackItems')
+    expect(portalCards).toContain("frameworkLabel.textContent = 'Built with'")
+    expect(portalCards).toContain("icon.className = 'framework-icon'")
+    expect(portalCards).toContain('card.title = application.portalDescription')
+    expect(portalCss).toContain('@media (hover: hover) and (pointer: fine)')
+    expect(portalCss).toContain('.application-card:hover .application-description')
+    expect(portalCss).toContain(':root[data-theme="dark"] .portal')
+    expect(portalCss).toContain('.atl-theme-dark .portal')
+    expect(portalCss).toContain('linear-gradient(100deg, var(--wl-shell-primary) 0%, var(--wl-shell-primary) 8%, var(--wl-shell-primary-strong) 100%)')
+    expect(portalCss).toContain('width: 18px')
+    expect(portalCss).toContain('height: 18px')
+    expect(maintenanceHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />')
+    expect(maintenanceFavicon).toContain('<svg')
+    expect(maintenanceFavicon).toContain('#1867C0')
   })
 
   it('keeps Portal medium-width cards in a balanced two-column grid', () => {

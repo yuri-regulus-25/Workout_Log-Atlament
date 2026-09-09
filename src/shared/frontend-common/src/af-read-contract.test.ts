@@ -15,7 +15,7 @@ describe('AF read contract refinement', () => {
       'src/shared/frontend-common/src/index.ts',
       'src/application/windows/Core/AfModels.cs',
       'src/application/windows/Core/AfServices.cs',
-      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt',
       'tools/dev-runtime/development-runtime.mjs',
     ] as const
 
@@ -23,13 +23,13 @@ describe('AF read contract refinement', () => {
       expect(readSource(sourcePath), sourcePath).toMatch(/applicationFramework|ApplicationFramework/)
       expect(readSource(sourcePath), sourcePath).toMatch(/nativePackages|NativePackage/)
     }
-    expect(readSource('src/frontend/settings-solid/src/App.tsx')).toMatch(/applicationFramework|ApplicationFramework/)
+    expect(readSource('src/frontend/settings-solid/src/SettingsStatusSection.tsx')).toMatch(/applicationFramework|ApplicationFramework/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/nativePackages|NativePackage/)
 
     expect(readSource('src/shared/frontend-common/src/index.ts')).not.toMatch(/AfStatus = \{\s*version:/)
     expect(readSource('src/frontend/settings-solid/src/App.tsx')).not.toMatch(/status\?\.version(?!s)/)
     expect(readSource('src/application/windows/Core/AfModels.cs')).not.toMatch(/AfStatus\(\s*\[property: JsonPropertyName\("version"\)\]/)
-    expect(readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')).not.toContain('"version": "${BuildConfig.VERSION_NAME}"')
+    expect(readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt')).not.toContain('"version": "${BuildConfig.VERSION_NAME}"')
     expect(readSource('tools/dev-runtime/development-runtime.mjs')).not.toContain('version: versions.applicationFramework')
   })
 
@@ -41,6 +41,26 @@ describe('AF read contract refinement', () => {
     expect(apiInventory).toContain('no longer publishes top-level `version`')
     expect(apiContract).not.toContain('- `version`')
     expect(apiInventory).not.toContain('- `version`:')
+  })
+
+  it('keeps build identity as an additive shared Status API field', () => {
+    const frontendContract = readSource('src/shared/frontend-common/src/index.ts')
+    const settings = readSource('src/frontend/settings-solid/src/SettingsStatusSection.tsx')
+    const settingsPresentation = readSource('src/frontend/settings-solid/src/settings-status-presentation.ts')
+    const windowsModels = readSource('src/application/windows/Core/AfModels.cs')
+    const windowsServices = readSource('src/application/windows/Core/AfServices.cs')
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt')
+
+    expect(frontendContract).toContain('build?:')
+    expect(frontendContract).toContain('variant: string')
+    expect(frontendContract).toContain('debug: boolean')
+    expect(settings).toContain('buildIdentitySummary')
+    expect(settingsPresentation).toContain('buildIdentitySummary')
+    expect(windowsModels).toContain('BuildIdentity')
+    expect(windowsServices).toContain('ApplicationBuildIdentity')
+    expect(android).toContain('"build": {')
+    expect(android).toContain('"variant": "${BuildConfig.BUILD_TYPE}"')
+    expect(android).toContain('"debug": ${BuildConfig.DEBUG}')
   })
 
   it('derives shared readiness without treating optional Main Gym context as setup failure', () => {
@@ -185,7 +205,7 @@ describe('AF read contract refinement', () => {
   it('keeps frontend fallback presentation bound to runtimeData facts', () => {
     const typedPolicy = readSource('src/shared/frontend-common/src/index.ts')
     const browserPolicy = readSource('src/shared/frontend-common/src/af-client.js')
-    const portal = readSource('src/frontend/portal/src/main.js')
+    const portal = readSource('src/frontend/portal/src/portal-status-notice.js')
 
     expect(typedPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')
     expect(browserPolicy).toContain('const fallbackActive = runtimeData?.fallbackActive ?? false')

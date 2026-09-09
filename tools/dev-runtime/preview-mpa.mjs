@@ -128,7 +128,7 @@ function resolveFile(pathname) {
 
 function resolveDefinedMpaRoute(pathname) {
   const normalized = pathname.replace(/\/+$/, '')
-  if (/^\/workouts\/\d{4}-\d{2}-\d{2}$/.test(normalized)) return 'workouts/index.html'
+  if (/^\/workouts\/\d{4}-\d{2}-\d{2}$/.test(normalized)) return 'workouts/detail.html'
   if (/^\/machines\/[A-Za-z0-9][A-Za-z0-9_-]*$/.test(normalized)) return 'machines/index.html'
   return null
 }

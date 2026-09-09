@@ -6,7 +6,7 @@ Application、Frontend、Shared PackageのSourceを管理します。
 
 ```text
 src/
-├─ application/     # Windows AFなどPlatform Application
+├─ application/     # Windows / Android AF
 ├─ frontend/        # 画面単位Frontend
 └─ shared/          # Framework横断の共通処理・型・Style・Asset
 ```

@@ -24,13 +24,18 @@ const sourceDocuments = [
   'src/frontend/maintenance-vue/index.html',
   'src/frontend/portal/src/index.html',
   'src/frontend/settings-solid/index.html',
+  'src/frontend/workouts-vue/detail.html',
   'src/frontend/workouts-vue/index.html',
 ] as const
 
 const existingFrontendApps = [
   {
     id: 'dashboard',
-    sourceFiles: ['src/frontend/dashboard-react/src/App.tsx'],
+    sourceFiles: [
+      'src/frontend/dashboard-react/src/App.tsx',
+      'src/frontend/dashboard-react/src/DashboardCharts.tsx',
+      'src/frontend/dashboard-react/src/DashboardSections.tsx',
+    ],
     cssFiles: ['src/frontend/dashboard-react/src/App.css', 'src/frontend/dashboard-react/src/index.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
@@ -43,7 +48,9 @@ const existingFrontendApps = [
     id: 'workouts',
     sourceFiles: [
       'src/frontend/workouts-vue/src/App.vue',
-      'src/frontend/workouts-vue/src/router.ts',
+      'src/frontend/workouts-vue/src/DetailApp.vue',
+      'src/frontend/workouts-vue/src/main.ts',
+      'src/frontend/workouts-vue/src/main-detail.ts',
       'src/frontend/workouts-vue/src/views/WorkoutsView.vue',
       'src/frontend/workouts-vue/src/views/WorkoutDetailView.vue',
     ],
@@ -68,7 +75,11 @@ const existingFrontendApps = [
   },
   {
     id: 'analytics',
-    sourceFiles: ['src/frontend/analytics-svelte/src/App.svelte'],
+    sourceFiles: [
+      'src/frontend/analytics-svelte/src/App.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsCharts.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsTables.svelte',
+    ],
     cssFiles: ['src/frontend/analytics-svelte/src/app.css'],
     stateMarkers: {
       loading: /loadRuntimeWorkoutSessions/,
@@ -89,7 +100,15 @@ const existingFrontendApps = [
   },
   {
     id: 'maintenance',
-    sourceFiles: ['src/frontend/maintenance-vue/src/App.vue'],
+    sourceFiles: [
+      'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceDialogFrame.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceLoadingOverlay.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceSnackbar.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
+      'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
+    ],
     cssFiles: ['src/frontend/maintenance-vue/src/style.css'],
     stateMarkers: {
       loading: /:loading="loading"/,
@@ -131,20 +150,23 @@ describe('cross-frontend test baseline', () => {
     expect(baselineCss).toContain('overflow-x: hidden')
     expect(baselineCss).toContain('-webkit-tap-highlight-color: transparent')
     expect(baselineCss).toContain('min-height: 40px')
-    expect(baselineCss).toContain('env(safe-area-inset-top, 0px)')
     expect(baselineCss).toContain('prefers-reduced-motion: reduce')
     expect(baselineCss).toContain('animation-duration: 0.01ms')
     expect(baselineCss).toContain('scroll-behavior: auto')
-    expect(baselineCss).toContain('.atl-navigation-layout > .app-shell')
-    expect(baselineCss).toContain('grid-column: 2')
-    expect(baselineCss).toContain('.app-shell > .panel + .panel')
-    expect(baselineCss).toContain('.page-hero h1:focus')
+    expect(baselineCss).toContain('.app-background')
+    expect(baselineCss).toContain('.app-shell.atl-application-shell')
+    expect(baselineCss).toContain('.app-body')
+    expect(baselineCss).toContain('.app-header')
+    expect(baselineCss).toContain('.app-content')
+    expect(baselineCss).toContain('.app-scroll')
+    expect(baselineCss).toContain('.atl-screen-content > .panel + .panel')
+    expect(baselineCss).toContain('.app-title:focus')
     expect(baselineCss).toMatch(/input,\s*select,\s*textarea/)
   })
 
   it('keeps cross-app navigation metadata stable and smoke-tested by each existing app', () => {
     const drawerRouteIds = drawerApplications.map((application) => application.id)
-    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'])
+    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'])
 
     const routes = Object.values(applicationRoutes)
     expect(new Set(routes).size).toBe(routes.length)
@@ -157,6 +179,9 @@ describe('cross-frontend test baseline', () => {
 
       expect(source, app.id).toContain('initializeAppNavigation')
       expect(source, app.id).toContain(`currentRouteId: '${app.id}'`)
+      expect(source, app.id).toContain('screen:')
+      expect(source, app.id).toContain('data-application-shell-content')
+      expect(source, app.id).not.toContain('page-hero')
       expect(applicationRoutes[app.id], app.id).toMatch(/^\/.+\/$/)
     }
   })
@@ -183,20 +208,88 @@ describe('cross-frontend test baseline', () => {
         'src/shared/shared-styles/src/components.css',
       ])
 
-      expect(source, `${app.id} labels`).toMatch(/aria-label|aria-live|aria-busy/)
+      expect(source, `${app.id} labels`).toMatch(/aria-label|aria-live|aria-busy|ariaLabel/)
       expect(source, `${app.id} decorative icons`).toMatch(/aria-hidden/)
       expect(css, `${app.id} responsive CSS`).toMatch(/@media|@container/)
       expect(css, `${app.id} stable layout CSS`).toMatch(/grid-template-columns|min-width|max-width|overflow-x/)
     }
   })
 
-  it('keeps Workout Domain route changes focus-restored to the page heading', () => {
-    const source = readSource('src/frontend/workouts-vue/src/App.vue')
+  it('keeps Workout Domain list and detail entry points separated', () => {
+    const listRoot = readSource('src/frontend/workouts-vue/src/App.vue')
+    const detailRoot = readSource('src/frontend/workouts-vue/src/DetailApp.vue')
+    const listMain = readSource('src/frontend/workouts-vue/src/main.ts')
+    const detailMain = readSource('src/frontend/workouts-vue/src/main-detail.ts')
+    const detailHtml = readSource('src/frontend/workouts-vue/detail.html')
+    const preview = readSource('tools/dev-runtime/preview-mpa.mjs')
 
-    expect(source).toContain('ref="pageHeading"')
-    expect(source).toContain('tabindex="-1"')
-    expect(source).toContain('"$route.fullPath"')
-    expect(source).toContain('this.$refs.pageHeading?.focus()')
+    expect(listRoot).toContain('<WorkoutsView />')
+    expect(listRoot).toContain("title: 'Workout Domain'")
+    expect(listRoot).toContain("description: '過去のワークアウト記録を確認します'")
+    expect(listRoot).not.toContain('<RouterView')
+    expect(detailRoot).toContain('<WorkoutDetailView :date="workoutDate" />')
+    expect(detailRoot).toContain("title: 'Workout Domain / Details'")
+    expect(detailRoot).toContain("description: '特定のワークアウト記録を確認します'")
+    expect(detailMain).toContain("import DetailApp from './DetailApp.vue'")
+    expect(listMain).not.toContain('.use(router)')
+    expect(detailHtml).toContain('/src/main-detail.ts')
+    expect(preview).toContain("return 'workouts/detail.html'")
+  })
+
+  it('keeps Application Shell responsibilities centralized in the shared frontend layer', () => {
+    const navigationUi = readSource('src/shared/frontend-common/src/navigation/navigation-ui.ts')
+    const sharedCss = readSources([
+      'src/shared/shared-styles/src/layout.css',
+      'src/shared/shared-styles/src/components.css',
+    ])
+    const hostedSources = readSources(existingFrontendApps.flatMap((app) => app.sourceFiles))
+
+    expect(navigationUi).toContain('export type AppScreenHeader')
+    expect(navigationUi).toContain('function createApplicationShell')
+    expect(navigationUi).toContain("background.className = 'app-background'")
+    expect(navigationUi).toContain("body.className = 'app-body'")
+    expect(navigationUi).toContain("header.className = 'app-header'")
+    expect(navigationUi).toContain("mobileMenuButton.className = 'atl-mobile-menu-button'")
+    expect(navigationUi).toContain('header.append(mobileMenuButton, title)')
+    expect(navigationUi).toContain("appContent.className = 'app-content'")
+    expect(navigationUi).toContain("appScroll.className = 'app-scroll'")
+    expect(navigationUi).toContain('body.append(header, appContent)')
+    expect(navigationUi).toContain('appContent.append(appScroll)')
+    expect(navigationUi).toContain("content.classList.add('atl-screen-content')")
+    expect(navigationUi).toContain('initializeCharacterEasterEgg')
+    expect(navigationUi).toContain("topRegion.className = 'atl-navigation-region atl-navigation-region-top'")
+    expect(navigationUi).toContain("scrollRegion.className = 'atl-navigation-region atl-navigation-region-scroll'")
+    expect(navigationUi).toContain("bottomRegion.className = 'atl-navigation-region atl-navigation-region-bottom'")
+    expect(navigationUi).toContain("getApplicationMetadata('portal')")
+    expect(navigationUi).toContain("portalLink.classList.add('atl-navigation-portal-link')")
+    expect(navigationUi).toContain("bottomRegion.append(themeTrigger)")
+    expect(navigationUi).toContain("icon.className = 'mdi mdi-theme-light-dark'")
+    expect(navigationUi).not.toContain("label.textContent = 'Theme'")
+    expect(navigationUi).not.toContain('atl-theme-trigger-label')
+    expect(navigationUi).not.toContain('createMobileHeader')
+    expect(sharedCss).toContain('background: var(--wl-shell-primary-soft)')
+    expect(sharedCss).toContain('linear-gradient(100deg, var(--wl-shell-primary) 0%, var(--wl-shell-primary) 8%, var(--wl-shell-primary-strong) 100%)')
+    expect(sharedCss).toContain('height: 60px')
+    expect(sharedCss).toContain('margin: 0 16px 16px 0')
+    expect(sharedCss).toContain('border-radius: 24px')
+    expect(sharedCss).toContain('background: rgb(247, 247, 245)')
+    expect(sharedCss).toContain('scrollbar-width: none')
+    expect(sharedCss).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
+    expect(sharedCss).toContain('width: 100px')
+    expect(sharedCss).toContain('width: 84px')
+    expect(sharedCss).toContain('height: 62px')
+    expect(sharedCss).toContain('height: 48px')
+    expect(sharedCss).toContain('.atl-navigation-region-scroll')
+    expect(sharedCss).toContain('overscroll-behavior: contain')
+    expect(sharedCss).toContain('@media (max-width: 900px)')
+    expect(sharedCss).toContain('.atl-navigation-drawer-mobile')
+    expect(sharedCss).toContain('max-width: calc(100vw - 56px)')
+    expect(sharedCss).toContain('justify-content: center')
+    expect(sharedCss).toContain('.atl-navigation-drawer-mobile .atl-theme-trigger.atl-navigation-theme-trigger')
+    expect(sharedCss).toContain('display: grid')
+    expect(sharedCss).toContain('background: var(--wl-overlay)')
+    expect(hostedSources).not.toContain('class="page-hero"')
+    expect(hostedSources).not.toContain('className="page-hero"')
   })
 
   it('keeps Master Maintenance writes constrained to reviewed operations', () => {
@@ -219,33 +312,51 @@ describe('cross-frontend test baseline', () => {
   })
 
   it('keeps Round 3 reviewed frontend presentation contracts', () => {
-    const dashboard = readSource('src/frontend/dashboard-react/src/App.tsx')
+    const dashboard = readSources([
+      'src/frontend/dashboard-react/src/App.tsx',
+      'src/frontend/dashboard-react/src/DashboardCharts.tsx',
+      'src/frontend/dashboard-react/src/DashboardSections.tsx',
+    ])
     const machines = readSources([
       'src/frontend/machines-angular/src/app/app.ts',
       'src/frontend/machines-angular/src/app/app.html',
     ])
-    const analytics = readSource('src/frontend/analytics-svelte/src/App.svelte')
+    const analytics = readSources([
+      'src/frontend/analytics-svelte/src/App.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsCharts.svelte',
+      'src/frontend/analytics-svelte/src/AnalyticsTables.svelte',
+    ])
     const workoutFilters = readSource('src/frontend/workouts-vue/src/components/WorkoutFilters.vue')
-    const settings = readSource('src/frontend/settings-solid/src/App.tsx')
+    const settings = readSources([
+      'src/frontend/settings-solid/src/App.tsx',
+      'src/frontend/settings-solid/src/settings-status-presentation.ts',
+    ])
     const maintenance = readSources([
       'src/frontend/maintenance-vue/src/App.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceDialogFrame.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceLoadingOverlay.vue',
+      'src/frontend/maintenance-vue/src/MaintenanceSnackbar.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue',
+      'src/frontend/maintenance-vue/src/MasterRecordsTable.vue',
+      'src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue',
       'src/frontend/maintenance-vue/src/style.css',
     ])
 
     expect(dashboard).toContain('colors: [chartTheme.accent]')
     expect(machines).toContain('colors: [chartTheme.accent]')
     expect(machines).toContain('<option value="">-</option>')
+    expect(machines).toContain('存在しないマシンIDが指定されています。表示するマシンを選択してください。')
     expect(machines).toContain('class="filter-actions"')
     expect(machines).toContain('>Reset</button>')
     expect(machines).not.toContain('>Clear</button>')
     expect(machines).not.toContain('filteredMachineOptions().length }} / {{ machineOptions().length')
     expect(analytics).toContain('colors: [chartTheme.accent]')
-    expect(analytics).toContain('mainGymVolumeTrendReady')
-    expect(analytics).toContain('{#if mainGymVolumeTrendReady}')
-    expect(analytics).toContain('{#key mainGymVolumeTrendKey}')
+    expect(analytics).toContain('trendReady')
+    expect(analytics).toContain('{#if trendReady}')
+    expect(analytics).toContain('{#key trendKey}')
     expect(analytics).toContain('<p class="muted">データがありません</p>')
     expect(analytics).not.toContain('記録期間全体での週あたり平均セッション数。')
-    expect(analytics).toContain('<h2>ジム</h2>')
+    expect(analytics).toContain("'ジム'")
     expect(workoutFilters).not.toContain('Sort')
     expect(workoutFilters).not.toContain('Newest')
     expect(settings).not.toContain('{step.actionLabel}')
@@ -257,9 +368,9 @@ describe('cross-frontend test baseline', () => {
     expect(settings).toContain('onClick={saveCredential}')
     expect(settings).toContain('onClick={saveResources}')
     expect(settings).toContain('onClick={syncNow}')
-    expect(maintenance).toContain('initializeCharacterEasterEgg')
     expect(maintenance).toContain('@import "@workout-lab/frontend-common/easter-egg.css"')
-    expect(maintenance).toContain('class="atl-brand-row"')
+    expect(maintenance).toContain('data-application-shell-content')
+    expect(maintenance).toContain("title: 'Resource Management'")
     expect(maintenance).not.toContain('atl-logo-mark')
     expect(maintenance).toContain('cloneRecordDraft')
     expect(maintenance).not.toContain('structuredClone')
@@ -270,14 +381,32 @@ describe('cross-frontend test baseline', () => {
     expect(maintenance).not.toContain('label="Machine ID"')
     expect(maintenance).not.toContain('label="Gym ID"')
     expect(maintenance).toContain('label="ID" variant="outlined"')
-    expect(maintenance).toContain('label="有効" color="primary" inset')
+    expect(maintenance).toContain('label="有効" color="var(--wl-primary)" inset')
     expect(maintenance).toContain('accent-create-button')
-    expect(maintenance).toContain('--maintenance-accent-action-bg: var(--wl-accent)')
-    expect(maintenance).toContain('--maintenance-accent-selection-bg: var(--wl-primary-soft)')
-    expect(maintenance).toContain(':root[data-theme="dark"] .maintenance-shell')
-    expect(maintenance).toContain('color-mix(in srgb, var(--wl-primary) 68%, black)')
+    expect(maintenance).toContain('--maintenance-accent-action-bg: var(--wl-primary-strong)')
+    expect(maintenance).toContain('--maintenance-accent-selection-bg: var(--wl-primary-strong)')
+    expect(maintenance).toContain('--maintenance-accent-selection-fg: #ffffff')
+    expect(maintenance).not.toContain(':root[data-theme="dark"] .maintenance-shell')
+    expect(maintenance).not.toContain('color-mix(in srgb, var(--wl-primary) 68%, black)')
     expect(maintenance).toContain('background: var(--maintenance-accent-action-bg)')
     expect(maintenance).toContain('background: var(--maintenance-accent-selection-bg)')
+    expect(maintenance).toContain('<MaintenanceDialogFrame')
+    expect(maintenance).toContain('maintenance-dialog-toolbar')
+    expect(maintenance).toContain('background: var(--wl-primary-strong)')
+    expect(maintenance).toContain('<v-divider vertical class="mx-0"')
+    expect(maintenance).toContain("'登録する'")
+    expect(maintenance).toContain("'更新する'")
+    expect(maintenance).toContain('function closeDialog()')
+    expect(maintenance).not.toContain('変更を破棄しますか')
+    expect(maintenance).not.toContain('discardOpen')
+    expect(maintenance).toContain('<MaintenanceSnackbar')
+    expect(maintenance).toContain('<MaintenanceLoadingOverlay')
+    expect(maintenance).not.toContain('v-alert v-if="message"')
+    expect(maintenance).toContain('mdi-check-circle')
+    expect(maintenance).toContain('mdi-alert-circle')
+    expect(maintenance).not.toContain('#actions')
+    expect(maintenance).toContain('.v-progress-circular__overlay')
+    expect(maintenance).toContain('stroke: var(--wl-primary)')
     expect(maintenance).not.toContain('green-darken')
     expect(maintenance).not.toContain('purple-darken')
     expect(maintenance).toContain("'master-table'")

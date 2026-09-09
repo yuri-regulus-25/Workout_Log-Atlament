@@ -11,24 +11,39 @@
     <script type="module" src="./main.js"></script>
   </head>
   <body>
-    <main>
-      <div class="portal-brand-row" aria-label="Atlament Portal">
-        <button id="portal-logo-trigger" class="portal-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
-          <img id="portal-logo" class="portal-logo" src="./frontend-common/branding/assets/logo_svg_primary.svg" alt="" />
-        </button>
-        <p id="portal-character-trigger" class="eyebrow portal-title-trigger">Atlament / Portal</p>
+    <main class="portal">
+      <div class="portal-container">
+        <header class="portal-hero">
+          <div class="portal-brand" aria-label="Atlament Portal">
+            <button id="portal-logo-trigger" class="portal-logo-trigger" type="button" aria-label="Toggle Atlament logo variant">
+              <span class="portal-logo-box">
+                <img id="portal-logo" class="portal-logo" src="./frontend-common/branding/assets/logo_svg_primary.svg" alt="" />
+              </span>
+            </button>
+            <span id="portal-character-trigger" class="portal-brand-name portal-title-trigger">Portal - 利用する機能を選択します</span>
+          </div>
+          <div class="portal-heading">
+            <p class="portal-eyebrow">Browse, Explore, Analyze.</p>
+            <h1>What do you want to explore?</h1>
+            <p class="portal-description">ワークアウトの履歴、種目ごとの記録、蓄積したデータの分析へ。</p>
+          </div>
+          <section id="sync-notice" class="sync-status" aria-live="polite">
+            <span class="sync-loader" aria-hidden="true"></span>
+            <i id="sync-notice-icon" class="sync-icon mdi" aria-hidden="true"></i>
+            <span id="sync-notice-text">GitHubからデータを取得しています。</span>
+          </section>
+        </header>
+        <section class="launcher" aria-label="Applications">
+          <div class="launcher-header">
+            <div>
+              <span class="launcher-eyebrow">APPLICATIONS</span>
+              <h2>アプリケーション</h2>
+            </div>
+            <span id="launcher-count" class="launcher-count"></span>
+          </div>
+          <div id="portal-app-grid" class="application-grid"></div>
+        </section>
       </div>
-      <h2>Browse, Explore, Analyze.</h2>
-      <h1>What do you want to explore?</h1>
-      <p>
-        ワークアウトの履歴、種目ごとの記録、蓄積したデータの分析へ。
-      </p>
-      <section id="sync-notice" class="sync-notice" aria-live="polite">
-        <span class="sync-loader" aria-hidden="true"></span>
-        <i id="sync-notice-icon" class="sync-icon mdi" aria-hidden="true"></i>
-        <span id="sync-notice-text">GitHubからデータを取得しています。</span>
-      </section>
-      <section id="portal-app-grid" class="app-grid" aria-label="Applications"></section>
     </main>
   </body>
 </html>

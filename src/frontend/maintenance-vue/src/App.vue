@@ -1,213 +1,115 @@
 <template>
   <v-app>
     <main ref="shell" :class="['app-shell', 'maintenance-shell', pageTransitionClassName]">
-      <header class="page-hero">
-        <div class="hero-top">
-          <div class="atl-brand-row" aria-label="Atlament Resource Management">
-            <p ref="characterTriggerElement" class="eyebrow atl-character-trigger">Atlament / Resource Management</p>
+      <div data-application-shell-content>
+        <section class="panel wide maintenance-panel">
+          <div class="maintenance-toolbar">
+            <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
+              <v-btn value="masters">マスター</v-btn>
+              <v-btn value="unresolved">未解決参照</v-btn>
+              <v-btn value="recovery">修復が必要なデータ</v-btn>
+            </v-btn-toggle>
+            <v-btn-toggle v-if="viewMode !== 'recovery'" v-model="selectedType" mandatory density="comfortable" variant="outlined">
+              <v-btn value="MACHINE_MASTER">マシン</v-btn>
+              <v-btn value="GYM_MASTER">ジム</v-btn>
+            </v-btn-toggle>
+            <v-btn-toggle v-if="viewMode === 'masters'" v-model="displayMode" mandatory density="comfortable" variant="outlined">
+              <v-btn value="active">有効</v-btn>
+              <v-btn value="deleted">削除済み</v-btn>
+              <v-btn value="all">すべて</v-btn>
+            </v-btn-toggle>
+            <v-spacer />
+            <v-btn v-if="viewMode === 'masters'" class="accent-create-button" variant="flat" prepend-icon="mdi-plus-thick" @click="openCreate" >新規作成</v-btn>
           </div>
-        </div>
-        <h1 ref="pageHeading" tabindex="-1">Resource Management</h1>
-        <p class="lead">リソース情報を管理する<br />登録情報の変更や、未解決の参照を確認します</p>
-      </header>
 
-      <v-alert v-if="message" class="status-alert mb-4" :type="message.type" variant="tonal" density="compact" ariant="outlined" closable @click:close="message = null">
-        {{ message.text }}
-      </v-alert>
+          <RecoveryPanel v-if="viewMode === 'recovery'" @message="message = $event" />
 
-      <section class="panel wide maintenance-panel">
-        <div class="maintenance-toolbar">
-          <v-btn-toggle v-model="viewMode" mandatory density="comfortable" variant="outlined">
-            <v-btn value="masters">マスター</v-btn>
-            <v-btn value="unresolved">未解決参照</v-btn>
-            <v-btn value="recovery">修復が必要なデータ</v-btn>
-          </v-btn-toggle>
-          <v-btn-toggle v-if="viewMode !== 'recovery'" v-model="selectedType" mandatory density="comfortable" variant="outlined">
-            <v-btn value="MACHINE_MASTER">マシン</v-btn>
-            <v-btn value="GYM_MASTER">ジム</v-btn>
-          </v-btn-toggle>
-          <v-btn-toggle v-if="viewMode === 'masters'" v-model="displayMode" mandatory density="comfortable" variant="outlined">
-            <v-btn value="active">有効</v-btn>
-            <v-btn value="deleted">削除済み</v-btn>
-            <v-btn value="all">すべて</v-btn>
-          </v-btn-toggle>
-          <v-spacer />
-          <v-btn v-if="viewMode === 'masters'" class="accent-create-button" variant="flat" prepend-icon="mdi-plus-thick" @click="openCreate" >新規作成</v-btn>
-        </div>
+          <p v-if="viewMode === 'unresolved'" class="maintenance-description">
+            ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
+          </p>
 
-        <RecoveryPanel v-if="viewMode === 'recovery'" @message="message = $event" />
+          <MasterRecordsTable
+            v-if="viewMode === 'masters'"
+            :type="selectedType"
+            :headers="tableHeaders"
+            :records="visibleRecords"
+            :loading="loading"
+            @row-click="onRowClick"
+            @copy="openCopy"
+            @request-lifecycle-toggle="requestLifecycleToggle"
+            @request-main-gym="requestMainGym"
+          />
 
-        <p v-if="viewMode === 'unresolved'" class="maintenance-description">
-          ワークアウトから参照している情報が見つからない状態です。ワークアウト記録そのものは変更せず、不足情報の追加・復元・既存情報への解決を行えます。
-        </p>
+          <v-data-table
+            v-else-if="viewMode === 'unresolved'"
+            class="maintenance-table"
+            :headers="unresolvedHeaders"
+            :items="visibleUnresolved"
+            :items-per-page-text="'Show Items'"
+            :loading="loading ? 'primary' : false"
+            item-value="referenceId"
+            no-data-text="データがありません"
+            hover
+            density="comfortable"
+          >
+            <template #item.type="{ item }">
+              <v-chip size="small" variant="tonal">{{ masterTypeLabel(item.type) }}</v-chip>
+            </template>
+            <template #item.affected="{ item }">
+              <v-chip size="small" variant="tonal">{{ item.affectedWorkouts.length }}</v-chip>
+            </template>
+            <template #item.actions="{ item }">
+              <div class="row-actions" @click.stop>
+                <v-btn prepend-icon="mdi-link-variant" variant="text" size="small" aria-label="既存の登録情報へ解決する" @click.stop="openResolve(item)">
+                  解決
+                </v-btn>
+                <v-btn prepend-icon="mdi-plus" variant="text" size="small" aria-label="この参照IDで新しい登録情報を作成する" @click.stop="createFromUnresolved(item)">
+                  新規
+                </v-btn>
+              </div>
+            </template>
+          </v-data-table>
+        </section>
+      </div>
 
-        <v-data-table
-          v-if="viewMode === 'masters'"
-          :class="['maintenance-table', 'master-table', selectedType === 'MACHINE_MASTER' ? 'machine-master-table' : 'gym-master-table']"
-          :headers="tableHeaders"
-          :items="visibleRecords"
-          :loading="loading"
-          item-value="id"
-          no-data-text="データがありません"
-          hover
-          density="comfortable"
-          @click:row="onRowClick"
-        >
-          <template #item.state="{ item }">
-            <v-chip :color="item.deleted ? 'error' : item.active ? 'success' : 'warning'" size="small" variant="tonal">
-              {{ item.deleted ? '削除済み' : item.active ? '有効' : '無効' }}
-            </v-chip>
-          </template>
-          <template #item.main="{ item }">
-            <v-icon v-if="isGym(item) && item.main" icon="mdi-star" color="primary" aria-hidden="true" />
-          </template>
-          <template #item.body_part="{ item }">
-            {{ isMachine(item) ? formatBodyPart(item.body_part) : '' }}
-          </template>
-          <template #item.actions="{ item }">
-            <div class="row-actions" @click.stop>
-              <v-btn
-                v-if="isGym(item)"
-                :icon="item.main ? 'mdi-star' : 'mdi-star-outline'"
-                variant="text"
-                size="small"
-                :disabled="item.deleted || !item.active"
-              aria-label="メインジムに設定"
-                @click.stop="requestMainGym(item)"
-              />
-              <v-btn icon="mdi-content-copy" variant="text" size="small" aria-label="コピーして作成" @click.stop="openCopy(item)" />
-              <v-btn
-                :icon="item.deleted ? 'mdi-restore' : 'mdi-delete-outline'"
-                variant="text"
-                size="small"
-              :aria-label="item.deleted ? '復元' : '削除'"
-                :disabled="isGym(item) && item.main && !item.deleted"
-                @click.stop="requestLifecycleToggle(item)"
-              />
-            </div>
-          </template>
-        </v-data-table>
+      <MasterRecordEditorDialog
+        v-model:open="dialogOpen"
+        v-model:alias-text="aliasText"
+        :title="dialogTitle"
+        :dialog-mode="dialogMode"
+        :machine-draft="machineDraft"
+        :gym-draft="gymDraft"
+        :body-parts="bodyParts"
+        :id-error="idError"
+        :saving="saving"
+        :can-save="Boolean(canSave)"
+        @close="closeDialog"
+        @save="saveDialog"
+      />
 
-        <v-data-table
-          v-else-if="viewMode === 'unresolved'"
-          class="maintenance-table"
-          :headers="unresolvedHeaders"
-          :items="visibleUnresolved"
-          :loading="loading"
-          item-value="referenceId"
-          no-data-text="データがありません"
-          hover
-          density="comfortable"
-        >
-          <template #item.type="{ item }">
-            <v-chip size="small" variant="tonal">{{ masterTypeLabel(item.type) }}</v-chip>
-          </template>
-          <template #item.affected="{ item }">
-            <v-chip size="small" variant="tonal">{{ item.affectedWorkouts.length }}</v-chip>
-          </template>
-          <template #item.actions="{ item }">
-            <div class="row-actions" @click.stop>
-            <v-btn icon="mdi-eye-outline" variant="text" size="small" aria-label="確認" @click.stop="inspectUnresolved(item)" />
-            <v-btn icon="mdi-link-variant" variant="text" size="small" aria-label="既存マスターへ解決" @click.stop="openResolve(item)" />
-            <v-btn icon="mdi-plus" variant="text" size="small" aria-label="新規作成" @click.stop="createFromUnresolved(item)" />
-            </div>
-          </template>
-        </v-data-table>
-      </section>
+      <MaintenanceDialogFrame
+        v-model:open="confirmOpen"
+        :title="confirmTitle"
+        :primary-label="confirmPrimaryLabel"
+        :busy="saving"
+        max-width="460"
+        @close="confirmOpen = false"
+        @primary="confirmOperation"
+      >
+        <p class="confirmation-copy">{{ confirmText }}</p>
+      </MaintenanceDialogFrame>
 
-      <v-dialog v-model="dialogOpen" max-width="720" persistent>
-        <v-card>
-          <v-card-title>{{ dialogMode === 'create' ? '新規作成' : '編集' }} {{ masterTypeLabel(selectedType) }}</v-card-title>
-          <v-card-text>
-            <v-form class="record-form" @submit.prevent="saveDialog">
-              <template v-if="machineDraft">
-                <v-text-field v-model.trim="machineDraft.machine_id" label="ID" variant="outlined" :error-messages="idError" :disabled="dialogMode === 'edit'" density="compact" />
-                <v-text-field v-model.trim="machineDraft.name" label="名前" variant="outlined" density="compact" />
-                <v-select v-model="machineDraft.body_part" label="部位" variant="outlined" :items="bodyParts" item-title="title" item-value="value" density="compact" />
-                <v-text-field v-model="aliasText" label="別名" variant="outlined" density="compact" />
-                <v-switch v-model="machineDraft.active" label="有効" color="primary" inset density="compact" />
-                <v-chip v-if="machineDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
-              </template>
-              <template v-if="gymDraft">
-                <v-text-field v-model.trim="gymDraft.gym_id" label="ID" variant="outlined" :error-messages="idError" :disabled="dialogMode === 'edit'" density="compact" />
-                <v-text-field v-model.trim="gymDraft.name" label="名前" variant="outlined" density="compact" />
-                <v-text-field v-model.trim="gymDraft.short_name" label="短縮名" variant="outlined" density="compact" />
-                <v-switch v-model="gymDraft.active" label="有効" color="primary" inset density="compact" />
-                <v-chip v-if="gymDraft.deleted" color="error" variant="tonal">削除済み</v-chip>
-                <v-chip v-if="gymDraft.main" color="primary" variant="tonal">メインジム</v-chip>
-              </template>
-            </v-form>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="closeDialog">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="saveDialog">
-              {{ dialogMode === 'create' ? '作成' : '更新' }}
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <UnresolvedReferenceResolutionDialog
+        v-model:open="resolveOpen"
+        v-model:resolve-target-id="resolveTargetId"
+        :selected-unresolved="selectedUnresolved"
+        :resolve-options="resolveOptions"
+        :saving="saving"
+        @resolve="resolveToExisting"
+      />
 
-      <v-dialog v-model="discardOpen" max-width="420">
-        <v-card>
-          <v-card-title>変更を破棄しますか?</v-card-title>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="discardOpen = false">キャンセル</v-btn>
-            <v-btn color="error" @click="discardDraft">破棄</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-
-      <v-dialog v-model="confirmOpen" max-width="460">
-        <v-card>
-          <v-card-title>{{ confirmTitle }}</v-card-title>
-          <v-card-text>{{ confirmText }}</v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="confirmOpen = false">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" @click="confirmOperation">実行</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-
-      <v-dialog v-model="resolveOpen" max-width="720" persistent>
-        <v-card>
-          <v-card-title>未解決参照の解決</v-card-title>
-          <v-card-text>
-            <v-alert v-if="selectedUnresolved" type="info" variant="tonal" class="status-alert">
-              {{ selectedUnresolved.referenceId }} は {{ selectedUnresolved.affectedWorkouts.length }} 件のワークアウトに影響しています。
-            </v-alert>
-            <v-select
-              v-model="resolveTargetId"
-              label="解決先の登録情報"
-              variant="outlined"
-              :items="resolveOptions"
-              item-title="title"
-              item-value="value"
-            />
-            <v-data-table
-              v-if="selectedUnresolved"
-              class="maintenance-table compact-table"
-              :headers="affectedHeaders"
-              :items="selectedUnresolved.affectedWorkouts"
-              density="compact"
-            >
-              <template #item.message="{ item }">
-                <div class="affected-message">
-                  <span>{{ item.message }}</span>
-                  <span>メンテナンスを行う必要があります。</span>
-                </div>
-              </template>
-            </v-data-table>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn variant="text" @click="resolveOpen = false">キャンセル</v-btn>
-            <v-btn color="primary" :loading="saving" :disabled="!resolveTargetId" @click="resolveToExisting">解決</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <MaintenanceSnackbar :message="message" @clear="message = null" />
+      <MaintenanceLoadingOverlay :active="saving" label="更新しています" />
     </main>
   </v-app>
 </template>
@@ -216,39 +118,44 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg'
 import { formatBodyPart } from '@workout-lab/workout-core'
+import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
+import MaintenanceLoadingOverlay from './MaintenanceLoadingOverlay.vue'
+import MaintenanceSnackbar from './MaintenanceSnackbar.vue'
+import MasterRecordEditorDialog from './MasterRecordEditorDialog.vue'
+import MasterRecordsTable from './MasterRecordsTable.vue'
 import RecoveryPanel from './RecoveryPanel.vue'
+import UnresolvedReferenceResolutionDialog from './UnresolvedReferenceResolutionDialog.vue'
+import {
+  cloneRecordDraft,
+  cloneGymRecord,
+  cloneMachineRecord,
+  isGym,
+  isMachine,
+  isRecordDraft,
+  masterTypeLabel,
+  recordId,
+  toUserFacingMasterWriteError,
+  type GymRecord,
+  type MachineRecord,
+  type RecordDraft,
+} from './maintenance-master-records'
 import {
   getMasterDocument,
   getUnresolvedMasterReferences,
+  syncWorkoutData,
   updateMasterDocument,
   type MasterDocumentType,
   type UnresolvedMasterReference,
 } from '@workout-lab/frontend-common'
 
-type MachineRecord = {
-  machine_id: string
-  source_ids?: string[]
-  name: string
-  body_part: string
-  aliases: string[]
-  active: boolean
-  deleted: boolean
-}
-
-type GymRecord = {
-  gym_id: string
-  source_ids?: string[]
-  name: string
-  short_name?: string
-  active: boolean
-  deleted: boolean
-  main: boolean
-}
-
-type RecordDraft = MachineRecord | GymRecord
-
+/**
+ * Resource Management の Composition Root。
+ *
+ * Master/Unresolved/Recovery の画面切替、AF API との read/write orchestration、
+ * Dialog/Snackbar/Loading の共通 state を所有する。Master table、record editor、
+ * unresolved resolution、recovery workspace の表示責務は子 component へ委譲する。
+ */
 const bodyPartValues = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'core', 'cardio', 'other']
 const bodyParts = bodyPartValues.map((bodyPart) => ({ title: formatBodyPart(bodyPart), value: bodyPart }))
 const viewMode = ref<'masters' | 'unresolved' | 'recovery'>('masters')
@@ -262,7 +169,6 @@ const machines = ref<MachineRecord[]>([])
 const gyms = ref<GymRecord[]>([])
 const unresolved = ref<UnresolvedMasterReference[]>([])
 const dialogOpen = ref(false)
-const discardOpen = ref(false)
 const confirmOpen = ref(false)
 const resolveOpen = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -271,29 +177,30 @@ const gymDraft = ref<GymRecord | null>(null)
 const pendingOperation = ref<{ kind: 'lifecycle' | 'main-gym'; record: RecordDraft } | null>(null)
 const selectedUnresolved = ref<UnresolvedMasterReference | null>(null)
 const resolveTargetId = ref('')
-const originalDraft = ref('')
 const aliasText = ref('')
-const message = ref<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null)
+const message = ref<{ type: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null)
 const shell = ref<HTMLElement | null>(null)
-const pageHeading = ref<HTMLElement | null>(null)
-const characterTriggerElement = ref<HTMLParagraphElement | null>(null)
 let navigation: { dispose: () => void } | null = null
-let characterEasterEgg: { dispose: () => void } | null = null
+let shellNavigation: { dispose: () => void; focusTitle: () => void } | null = null
 
 onMounted(() => {
-  navigation = initializeAppNavigation({ currentRouteId: 'maintenance', shell: shell.value ?? document.body })
-  characterEasterEgg = initializeCharacterEasterEgg({
-    trigger: characterTriggerElement.value ?? undefined,
-    host: document.body,
-    assetBasePath: '/frontend-common/easter-egg/assets/',
+  shellNavigation = initializeAppNavigation({
+    currentRouteId: 'maintenance',
+    shell: shell.value ?? document.body,
+    screen: {
+      eyebrow: 'Atlament / Resource Management',
+      title: 'Resource Management',
+      description: ['リソース情報を管理する', '登録情報の変更や、未解決の参照を確認します'],
+      ariaLabel: 'Atlament Resource Management',
+    },
   })
-  pageHeading.value?.focus()
+  navigation = shellNavigation
+  shellNavigation.focusTitle()
   void loadAll()
 })
 
 onBeforeUnmount(() => {
-  navigation?.dispose()
-  characterEasterEgg?.dispose()
+  shellNavigation?.dispose()
 })
 
 watch(aliasText, (value) => {
@@ -303,10 +210,16 @@ watch(aliasText, (value) => {
 })
 
 const activeDraft = computed<RecordDraft | null>(() => machineDraft.value ?? gymDraft.value)
+const dialogTitle = computed(() => `${dialogActionLabel.value} - ${masterTypeLabel(selectedType.value)}情報`)
+const dialogActionLabel = computed(() => {
+  if (dialogMode.value === 'edit') return '編集'
+  return originalDraftWasCopied.value ? '別名保存' : '新規作成'
+})
+const originalDraftWasCopied = ref(false)
 
 const confirmTitle = computed(() => {
   if (!pendingOperation.value) return ''
-  return '確認'
+  return pendingOperation.value.kind === 'main-gym' ? 'メインジムを変更します' : '登録情報の状態を変更します'
 })
 
 const confirmText = computed(() => {
@@ -314,6 +227,8 @@ const confirmText = computed(() => {
   if (pendingOperation.value.kind === 'main-gym') return '選択した有効なジムをメインジムにし、現在のメインジムを解除します。'
   return '本当に更新しますか？'
 })
+
+const confirmPrimaryLabel = computed(() => pendingOperation.value?.kind === 'main-gym' ? 'メインジムにする' : '更新する')
 
 const records = computed(() => selectedType.value === 'MACHINE_MASTER' ? machines.value : gyms.value)
 const visibleUnresolved = computed(() => unresolved.value.filter((item) => item.type === selectedType.value))
@@ -351,12 +266,6 @@ const unresolvedHeaders = [
   { title: '', key: 'actions', sortable: false, width: 128 },
 ]
 
-const affectedHeaders = [
-  { title: 'ワークアウト', key: 'filePath' },
-  { title: '行', key: 'line' },
-  { title: 'メッセージ', key: 'message' },
-]
-
 const idError = computed(() => {
   if (!activeDraft.value || dialogMode.value === 'edit') return ''
   const id = recordId(activeDraft.value)
@@ -364,9 +273,14 @@ const idError = computed(() => {
   return records.value.some((record) => recordId(record) === id) ? 'IDはすでに存在します。' : ''
 })
 
-const dirty = computed(() => activeDraft.value !== null && JSON.stringify(activeDraft.value) !== originalDraft.value)
 const canSave = computed(() => activeDraft.value !== null && !idError.value && recordId(activeDraft.value) && activeDraft.value.name.trim())
 
+/**
+ * Master write UI が必要とする local Master snapshot と unresolved reference を同期的に揃える。
+ *
+ * Resource Management は AF の local Master snapshot を Source of Truth とし、
+ * 画面側から GitHub を直接読まない。
+ */
 async function loadAll() {
   loading.value = true
   try {
@@ -402,6 +316,7 @@ async function loadUnresolved() {
 
 function openCreate() {
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = false
   machineDraft.value = selectedType.value === 'MACHINE_MASTER'
     ? { machine_id: '', source_ids: [], name: '', body_part: 'other', aliases: [], active: true, deleted: false }
     : null
@@ -409,40 +324,41 @@ function openCreate() {
     ? { gym_id: '', source_ids: [], name: '', short_name: '', active: true, deleted: false, main: false }
     : null
   aliasText.value = ''
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
 function openEdit(record: RecordDraft) {
   dialogMode.value = 'edit'
+  originalDraftWasCopied.value = false
   machineDraft.value = isMachine(record) ? cloneMachineRecord(record) : null
   gymDraft.value = isGym(record) ? cloneGymRecord(record) : null
   aliasText.value = machineDraft.value ? machineDraft.value.aliases.join(', ') : ''
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
 function openCopy(record: RecordDraft) {
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = true
   if (isMachine(record)) {
-    machineDraft.value = cloneMachineRecord(record)
+    const draft = cloneMachineRecord(record)
+    draft.machine_id = ''
+    draft.source_ids = []
+    draft.active = true
+    draft.deleted = false
+    machineDraft.value = draft
     gymDraft.value = null
-    machineDraft.value.machine_id = ''
-    machineDraft.value.source_ids = []
-    machineDraft.value.active = true
-    machineDraft.value.deleted = false
-    aliasText.value = machineDraft.value.aliases.join(', ')
+    aliasText.value = draft.aliases.join(', ')
   } else {
-    gymDraft.value = cloneGymRecord(record)
+    const draft = cloneGymRecord(record)
+    draft.gym_id = ''
+    draft.source_ids = []
+    draft.active = true
+    draft.deleted = false
+    draft.main = false
+    gymDraft.value = draft
     machineDraft.value = null
-    gymDraft.value.gym_id = ''
-    gymDraft.value.source_ids = []
-    gymDraft.value.active = true
-    gymDraft.value.deleted = false
-    gymDraft.value.main = false
     aliasText.value = ''
   }
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
@@ -461,6 +377,7 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
   selectedType.value = item.type
   viewMode.value = 'masters'
   dialogMode.value = 'create'
+  originalDraftWasCopied.value = false
   if (item.type === 'MACHINE_MASTER') {
     machineDraft.value = { machine_id: item.referenceId, source_ids: [], name: item.referenceId, body_part: 'other', aliases: [], active: true, deleted: false }
     gymDraft.value = null
@@ -470,21 +387,34 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
     machineDraft.value = null
     aliasText.value = ''
   }
-  originalDraft.value = JSON.stringify(activeDraft.value)
   dialogOpen.value = true
 }
 
+/**
+ * 未解決 raw ID を既存 Master record の `source_ids` として追加する。
+ *
+ * Raw Workout JSON は変更せず、次回 Runtime rebuild で canonical ID へ解決される契約である。
+ */
 async function resolveToExisting() {
   if (!selectedUnresolved.value || !resolveTargetId.value) return
-  const unresolvedItem = selectedUnresolved.value
-  const targetId = resolveTargetId.value
-  const next = records.value.map((record) => {
-    if (recordId(record) !== targetId) return record
-    const sourceIds = new Set([...(record.source_ids ?? []), unresolvedItem.referenceId])
-    return { ...record, source_ids: Array.from(sourceIds).sort() }
-  })
-  await saveRecords(unresolvedItem.type, next)
-  resolveOpen.value = false
+  saving.value = true
+  try {
+    const unresolvedItem = selectedUnresolved.value
+    const targetId = resolveTargetId.value
+    const next = records.value.map((record) => {
+      if (recordId(record) !== targetId) return record
+      const sourceIds = new Set([...(record.source_ids ?? []), unresolvedItem.referenceId])
+      return { ...record, source_ids: Array.from(sourceIds).sort() }
+    })
+    await saveRecords(unresolvedItem.type, next)
+    resolveOpen.value = false
+    message.value = { type: 'success', text: '参照先を設定しました' }
+  } catch (error) {
+    reportDiagnostic('Unresolved reference resolution failed.', error)
+    message.value = { type: 'error', text: '設定に失敗しました' }
+  } finally {
+    saving.value = false
+  }
 }
 
 function requestLifecycleToggle(record: RecordDraft) {
@@ -527,15 +457,6 @@ async function confirmOperation() {
 }
 
 function closeDialog() {
-  if (dirty.value) {
-    discardOpen.value = true
-    return
-  }
-  resetDialog()
-}
-
-function discardDraft() {
-  discardOpen.value = false
   resetDialog()
 }
 
@@ -543,7 +464,7 @@ function resetDialog() {
   dialogOpen.value = false
   machineDraft.value = null
   gymDraft.value = null
-  originalDraft.value = ''
+  originalDraftWasCopied.value = false
   aliasText.value = ''
 }
 
@@ -576,6 +497,12 @@ async function saveRecord(record: RecordDraft, mode: 'create' | 'edit') {
   }
 }
 
+/**
+ * Master document を expected revision 付きで保存する。
+ *
+ * Conflict や validation failure は AF response code/error code を Source of Truth とし、
+ * UI は成功時に返された revision だけを次回 write の前提として保持する。
+ */
 async function saveRecords(type: MasterDocumentType, next: RecordDraft[]) {
   const result = await updateMasterDocument(type, {
     expectedRevision: type === 'MACHINE_MASTER' ? machineRevision.value : gymRevision.value,
@@ -605,49 +532,22 @@ async function saveMainGym(record: GymRecord) {
     if (!result.success || !result.data) throw result
     gyms.value = next
     gymRevision.value = result.data.revision
-    message.value = { type: 'success', text: 'メインジムを更新しました。' }
+    const syncResult = await syncWorkoutData()
+    if (!syncResult.success || !syncResult.data) {
+      await loadAll()
+      message.value = { type: 'warning', text: 'メインジムは更新されましたが、同期結果を確認できませんでした。再読み込み後の表示を確認してください。' }
+      return
+    }
+    await loadAll()
+    message.value = syncResult.data.degraded
+      ? { type: 'warning', text: 'メインジムを更新しました。一部データは確認が必要です。' }
+      : { type: 'success', text: 'メインジムを更新しました。' }
   } catch (error) {
     reportDiagnostic('Main Gym update failed.', error)
     message.value = { type: 'error', text: toUserFacingMasterWriteError(error) }
   } finally {
     saving.value = false
   }
-}
-
-function recordId(record: RecordDraft): string {
-  return isMachine(record) ? record.machine_id : record.gym_id
-}
-
-function cloneRecordDraft(record: RecordDraft): RecordDraft {
-  return isMachine(record) ? cloneMachineRecord(record) : cloneGymRecord(record)
-}
-
-function cloneMachineRecord(record: MachineRecord): MachineRecord {
-  return {
-    machine_id: record.machine_id,
-    source_ids: [...(record.source_ids ?? [])],
-    name: record.name,
-    body_part: record.body_part,
-    aliases: [...record.aliases],
-    active: record.active,
-    deleted: record.deleted,
-  }
-}
-
-function cloneGymRecord(record: GymRecord): GymRecord {
-  return {
-    gym_id: record.gym_id,
-    source_ids: [...(record.source_ids ?? [])],
-    name: record.name,
-    short_name: record.short_name,
-    active: record.active,
-    deleted: record.deleted,
-    main: record.main,
-  }
-}
-
-function masterTypeLabel(type: MasterDocumentType): string {
-  return type === 'MACHINE_MASTER' ? 'マシン' : 'ジム'
 }
 
 function onRowClick(_: MouseEvent, row: { item?: RecordDraft | { raw?: RecordDraft } }) {
@@ -665,56 +565,7 @@ function extractRowRecord(row: { item?: RecordDraft | { raw?: RecordDraft } }): 
   return isRecordDraft(raw) ? raw : null
 }
 
-function isRecordDraft(value: unknown): value is RecordDraft {
-  return isMachine(value) || isGym(value)
-}
-
-function toUserFacingMasterWriteError(error: unknown): string {
-  const code = firstAfErrorCode(error)
-  if (code === 'MASTER_WRITE_CONFLICT') {
-    return 'ほかの更新が先に反映されています。画面を再読み込みしてから再度操作してください。'
-  }
-  if (code === 'MASTER_SYNC_REQUIRED') {
-    return '同期が必要です。同期してから再度操作してください。'
-  }
-  if (code === 'MASTER_WRITE_INVALID' || code === 'RUNTIME_DATA_INVALID') {
-    return '入力内容を保存できませんでした。マスター情報を確認してください。'
-  }
-  if (code === 'CONFIGURATION_REQUIRED' || code === 'CONFIG_REQUIRED') {
-    return '必要な設定を行ってから、再度操作してください。'
-  }
-  if (code === 'CREDENTIAL_REQUIRED' || code === 'GITHUB_UNAUTHORIZED' || code === 'GITHUB_FORBIDDEN') {
-    return 'GitHub Tokenを確認してください。'
-  }
-  if (code === 'GITHUB_RESOURCE_NOT_FOUND') {
-    return '必要なマスター情報が見つかりません。設定情報と同期対象を確認してください。'
-  }
-  if (code === 'GITHUB_TIMEOUT' || code === 'GITHUB_CONNECTION_FAILED' || code === 'GITHUB_RATE_LIMIT' || code === 'GITHUB_SERVER_ERROR') {
-    return 'GitHubとの通信に失敗しました。時間をおいて再度実行してください。'
-  }
-
-  return 'マスターデータを保存できませんでした。設定情報と同期状態を確認してください。'
-}
-
-function firstAfErrorCode(error: unknown): string | null {
-  if (typeof error !== 'object' || error === null || !('errors' in error)) return null
-  const errors = (error as { errors?: Array<{ code?: string }> }).errors
-  return errors?.[0]?.code ?? null
-}
-
 function reportDiagnostic(context: string, error: unknown) {
   console.error(context, error)
-}
-
-function isMachine(record: unknown): record is MachineRecord {
-  return isRecordLike(record) && 'machine_id' in record
-}
-
-function isGym(record: unknown): record is GymRecord {
-  return isRecordLike(record) && 'gym_id' in record
-}
-
-function isRecordLike(record: unknown): record is Record<string, unknown> {
-  return typeof record === 'object' && record !== null
 }
 </script>

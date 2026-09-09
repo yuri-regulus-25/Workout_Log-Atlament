@@ -35,7 +35,7 @@
   }
 }
 
-.settings-shell h1 {
+.settings-shell h1:not(.app-title) {
   color: var(--wl-text-strong);
   font-size: clamp(3rem, 8vw, 5.25rem);
   line-height: 0.95;
@@ -95,20 +95,21 @@
   border-radius: var(--wl-radius-inner);
   background: var(--wl-input-bg);
   display: grid;
-  gap: 10px;
-  grid-template-columns: 34px minmax(0, 1fr);
-  min-height: 150px;
-  padding: 12px;
+  gap: 8px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  height: 75px;
+  min-height: 75px;
+  padding: 8px 10px;
 }
 
 .setup-step__status {
   align-items: center;
   border-radius: 50%;
   display: inline-flex;
-  font-size: 1.1rem;
-  height: 34px;
+  font-size: 1rem;
+  height: 30px;
   justify-content: center;
-  width: 34px;
+  width: 30px;
 }
 
 .setup-step.complete .setup-step__status {
@@ -136,18 +137,21 @@
 
 .setup-step__body {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .setup-step__body strong {
   color: var(--wl-text-strong);
+  font-size: 0.86rem;
+  line-height: 1.12;
 }
 
 .setup-step__body span {
   color: var(--wl-text-muted);
-  font-size: 0.9rem;
+  font-size: 0.76rem;
   font-weight: 700;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 

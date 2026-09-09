@@ -109,6 +109,19 @@ public sealed class AfCoreTests
     }
 
     [Fact]
+    public void MasterReferenceSemanticsKeepsSharedResolutionAndWarningCodes()
+    {
+        Assert.Equal("missing", MasterReferenceSemantics.Resolve("missing-machine", null, deleted: false, invalidExcluded: false).State);
+        Assert.Equal("deleted", MasterReferenceSemantics.Resolve("deleted-machine", "deleted-machine", deleted: true, invalidExcluded: false).State);
+        Assert.Equal("invalid_excluded", MasterReferenceSemantics.Resolve("invalid-machine", null, deleted: false, invalidExcluded: true).State);
+        Assert.Equal("resolved", MasterReferenceSemantics.Resolve("legacy-machine", "known-machine", deleted: false, invalidExcluded: false).State);
+
+        Assert.Equal("MASTER_REFERENCE_MISSING", MasterReferenceSemantics.CreateWarning("machine", "missing-machine", null, false, false, "session", "workouts/a.json", null).Code);
+        Assert.Equal("MASTER_REFERENCE_DELETED", MasterReferenceSemantics.CreateWarning("machine", "deleted-machine", "deleted-machine", true, false, "session", "workouts/a.json", null).Code);
+        Assert.Equal("MASTER_REFERENCE_INVALID_EXCLUDED", MasterReferenceSemantics.CreateWarning("machine", "invalid-machine", null, false, true, "session", "workouts/a.json", null).Code);
+    }
+
+    [Fact]
     public void SourceIdsResolveUnresolvedWorkoutReferencesWithoutRawWorkoutRewrite()
     {
         var builder = new RuntimeDataBuilder();
@@ -1223,6 +1236,7 @@ public sealed class AfCoreTests
             File.WriteAllText(Path.Combine(paths.FrontendArtifactRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(workoutsRoot, "index.html"), "<html></html>");
+            File.WriteAllText(Path.Combine(workoutsRoot, "detail.html"), "<html></html>");
             File.WriteAllText(Path.Combine(machinesRoot, "index.html"), "<html></html>");
             File.WriteAllText(Path.Combine(dashboardRoot, "assets", "app.js"), "console.log('ok');");
 
@@ -1237,7 +1251,7 @@ public sealed class AfCoreTests
             Assert.False(staticUnavailable);
             Assert.Equal(Path.Combine(dashboardRoot, "assets", "app.js"), staticFile?.PhysicalPath);
             Assert.False(workoutRouteUnavailable);
-            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "index.html"), workoutRouteFile?.PhysicalPath);
+            Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "workouts", "detail.html"), workoutRouteFile?.PhysicalPath);
             Assert.False(machineRouteUnavailable);
             Assert.Equal(Path.Combine(paths.FrontendArtifactRoot, "machines", "index.html"), machineRouteFile?.PhysicalPath);
             Assert.False(unknownRouteUnavailable);
@@ -1688,6 +1702,12 @@ public sealed class AfCoreTests
         gate.Complete("startup", true);
 
         Assert.True(gate.TryStart("manualSync"));
+    }
+
+    [Fact]
+    public void LocalhostEndpointPolicyKeepsPrimaryAndSecondaryPortOrder()
+    {
+        Assert.Equal(new[] { 14108, 45194 }, LocalhostEndpointPolicy.Ports);
     }
 
     [Fact]

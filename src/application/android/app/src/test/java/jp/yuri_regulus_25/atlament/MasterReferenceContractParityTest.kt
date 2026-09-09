@@ -25,15 +25,17 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun keepsMasterRecordIsolationRuntimeSemanticsInAndroidBuilder() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val builderSource = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRuntimeDataBuilder.kt")
+            .readText()
+        val semanticsSource = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidMasterReferenceSemantics.kt")
             .readText()
 
-        assertTrue(source.contains("MasterRecordCatalog"))
-        assertTrue(source.contains("structuralInvalid"))
-        assertTrue(source.contains("duplicate reference key is excluded"))
-        assertTrue(source.contains("\"MASTER_REFERENCE_INVALID_EXCLUDED\""))
-        assertTrue(source.contains("\"invalid_excluded\""))
-        assertTrue(source.indexOf("machines.structuralInvalid || gyms.structuralInvalid") < source.indexOf("buildSession(file.path"))
+        assertTrue(builderSource.contains("MasterRecordCatalog"))
+        assertTrue(builderSource.contains("structuralInvalid"))
+        assertTrue(builderSource.contains("duplicate reference key is excluded"))
+        assertTrue(semanticsSource.contains("\"MASTER_REFERENCE_INVALID_EXCLUDED\""))
+        assertTrue(semanticsSource.contains("\"invalid_excluded\""))
+        assertTrue(builderSource.indexOf("machines.structuralInvalid || gyms.structuralInvalid") < builderSource.indexOf("buildSession(file.path"))
     }
 
     @Test
@@ -42,6 +44,22 @@ class MasterReferenceContractParityTest {
         assertEquals("heads/master", androidNormalizeGitBranchRef("master"))
         assertEquals("heads/release-2.1.0-test-06-android", androidNormalizeGitBranchRef("refs/heads/release-2.1.0-test-06-android"))
         assertEquals("tags/v2.1.0", androidNormalizeGitBranchRef("tags/v2.1.0"))
+    }
+
+    @Test
+    fun classifiesGithubHttpErrorsWithAndroidAfCodes() {
+        assertEquals("GITHUB_UNAUTHORIZED", androidMapGithubError(401, "master/machines.json").code)
+        assertEquals("GITHUB_FORBIDDEN", androidMapGithubError(403, "master/machines.json").code)
+        assertEquals("GITHUB_RESOURCE_NOT_FOUND", androidMapGithubError(404, "master/machines.json").code)
+        assertEquals("GitHub resource not found: master/machines.json.", androidMapGithubError(404, "master/machines.json").message)
+        assertEquals("GITHUB_RATE_LIMIT", androidMapGithubError(429, "master/machines.json").code)
+        assertEquals("GITHUB_CONNECTION_FAILED", androidMapGithubError(500, "master/machines.json").code)
+        assertEquals("GitHub server error: HTTP 500.", androidMapGithubError(500, "master/machines.json").message)
+    }
+
+    @Test
+    fun keepsLocalhostEndpointPrimaryAndSecondaryPortOrderAligned() {
+        assertEquals(listOf(14108, 45194), androidLocalhostPorts)
     }
 
     @Test
@@ -69,7 +87,7 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun keepsRecoveryFallbackUnresolvedFieldsLimitedToRequiredWorkoutSchemaFields() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt")
             .readText()
         val fallback = source
             .substringAfter("private fun unresolvedWorkoutFields")
@@ -87,7 +105,7 @@ class MasterReferenceContractParityTest {
         val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
             .readText()
             .substringAfter("private fun sendRecoveryCommit")
-        val staleKeyLookup = "recoveryResourceKey(configuration, \"WORKOUT\", it.source.path, expectedSourceRevision) == resourceKey"
+        val staleKeyLookup = "recoveryService.resourceKey(configuration, \"WORKOUT\", it.source.path, expectedSourceRevision) == resourceKey"
         val conflict = "failJson(\"RECOVERY_WRITE_CONFLICT\", \"Recovery source revision is stale.\")"
         val notFound = "failJson(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
 
@@ -98,13 +116,13 @@ class MasterReferenceContractParityTest {
 
     @Test
     fun recoveryReadAndValidateClassifyOldRevisionDraftAsStaleBeforeNotFound() {
-        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt")
+        val source = File("src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt")
             .readText()
-        val readResolver = "private fun resolveRecoveryResourceForRead"
-        val draftKeyLookup = "findRecoveryDraftByResourceKey(configuration, resourceKey)"
+        val readResolver = "fun resolveResourceForRead"
+        val draftKeyLookup = "recoveryDraftStore.findByResourceKey(configuration, resourceKey, ::resourceKey)"
         val stale = "errorsArray(\"RECOVERY_DRAFT_STALE\", \"Recovery Draft source revision is stale.\")"
         val notFound = "errorsArray(\"RECOVERY_RESOURCE_NOT_FOUND\", \"Recovery Resource was not found.\")"
-        val validation = source.substringAfter("private fun validateRecoveryDraft")
+        val validation = source.substringAfter("fun validateDraft")
 
         assertTrue(source.contains(readResolver))
         assertTrue(source.contains(draftKeyLookup))

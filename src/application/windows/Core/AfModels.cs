@@ -316,7 +316,12 @@ public sealed record AfStatus(
 public sealed record StatusVersions(
     [property: JsonPropertyName("applicationFramework")] string ApplicationFramework,
     [property: JsonPropertyName("frontendFramework")] string FrontendFramework,
-    [property: JsonPropertyName("nativePackages")] NativePackageVersions NativePackages);
+    [property: JsonPropertyName("nativePackages")] NativePackageVersions NativePackages,
+    [property: JsonPropertyName("build")] BuildIdentity Build);
+
+public sealed record BuildIdentity(
+    [property: JsonPropertyName("variant")] string Variant,
+    [property: JsonPropertyName("debug")] bool Debug);
 
 public sealed record NativePackageVersions(
     [property: JsonPropertyName("windows")] WindowsPackageVersion Windows,

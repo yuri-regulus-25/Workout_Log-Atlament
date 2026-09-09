@@ -55,12 +55,7 @@
         {{ errorText }}
       </v-alert>
 
-      <div v-if="detailLoading" class="recovery-loading">
-        <v-progress-circular indeterminate color="primary" />
-        <span>修復内容を読み込んでいます</span>
-      </div>
-
-      <template v-else-if="detail">
+      <template v-if="detail">
         <div class="recovery-detail-title">
           <div>
             <h2>{{ displayPath(detail.inspection.path) }}</h2>
@@ -70,78 +65,62 @@
         </div>
 
         <section class="recovery-section">
-          <h3>問題</h3>
-          <div class="issue-list">
-            <article v-for="issue in detail.inspection.issues" :key="`${issue.code}:${issue.location?.line ?? ''}:${issue.location?.fieldPath ?? ''}`" class="issue-card">
-              <strong>{{ issueTitle(issue) }}</strong>
-              <p>{{ issue.message }}</p>
-              <span>{{ issueContext(issue) }}</span>
-              <code>{{ issue.code }}</code>
-            </article>
-          </div>
+            <h3>問題</h3>
+            <div class="issue-list">
+              <RecoveryIssueCard
+                v-for="issue in detail.inspection.issues"
+                :key="`${issue.code}:${issue.location?.line ?? ''}:${issue.location?.fieldPath ?? ''}`"
+                :issue="issue"
+                :title="issueTitle(issue)"
+                :context="issueContext(issue)"
+              />
+            </div>
         </section>
 
         <section class="recovery-section">
           <div class="recovery-section-header">
             <h3>修復内容</h3>
             <div class="draft-actions">
-              <span class="autosave-state" role="status">{{ autosaveText }}</span>
+              <span v-if="draftSaveText" class="autosave-state" role="status">{{ draftSaveText }}</span>
+              <v-btn
+                v-if="activeDraft"
+                variant="outlined"
+                color="primary"
+                prepend-icon="mdi-content-save-outline"
+                :disabled="!canSaveDraft"
+                @click="saveDraft"
+              >
+                下書きを保存
+              </v-btn>
               <v-btn v-if="draftSnapshot?.state === 'active'" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="discardDialogOpen = true">
                 下書きを破棄
               </v-btn>
             </div>
           </div>
 
-          <v-alert v-if="draftSnapshot?.state === 'stale'" type="warning" variant="tonal" class="status-alert">
-            元データが更新されています。最新の状態から修復をやり直してください。
-          </v-alert>
-          <v-alert v-else-if="draftSnapshot?.state === 'corrupted'" type="error" variant="tonal" class="status-alert">
-            下書きを読み込めません。破棄して新しく作成できます。
-          </v-alert>
-          <v-alert v-else-if="draftSnapshot?.state === 'incompatible'" type="warning" variant="tonal" class="status-alert">
-            この下書きは現在のバージョンでは使用できません。破棄して新しく作成できます。
-          </v-alert>
+          <RecoveryDraftStateAlerts :state="draftSnapshot?.state" />
 
           <div v-if="!activeDraft" class="draft-empty">
             <p>このデータの下書きはまだありません。</p>
-            <v-btn color="primary" prepend-icon="mdi-file-edit-outline" :loading="draftLoading" @click="createDraft">下書きを作成</v-btn>
+            <v-btn class="recovery-primary-action" prepend-icon="mdi-file-edit-outline" @click="createDraft">下書きを作成</v-btn>
           </div>
 
-          <div v-else class="field-list">
-            <article v-for="field in sortedFields" :key="field.fieldPath" class="field-card">
-              <div class="field-header">
-                <div>
-                  <strong>{{ fieldLabel(field.fieldPath) }}</strong>
-                  <span>{{ fieldHelp(field.fieldPath) }}</span>
-                </div>
-                <v-chip size="small" :color="fieldStateColor(field)" variant="tonal">{{ fieldStateLabel(field) }}</v-chip>
-              </div>
-              <component :is="fieldComponent(field)" :field="field" :disabled="!canEditDraft" @change="updateField(field.fieldPath, $event)" />
-              <div v-if="suggestionsFor(field).length > 0" class="field-suggestions">
-                <span>候補</span>
-                <button
-                  v-for="suggestion in suggestionsFor(field)"
-                  :key="`${field.fieldPath}:${String(suggestion.suggestedValue)}`"
-                  type="button"
-                  class="suggestion-action"
-                  :disabled="!canEditDraft"
-                  @click="applySuggestion(field.fieldPath, suggestion.suggestedValue)"
-                >
-                  {{ suggestionLabel(suggestion.suggestedValue) }}
-                </button>
-              </div>
-            </article>
-          </div>
+          <RecoveryFieldEditor
+            v-else
+            :fields="activeDraft.fields"
+            :suggestions="activeDraft.suggestions"
+            :disabled="!canEditDraft"
+            @change="updateField($event.fieldPath, { value: $event.value })"
+          />
         </section>
 
         <section class="recovery-section">
           <div class="recovery-section-header">
             <h3>確認結果</h3>
             <v-btn
-              color="primary"
+              class="recovery-primary-action"
               prepend-icon="mdi-check-decagram-outline"
-              :loading="validating"
-              :disabled="!activeDraft || !canEditDraft"
+              :disabled="!canValidateDraft"
               @click="validateDraft"
             >
               修復内容を確認
@@ -156,21 +135,21 @@
           </v-alert>
           <div v-if="validation" class="validation-detail">
             <div v-if="validation.issues.length > 0" class="issue-list">
-              <article v-for="issue in validation.issues" :key="`${issue.code}:${issue.location?.fieldPath ?? ''}`" class="issue-card">
-                <strong>{{ issueTitle(issue) }}</strong>
-                <p>{{ issue.message }}</p>
-                <span>{{ issueContext(issue) }}</span>
-                <code>{{ issue.code }}</code>
-              </article>
+              <RecoveryIssueCard
+                v-for="issue in validation.issues"
+                :key="`${issue.code}:${issue.location?.fieldPath ?? ''}`"
+                :issue="issue"
+                :title="issueTitle(issue)"
+                :context="issueContext(issue)"
+              />
             </div>
             <v-alert v-if="validation.pathChange" type="warning" variant="tonal" class="status-alert">
               保存場所が変更されます。変更前: {{ validation.pathChange.from }} / 変更後: {{ validation.pathChange.to }}
             </v-alert>
             <v-btn
-              color="primary"
+              class="recovery-primary-action"
               prepend-icon="mdi-source-commit"
               :disabled="!canCommit"
-              :loading="committing"
               @click="confirmCommitOpen = true"
             >
               修復を確定
@@ -178,55 +157,59 @@
           </div>
         </section>
 
-        <v-expansion-panels variant="accordion" class="source-panel">
-          <v-expansion-panel>
-            <v-expansion-panel-title>元データ</v-expansion-panel-title>
-            <v-expansion-panel-text>
-              <v-alert v-if="sourceError" type="warning" variant="tonal" class="status-alert">
-                元データの表示は利用できません。修復操作は続行できます。
-              </v-alert>
-              <pre v-else-if="sourceView" class="source-view" tabindex="0" :readOnly="true">{{ sourceView.content }}</pre>
-              <v-btn v-else variant="outlined" prepend-icon="mdi-file-search-outline" :loading="sourceLoading" @click="loadSource">元データを表示</v-btn>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
+        <RecoverySourcePanel
+          :source-view="sourceView"
+          :source-error="sourceError"
+          :source-loading="sourceLoading"
+          @load-source="loadSource"
+        />
       </template>
     </div>
 
-    <v-dialog v-model="discardDialogOpen" max-width="440">
-      <v-card>
-        <v-card-title>下書きを破棄しますか?</v-card-title>
-        <v-card-text>破棄するのはこの画面の下書きだけです。Git上のデータは削除されません。</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="discardDialogOpen = false">キャンセル</v-btn>
-          <v-btn color="error" :loading="draftLoading" @click="discardDraft">下書きを破棄</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <MaintenanceDialogFrame
+      v-model:open="discardDialogOpen"
+      title="下書きを破棄しますか?"
+      primary-label="破棄する"
+      :busy="draftLoading"
+      max-width="440"
+      @close="discardDialogOpen = false"
+      @primary="discardDraft"
+    >
+      <p class="confirmation-copy">破棄するのはこの画面の下書きだけです。Git上のデータは削除されません。</p>
+    </MaintenanceDialogFrame>
 
-    <v-dialog v-model="confirmCommitOpen" max-width="560" persistent>
-      <v-card>
-        <v-card-title>修復を確定しますか?</v-card-title>
-        <v-card-text v-if="detail && validation" class="commit-confirmation">
-          <p>対象データ: {{ displayPath(detail.inspection.path) }}</p>
-          <p>保存先: {{ validation.replacementPath }}</p>
-          <p>確認結果: {{ validationTitle }}</p>
-          <p v-if="validation.pathChange">保存場所が変更されます: {{ validation.pathChange.from }} → {{ validation.pathChange.to }}</p>
-          <p v-if="validation.issues.length > 0">確認事項: {{ validation.issues.length }}件</p>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" :disabled="committing" @click="confirmCommitOpen = false">キャンセル</v-btn>
-          <v-btn color="primary" :loading="committing" :disabled="!canCommit" @click="commitDraft">修復を確定</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <MaintenanceDialogFrame
+      v-model:open="confirmCommitOpen"
+      title="修復内容を保存します"
+      primary-label="修復する"
+      :primary-disabled="!canCommit"
+      :busy="committing"
+      persistent
+      max-width="560"
+      @close="confirmCommitOpen = false"
+      @primary="commitDraft"
+    >
+      <div v-if="detail && validation" class="commit-confirmation">
+        <p>対象データ: {{ displayPath(detail.inspection.path) }}</p>
+        <p>保存先: {{ validation.replacementPath }}</p>
+        <p>確認結果: {{ validationTitle }}</p>
+        <p v-if="validation.pathChange">保存場所が変更されます: {{ validation.pathChange.from }} → {{ validation.pathChange.to }}</p>
+        <p v-if="validation.issues.length > 0">確認事項: {{ validation.issues.length }}件</p>
+      </div>
+    </MaintenanceDialogFrame>
+
+    <MaintenanceLoadingOverlay :active="recoveryOverlayActive" :label="recoveryOverlayLabel" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
+import MaintenanceLoadingOverlay from './MaintenanceLoadingOverlay.vue'
+import RecoveryDraftStateAlerts from './RecoveryDraftStateAlerts.vue'
+import RecoveryFieldEditor from './RecoveryFieldEditor.vue'
+import RecoveryIssueCard from './RecoveryIssueCard.vue'
+import RecoverySourcePanel from './RecoverySourcePanel.vue'
 import {
   commitRecoveryDraft,
   createRecoveryDraft,
@@ -242,16 +225,21 @@ import {
   type RecoveryDraftSnapshot,
   type RecoveryField,
   type RecoveryResourceDetail,
-  type RecoverySuggestion,
   type RecoverySourceView,
   type RecoveryValidationResult,
   type ResourceIssue,
   type ResourceType,
 } from '@workout-lab/frontend-common'
 
+/**
+ * Recovery workspace の container component。
+ *
+ * Broken Resource 一覧、選択中 resource、Draft の local editing state、validation result、
+ * source view request、commit confirmation を所有する。GitHub write や Runtime reflection の正否は
+ * AF response を契約として扱い、Raw source content を UI から直接保存しない。
+ */
 type FieldChange = { value: unknown }
-type EditableField = RecoveryField
-type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
+type DraftSaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
 
 const emit = defineEmits<{
   message: [{ type: 'success' | 'error' | 'warning'; text: string }]
@@ -274,21 +262,18 @@ const errorText = ref('')
 const sourceError = ref(false)
 const discardDialogOpen = ref(false)
 const confirmCommitOpen = ref(false)
-const autosaveState = ref<AutosaveState>('idle')
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null
-let autosaveInFlight = false
-let autosavePending = false
+const draftSaveState = ref<DraftSaveState>('idle')
+const hasUnsavedDraftChanges = ref(false)
 
 const activeDraft = computed(() => draftSnapshot.value?.state === 'active' ? draftSnapshot.value.draft : null)
 const canEditDraft = computed(() => draftSnapshot.value?.state === 'active')
-const sortedFields = computed(() => [...(activeDraft.value?.fields ?? [])].sort((a, b) => fieldPriority(a) - fieldPriority(b) || a.fieldPath.localeCompare(b.fieldPath)))
-const autosaveText = computed(() => {
+const draftSaveText = computed(() => {
   if (!activeDraft.value) return ''
-  if (autosaveState.value === 'saving') return '保存中...'
-  if (autosaveState.value === 'saved') return '下書きを保存しました'
-  if (autosaveState.value === 'conflict') return '別の変更が反映されたため、下書きを更新できませんでした'
-  if (autosaveState.value === 'failed') return '保存できませんでした'
-  return '入力すると下書きに保存されます'
+  if (draftSaveState.value === 'saving') return '保存中...'
+  if (draftSaveState.value === 'conflict') return '別の変更が反映されたため、下書きを更新できませんでした'
+  if (draftSaveState.value === 'failed') return '保存できませんでした'
+  if (hasUnsavedDraftChanges.value) return '未保存の変更があります'
+  return '変更後は下書きを保存してください'
 })
 const validationAlertType = computed(() => validation.value?.health === 'broken' ? 'error' : validation.value?.health === 'degraded' ? 'warning' : 'success')
 const validationTitle = computed(() => {
@@ -297,7 +282,12 @@ const validationTitle = computed(() => {
   if (validation.value.health === 'degraded') return '修復できますが、確認事項があります'
   return 'まだ修復できない項目があります'
 })
-const canCommit = computed(() => Boolean(validation.value?.commitAllowed && activeDraft.value && !validationInvalidated.value && !committing.value))
+const canSaveDraft = computed(() => Boolean(activeDraft.value && canEditDraft.value && hasUnsavedDraftChanges.value && !draftLoading.value))
+const canValidateDraft = computed(() => Boolean(activeDraft.value && canEditDraft.value && !hasUnsavedDraftChanges.value && !validating.value))
+const canCommit = computed(() => Boolean(validation.value?.commitAllowed && activeDraft.value && !hasUnsavedDraftChanges.value && !validationInvalidated.value && !committing.value))
+const operationBusy = computed(() => draftLoading.value || validating.value || committing.value)
+const recoveryOverlayActive = computed(() => detailLoading.value || operationBusy.value)
+const recoveryOverlayLabel = computed(() => detailLoading.value ? '修復内容を読み込んでいます' : '処理しています')
 
 onMounted(() => {
   window.addEventListener('popstate', restoreFromLocation)
@@ -307,7 +297,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', restoreFromLocation)
-  resetAutosaveQueue()
 })
 
 watch(selectedResourceKey, (value) => {
@@ -334,7 +323,6 @@ function selectResource(resource: BrokenResourceSummary) {
 }
 
 function returnToList() {
-  resetAutosaveQueue()
   selectedResourceKey.value = ''
   detail.value = null
   draftSnapshot.value = null
@@ -352,7 +340,6 @@ function restoreFromLocation() {
 
 async function reloadDetail() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   detailLoading.value = true
   errorText.value = ''
   sourceView.value = null
@@ -364,6 +351,8 @@ async function reloadDetail() {
     if (!result.success || !result.data) throw result
     detail.value = result.data
     draftSnapshot.value = result.data.draft
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'idle'
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
   } finally {
@@ -371,15 +360,18 @@ async function reloadDetail() {
   }
 }
 
+/**
+ * AF に Recovery Draft 作成を依頼し、返却 snapshot を画面の編集 state に採用する。
+ */
 async function createDraft() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await createRecoveryDraft(selectedResourceKey.value)
     if (!result.success || !result.data) throw result
     draftSnapshot.value = result.data
-    autosaveState.value = 'saved'
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'saved'
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
   } finally {
@@ -394,59 +386,36 @@ function updateField(fieldPath: string, change: FieldChange) {
     ? { fieldPath, state: 'confirmed', source: 'user', value: change.value }
     : field)
   validationInvalidated.value = validation.value !== null
-  scheduleAutosave()
+  hasUnsavedDraftChanges.value = true
+  draftSaveState.value = 'idle'
 }
 
-function applySuggestion(fieldPath: string, value: unknown) {
-  updateField(fieldPath, { value })
-}
-
-function scheduleAutosave() {
-  if (autosaveInFlight) {
-    autosavePending = true
-    return
-  }
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = setTimeout(() => {
-    void saveDraft()
-  }, 450)
-}
-
+/**
+ * expectedDraftRevision 付きで Draft を保存する。
+ *
+ * 保存競合時は表示中 snapshot を信用せず、detail を再読み込みして caller-visible state を更新する。
+ */
 async function saveDraft() {
   if (!selectedResourceKey.value) return
-  if (autosaveInFlight) {
-    autosavePending = true
-    return
-  }
   const draft = activeDraft.value
   if (!draft) return
   const fields = cloneRecoveryFields(draft.fields)
-  autosaveInFlight = true
-  autosaveState.value = 'saving'
+  draftLoading.value = true
+  draftSaveState.value = 'saving'
   try {
     const result = await updateRecoveryDraft(selectedResourceKey.value, {
       expectedDraftRevision: draft.draftRevision,
       fields,
     })
     if (!result.success || !result.data) throw result
-    draftSnapshot.value = autosavePending && activeDraft.value
-      ? {
-          ...result.data,
-          draft: result.data.draft
-            ? { ...result.data.draft, fields: activeDraft.value.fields }
-            : result.data.draft,
-        }
-      : result.data
-    autosaveState.value = 'saved'
+    draftSnapshot.value = result.data
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'saved'
   } catch (error) {
-    autosaveState.value = firstAfErrorCode(error) === 'RECOVERY_DRAFT_CONFLICT' ? 'conflict' : 'failed'
-    if (autosaveState.value === 'conflict') void reloadDetail()
+    draftSaveState.value = firstAfErrorCode(error) === 'RECOVERY_DRAFT_CONFLICT' ? 'conflict' : 'failed'
+    if (draftSaveState.value === 'conflict') void reloadDetail()
   } finally {
-    autosaveInFlight = false
-    if (autosavePending && autosaveState.value === 'saved') {
-      autosavePending = false
-      void saveDraft()
-    }
+    draftLoading.value = false
   }
 }
 
@@ -454,16 +423,8 @@ function cloneRecoveryFields(fields: RecoveryField[]): RecoveryField[] {
   return JSON.parse(JSON.stringify(fields)) as RecoveryField[]
 }
 
-function resetAutosaveQueue() {
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = null
-  autosaveInFlight = false
-  autosavePending = false
-}
-
 async function discardDraft() {
   if (!selectedResourceKey.value) return
-  resetAutosaveQueue()
   draftLoading.value = true
   try {
     const result = await deleteRecoveryDraft(selectedResourceKey.value)
@@ -471,6 +432,8 @@ async function discardDraft() {
     draftSnapshot.value = result.data
     validation.value = null
     validationInvalidated.value = false
+    hasUnsavedDraftChanges.value = false
+    draftSaveState.value = 'idle'
     discardDialogOpen.value = false
   } catch (error) {
     errorText.value = toUserFacingRecoveryError(error)
@@ -479,8 +442,11 @@ async function discardDraft() {
   }
 }
 
+/**
+ * 未保存変更がない Draft だけを AF の whole-resource validation に渡す。
+ */
 async function validateDraft() {
-  if (!selectedResourceKey.value) return
+  if (!selectedResourceKey.value || hasUnsavedDraftChanges.value) return
   validating.value = true
   try {
     const result = await validateRecoveryDraft(selectedResourceKey.value)
@@ -494,6 +460,12 @@ async function validateDraft() {
   }
 }
 
+/**
+ * validation 済み Draft を Recovery commit として確定する。
+ *
+ * Git 成功後の Runtime reflection 失敗は warning として扱い、write conflict/draft conflict は
+ * 再確認が必要な state へ戻す。
+ */
 async function commitDraft() {
   if (!selectedResourceKey.value || !detail.value || !activeDraft.value) return
   committing.value = true
@@ -591,63 +563,6 @@ function fieldLabel(path: string) {
   }[key] ?? key
 }
 
-function fieldHelp(path: string) {
-  const key = path.split('/').filter(Boolean).at(-1) ?? path
-  return {
-    schema_version: '通常は 1 です。',
-    session_id: 'この記録を識別するIDです。',
-    date: 'トレーニング日を選択してください。',
-    status: '完了または一部記録を選択してください。',
-    gym_id: '利用したジムのIDです。',
-    condition: '未入力でも修復できます。',
-    machines: '実施したマシンとセットを入力してください。',
-    notes: '必要なメモを入力できます。',
-  }[key] ?? ''
-}
-
-function fieldPriority(field: RecoveryField) {
-  if (field.state === 'unresolved') return 0
-  if (field.state === 'confirmed' || field.source === 'user') return 1
-  return 2
-}
-
-function fieldStateLabel(field: RecoveryField) {
-  if (field.state === 'unresolved') return '確認が必要'
-  if (field.state === 'confirmed' || field.source === 'user') return '変更しました'
-  return '復元できました'
-}
-
-function fieldStateColor(field: RecoveryField) {
-  if (field.state === 'unresolved') return 'warning'
-  if (field.state === 'confirmed' || field.source === 'user') return 'primary'
-  return 'info'
-}
-
-function fieldValue(field: RecoveryField) {
-  return 'value' in field ? field.value : undefined
-}
-
-function fieldComponent(field: RecoveryField) {
-  const key = field.fieldPath.split('/').filter(Boolean).at(-1)
-  if (key === 'schema_version') return NumberField
-  if (key === 'date') return DateField
-  if (key === 'status') return StatusField
-  if (key === 'machines') return MachinesField
-  if (key === 'notes') return NotesField
-  if (key === 'condition') return ConditionField
-  return TextField
-}
-
-function suggestionsFor(field: RecoveryField): RecoverySuggestion[] {
-  return activeDraft.value?.suggestions.filter((suggestion) => suggestion.fieldPath === field.fieldPath) ?? []
-}
-
-function suggestionLabel(value: unknown) {
-  if (value === null || value === undefined || value === '') return '未入力にする'
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return JSON.stringify(value)
-}
-
 function firstAfErrorCode(error: unknown): string | null {
   if (typeof error !== 'object' || error === null || !('errors' in error)) return null
   return (error as { errors?: AfError[] }).errors?.[0]?.code ?? null
@@ -681,124 +596,4 @@ function toUserFacingRecoveryError(error: unknown) {
   return code ? messages[code] ?? '修復操作を完了できませんでした。' : '修復操作を完了できませんでした。'
 }
 
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
-}
-
-const TextField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const value = ref(String(fieldValue(props.field) ?? ''))
-    watch(() => props.field, () => { value.value = String(fieldValue(props.field) ?? '') })
-    return () => h('label', { class: 'field-control' }, [
-      h('span', '値'),
-      h('input', { value: value.value, disabled: props.disabled, onInput: (event: Event) => { value.value = (event.target as HTMLInputElement).value; emit('change', { value: value.value }) } }),
-    ])
-  },
-})
-
-const NumberField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const value = ref(Number(fieldValue(props.field) ?? 1))
-    return () => h('label', { class: 'field-control' }, [
-      h('span', '数値'),
-      h('input', { type: 'number', min: '1', value: value.value, disabled: props.disabled, onInput: (event: Event) => { value.value = Number((event.target as HTMLInputElement).value); emit('change', { value: value.value }) } }),
-    ])
-  },
-})
-
-const DateField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const value = ref(String(fieldValue(props.field) ?? ''))
-    return () => h('label', { class: 'field-control' }, [
-      h('span', '日付'),
-      h('input', { type: 'date', value: value.value, disabled: props.disabled, onInput: (event: Event) => { value.value = (event.target as HTMLInputElement).value; emit('change', { value: value.value }) } }),
-    ])
-  },
-})
-
-const StatusField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const value = ref(String(fieldValue(props.field) ?? 'complete'))
-    return () => h('label', { class: 'field-control' }, [
-      h('span', '状態'),
-      h('select', { value: value.value, disabled: props.disabled, onChange: (event: Event) => { value.value = (event.target as HTMLSelectElement).value; emit('change', { value: value.value }) } }, [
-        h('option', { value: 'complete' }, '完了'),
-        h('option', { value: 'partial' }, '一部記録'),
-      ]),
-    ])
-  },
-})
-
-const NotesField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const value = ref(Array.isArray(fieldValue(props.field)) ? (fieldValue(props.field) as string[]).join('\n') : '')
-    return () => h('label', { class: 'field-control' }, [
-      h('span', 'メモ'),
-      h('textarea', { value: value.value, disabled: props.disabled, rows: 3, onInput: (event: Event) => { value.value = (event.target as HTMLTextAreaElement).value; emit('change', { value: value.value.split('\n').map((line) => line.trim()).filter(Boolean) }) } }),
-    ])
-  },
-})
-
-const ConditionField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const fatigue = ref(Number((fieldValue(props.field) as { fatigue?: number } | null)?.fatigue ?? 0))
-    const motivation = ref(Number((fieldValue(props.field) as { motivation?: number } | null)?.motivation ?? 0))
-    const update = () => emit('change', { value: fatigue.value || motivation.value ? { fatigue: fatigue.value || null, motivation: motivation.value || null } : null })
-    return () => h('div', { class: 'condition-grid' }, [
-      h('label', { class: 'field-control' }, [h('span', '疲労'), h('input', { type: 'number', min: '0', max: '5', value: fatigue.value, disabled: props.disabled, onInput: (event: Event) => { fatigue.value = Number((event.target as HTMLInputElement).value); update() } })]),
-      h('label', { class: 'field-control' }, [h('span', '意欲'), h('input', { type: 'number', min: '0', max: '5', value: motivation.value, disabled: props.disabled, onInput: (event: Event) => { motivation.value = Number((event.target as HTMLInputElement).value); update() } })]),
-    ])
-  },
-})
-
-const MachinesField = defineComponent({
-  props: { field: { type: Object as PropType<EditableField>, required: true }, disabled: Boolean },
-  emits: ['change'],
-  setup(props, { emit }) {
-    const machines = ref<Array<{ machine_id: string; sets: Array<{ set: number; weight_kg: number; reps: number }> }>>(normalizeMachines(fieldValue(props.field)))
-    const emitValue = () => emit('change', { value: clone(machines.value) })
-    const addMachine = () => { machines.value.push({ machine_id: '', sets: [{ set: 1, weight_kg: 0, reps: 0 }] }); emitValue() }
-    const addSet = (index: number) => { machines.value[index].sets.push({ set: machines.value[index].sets.length + 1, weight_kg: 0, reps: 0 }); emitValue() }
-    return () => h('div', { class: 'machines-editor' }, [
-      machines.value.map((machine, machineIndex) => h('div', { class: 'machine-edit-row' }, [
-        h('label', { class: 'field-control' }, [h('span', 'マシンID'), h('input', { value: machine.machine_id, disabled: props.disabled, onInput: (event: Event) => { machine.machine_id = (event.target as HTMLInputElement).value; emitValue() } })]),
-        machine.sets.map((set, setIndex) => h('div', { class: 'set-edit-row' }, [
-          h('label', { class: 'field-control' }, [h('span', `セット${setIndex + 1}`), h('input', { type: 'number', min: '1', value: set.set, disabled: props.disabled, onInput: (event: Event) => { set.set = Number((event.target as HTMLInputElement).value); emitValue() } })]),
-          h('label', { class: 'field-control' }, [h('span', '重量kg'), h('input', { type: 'number', min: '0', step: '0.5', value: set.weight_kg, disabled: props.disabled, onInput: (event: Event) => { set.weight_kg = Number((event.target as HTMLInputElement).value); emitValue() } })]),
-          h('label', { class: 'field-control' }, [h('span', '回数'), h('input', { type: 'number', min: '0', value: set.reps, disabled: props.disabled, onInput: (event: Event) => { set.reps = Number((event.target as HTMLInputElement).value); emitValue() } })]),
-        ])),
-        h('button', { type: 'button', class: 'inline-action', disabled: props.disabled, onClick: () => addSet(machineIndex) }, 'セットを追加'),
-      ])),
-      h('button', { type: 'button', class: 'inline-action', disabled: props.disabled, onClick: addMachine }, 'マシンを追加'),
-    ])
-  },
-})
-
-function normalizeMachines(value: unknown) {
-  if (!Array.isArray(value)) return [{ machine_id: '', sets: [{ set: 1, weight_kg: 0, reps: 0 }] }]
-  return value.map((machine) => {
-    const record = typeof machine === 'object' && machine !== null ? machine as { machine_id?: unknown; sets?: unknown } : {}
-    return {
-      machine_id: String(record.machine_id ?? ''),
-      sets: Array.isArray(record.sets) && record.sets.length > 0
-        ? record.sets.map((set, index) => {
-            const row = typeof set === 'object' && set !== null ? set as { set?: unknown; weight_kg?: unknown; reps?: unknown } : {}
-            return { set: Number(row.set ?? index + 1), weight_kg: Number(row.weight_kg ?? 0), reps: Number(row.reps ?? 0) }
-          })
-        : [{ set: 1, weight_kg: 0, reps: 0 }],
-    }
-  })
-}
 </script>

@@ -25,13 +25,13 @@
 - Uses shared types from `@workout-lab/workout-types`.
 - Uses derived calculations from `@workout-lab/workout-core`.
 - Uses CSS tokens from `@workout-lab/design-tokens`.
-- Uses `vue-router` for `/workouts/` and `/workouts/:date`.
+- Uses separate Vite entry points for `/workouts/` and `/workouts/:date`.
 - Keeps Vue scoped to the Workout History / Detail domain in line with the design draft.
 - Project-root `index.html` is a Vite entry file and is not meant for `file://` direct opening.
 
 ## First impressions to validate later
 
 - Vue `computed` and `v-model` are a good fit for filter-driven UI.
-- `vue-router` expresses the intended `/workouts/` and `/workouts/:date` split cleanly.
+- Separate entry points keep the workout list and detail page shells independent.
 - A plain Vue table is easier to keep stable for this MVP than AG Grid.
 - The selected-row-to-detail navigation is a useful comparison baseline for the real Workout History screen.

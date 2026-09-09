@@ -30,8 +30,8 @@ android {
         applicationId = "jp.yuri_regulus_25.atlament"
         minSdk = 29
         targetSdk = 35
-        versionCode = 6
-        versionName = "2.2.0"
+        versionCode = 7
+        versionName = "3.0.0"
     }
 
     signingConfigs {
@@ -44,6 +44,10 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-debug"
+        }
         getByName("release") {
             isMinifyEnabled = false
             isShrinkResources = false

@@ -16,7 +16,15 @@ describe('platform behavioral parity contract', () => {
       'src/application/windows/Core/AfServices.cs',
       'src/application/windows/Host/AfHttpHost.cs',
     ].map(readSource).join('\n')
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = [
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRuntimeDataStore.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRuntimeDataBuilder.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidGithubClient.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidConfiguredResourceFetcher.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidMasterWriteService.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidStatusComposer.kt',
+    ].map(readSource).join('\n')
     const shared = readSource('src/shared/frontend-common/src/index.ts')
 
     for (const requiredContract of [
@@ -54,8 +62,8 @@ describe('platform behavioral parity contract', () => {
     expect(android).toContain('Update $subject master: $fileName')
     expect(android).toContain("target.path.substringAfterLast('/')")
     expect(android).toContain('readLocalMasterDocuments')
-    expect(android).toContain('fetchConfiguredWorkoutResources')
-    expect(android).toContain('saveRuntimeDataAtomically')
+    expect(android).toContain('fetchWorkoutResources')
+    expect(android).toContain('saveAtomically')
     expect(windows).toContain('LoadLocalMasterDocuments')
     expect(windows).toContain('FetchWorkoutFilesAsync')
     expect(android).toContain('workoutLogWriteAllowed')
@@ -74,8 +82,16 @@ describe('platform behavioral parity contract', () => {
       'src/application/windows/Core/AfModels.cs',
       'src/application/windows/Core/AfServices.cs',
       'src/application/windows/Core/AfContracts.cs',
+      'src/application/windows/Core/AfJson.cs',
+      'src/application/windows/Core/GithubAccessService.cs',
+      'src/application/windows/Core/RecoveryService.cs',
     ].map(readSource).join('\n')
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = [
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidGithubClient.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryDraftStore.kt',
+      'src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt',
+    ].map(readSource).join('\n')
     const shared = readSource('src/shared/frontend-common/src/index.ts')
     const node = readSource('tools/dev-runtime/development-runtime.mjs')
 
@@ -131,15 +147,15 @@ describe('platform behavioral parity contract', () => {
     expect(android).toContain('toString(2) + "\\n"')
     expect(windowsCore).toContain('MatchesWorkoutResourceKey')
     expect(windowsCore).toContain('Recovery source revision is stale.')
-    expect(android).toContain('recoveryResourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey')
+    expect(android).toContain('recoveryService.resourceKey(configuration, "WORKOUT", it.source.path, expectedSourceRevision) == resourceKey')
     expect(android).toContain('Recovery source revision is stale.')
   })
 
   it('keeps Recovery fallback unresolved fields limited to Workout schema required fields', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/RecoveryService.cs')
       .split('private static IEnumerable<JsonObject> UnresolvedWorkoutFields')[1]
       .split('private static JsonObject RecoveredField')[0]
-    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
+    const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidRecoveryService.kt')
       .split('private fun unresolvedWorkoutFields')[1]
       .split('private fun recoverableField')[0]
     const shared = readSource('src/shared/workout-data/src/index.ts')

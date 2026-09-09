@@ -29,7 +29,7 @@ Application Framework は Wake Up / Settings Sync で GitHub data を読み取�
 - Resource Management
 - 404 / 500 / 503 Error Pages
 
-v1.2.0 candidate application は、現行 As-Is 仕様には含まれない。
+Planning資料にのみ存在する未実装Applicationは、現行As-Is仕様には含まれない。
 
 ## Platform Targets
 
@@ -48,11 +48,11 @@ Native application layer の現行 target は以下である。
 
 ```json
 {
-  "frontend": "2.0.0",
-  "windows": "2.0.0",
+  "frontend": "3.0.0",
+  "windows": "3.0.0",
   "android": {
-    "versionName": "2.0.0",
-    "versionCode": 4
+    "versionName": "3.0.0",
+    "versionCode": 7
   }
 }
 ```

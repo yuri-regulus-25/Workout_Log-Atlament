@@ -16,7 +16,10 @@ describe('Maintenance Recovery UI contract', () => {
 
   it('exposes Recovery from the existing Maintenance app without a new frontend app', () => {
     const app = readSource('src/frontend/maintenance-vue/src/App.vue')
-    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const recovery = [
+      readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue'),
+      readSource('src/frontend/maintenance-vue/src/RecoveryDraftStateAlerts.vue'),
+    ].join('\n')
 
     expect(app).toContain('修復が必要なデータ')
     expect(app).toContain('RecoveryPanel')
@@ -25,7 +28,10 @@ describe('Maintenance Recovery UI contract', () => {
   })
 
   it('keeps Recovery UI purpose-limited instead of raw Git or raw JSON editing', () => {
-    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const recovery = [
+      readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue'),
+      readSource('src/frontend/maintenance-vue/src/RecoverySourcePanel.vue'),
+    ].join('\n')
 
     expect(recovery).toContain('修復内容を確認')
     expect(recovery).toContain('修復を確定')
@@ -39,12 +45,13 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).not.toContain('replacementPath =')
   })
 
-  it('models draft autosave, validation invalidation, conflicts, confirmation, and reflection failure', () => {
+  it('models explicit draft save, validation invalidation, conflicts, confirmation, and reflection failure', () => {
     const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
 
     expect(recovery).toContain('expectedDraftRevision: draft.draftRevision')
-    expect(recovery).toContain('autosaveInFlight')
-    expect(recovery).toContain('autosavePending')
+    expect(recovery).toContain('下書きを保存')
+    expect(recovery).toContain('hasUnsavedDraftChanges')
+    expect(recovery).toContain('canValidateDraft')
     expect(recovery).toContain('cloneRecoveryFields(draft.fields)')
     expect(recovery).toContain('const draft = activeDraft.value')
     expect(recovery).toContain('validationInvalidated.value = validation.value !== null')
@@ -54,6 +61,52 @@ describe('Maintenance Recovery UI contract', () => {
     expect(recovery).toContain('この下書きは現在のバージョンでは使用できません')
     expect(recovery).toContain('保存済み・反映失敗')
     expect(recovery).toContain('confirmCommitOpen')
+    expect(recovery).not.toContain('下書きを保存しました')
+    expect(recovery).not.toContain('setTimeout')
+    expect(recovery).not.toContain('scheduleAutosave')
+  })
+
+  it('keeps Recovery issue and draft-state presentation in screen-local components', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const issueCard = readSource('src/frontend/maintenance-vue/src/RecoveryIssueCard.vue')
+    const draftStateAlerts = readSource('src/frontend/maintenance-vue/src/RecoveryDraftStateAlerts.vue')
+
+    expect(recovery).toContain('RecoveryIssueCard')
+    expect(recovery).toContain('RecoveryDraftStateAlerts')
+    expect(issueCard).toContain('issue.message')
+    expect(issueCard).toContain('issue.code')
+    expect(draftStateAlerts).toContain("state === 'stale'")
+    expect(draftStateAlerts).toContain("state === 'corrupted'")
+    expect(draftStateAlerts).toContain("state === 'incompatible'")
+  })
+
+  it('keeps Recovery draft field editing in a screen-local component', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const fieldEditor = readSource('src/frontend/maintenance-vue/src/RecoveryFieldEditor.vue')
+
+    expect(recovery).toContain('RecoveryFieldEditor')
+    expect(recovery).not.toContain('field-card')
+    expect(fieldEditor).toContain('field-card')
+    expect(fieldEditor).toContain('fieldStateLabel')
+    expect(fieldEditor).toContain('suggestionLabel')
+    expect(fieldEditor).toContain('normalizeMachines')
+    expect(fieldEditor).toContain('マシンを追加')
+    expect(fieldEditor).toContain('セットを追加')
+  })
+
+  it('keeps Recovery source viewing as a secondary read-only path', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const sourcePanel = readSource('src/frontend/maintenance-vue/src/RecoverySourcePanel.vue')
+    const style = readSource('src/frontend/maintenance-vue/src/style.css')
+
+    expect(recovery).toContain('RecoverySourcePanel')
+    expect(sourcePanel).toContain('<v-expansion-panels')
+    expect(sourcePanel).toContain('元データ')
+    expect(sourcePanel).toContain('readOnly')
+    expect(sourcePanel).toContain('修復操作は続行できます')
+    expect(style).toContain('.source-panel :is(.v-expansion-panel, .v-expansion-panel-title, .v-expansion-panel-text, .v-expansion-panel-text__wrapper)')
+    expect(style).toContain('background: var(--wl-surface) !important')
+    expect(recovery).not.toContain('<pre')
   })
 
   it('keeps Recovery write conflict visible instead of emptying the commit confirmation dialog', () => {
@@ -103,6 +156,32 @@ describe('Maintenance Recovery UI contract', () => {
       expectedSourceRevision: 'source-a',
       expectedDraftRevision: 3,
     })
+  })
+
+  it('uses the shared Maintenance dialog and loading overlay for Recovery write operations', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+
+    expect(recovery).toContain('MaintenanceDialogFrame')
+    expect(recovery).toContain('MaintenanceLoadingOverlay')
+    expect(recovery).toContain('operationBusy')
+    expect(recovery).toContain('recoveryOverlayActive')
+    expect(recovery).toContain('recoveryOverlayLabel')
+    expect(recovery).toContain('修復内容を保存します')
+    expect(recovery).toContain('primary-label="破棄する"')
+    expect(recovery).not.toContain('<v-card-title>修復を確定しますか?')
+  })
+
+  it('uses design tokens for Recovery action and field affordance colors', () => {
+    const recovery = readSource('src/frontend/maintenance-vue/src/RecoveryPanel.vue')
+    const style = readSource('src/frontend/maintenance-vue/src/style.css')
+
+    expect(recovery).toContain('class="recovery-primary-action"')
+    expect(recovery).not.toContain('<v-btn color="primary" prepend-icon="mdi-file-edit-outline"')
+    expect(recovery).not.toContain('color="primary"\n              prepend-icon="mdi-check-decagram-outline"')
+    expect(style).toContain('.recovery-primary-action')
+    expect(style).toContain('background: var(--wl-primary-strong) !important')
+    expect(style).toContain('input[type="date"]::-webkit-calendar-picker-indicator')
+    expect(style).toContain('filter: brightness(0) invert(1)')
   })
 
   it('does not fake Recovery commit success in the Node development runtime', () => {

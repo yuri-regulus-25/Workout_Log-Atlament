@@ -72,7 +72,7 @@ Shared frontend client、Windows AF、Android AF、Node development runtime は�
 | PUT | `/recovery/resources/{resourceKey}/draft` | Expected draft revision 付き autosave。 |
 | DELETE | `/recovery/resources/{resourceKey}/draft` | Local Recovery Draft discard。 |
 | POST | `/recovery/resources/{resourceKey}/validate` | Whole Resource Recovery candidate validation。 |
-| POST | `/recovery/resources/{resourceKey}/commit` | Validated Recovery replacement commit。Android は write capability unavailable の場合 `RECOVERY_UNAVAILABLE` を返す。 |
+| POST | `/recovery/resources/{resourceKey}/commit` | 検証済みRecovery内容のコミット。Windows/Androidは修復可能なリソースをコミットでき、書き込み境界が利用不能な場合は `RECOVERY_UNAVAILABLE` を返す。 |
 | POST | `/shutdown` | Application shutdown request。 |
 
 Legacy `/api/common/*` alias は現行 contract では公開しない。Unknown `/api/*` route は frontend HTML へ fall through せず、platform error response を返す。
@@ -304,7 +304,7 @@ Unresolved Master reference は `resolved` / `missing` / `deleted` を Runtime e
 
 Recovery endpoints are purpose-specific and do not expose Raw JSON write, arbitrary path write, generic Git operations, credential material, automatic merge, force push, or bulk recovery.
 
-Current v2.1.0 public shape is shared by Windows AF, Android AF, Node development runtime, shared frontend client, and Maintenance UI:
+現行v3.0.0では、次の公開データ形式をWindows AF、Android AF、Node.js開発用ランタイム、共通フロントエンドクライアント、Maintenance UIで共有する。
 
 - `BrokenResourceSummary`
 - `RecoveryResourceDetail`
@@ -319,4 +319,4 @@ Current v2.1.0 public shape is shared by Windows AF, Android AF, Node developmen
 - `RecoveryCommitRequest`
 - `RecoveryCommitResult`
 
-Windows provides Recovery Git commit when the configured GitHub write boundary is available. Android exposes the same endpoint set and read/draft/validate semantics, but must return truthful capability and `RECOVERY_UNAVAILABLE` for commit when the packaged runtime cannot safely perform the Recovery Git write boundary. Node development runtime mirrors the public shape for local development and must not fake commit success.
+WindowsとAndroidは、設定済みのGitHub書き込み境界が利用可能でリソースが修復可能な場合にRecoveryのGitコミットを提供する。Androidは同一パスの置換に加えて、追加と削除を1コミットにまとめるパス移動を実行できる。各ランタイムは実際の状態に対応する機能可否を返し、安全に書き込めない場合は `RECOVERY_UNAVAILABLE` を返す。Node.js開発用ランタイムはローカル開発向けに公開データ形式を再現するが、コミット成功を偽装しない。

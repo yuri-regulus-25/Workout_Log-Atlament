@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+
+describe('Maintenance composition contract', () => {
+  it('keeps master table presentation in a dedicated Vue component', () => {
+    const app = readFileSync('src/frontend/maintenance-vue/src/App.vue', 'utf8')
+    const table = readFileSync('src/frontend/maintenance-vue/src/MasterRecordsTable.vue', 'utf8')
+
+    expect(table).toContain('<v-data-table')
+    expect(table).toContain("isGym(item) && item.main")
+    expect(table).toContain('formatBodyPart(item.body_part)')
+    expect(table).toContain("'request-lifecycle-toggle'")
+    expect(table).toContain("'request-main-gym'")
+    expect(app).toContain('<MasterRecordsTable')
+    expect(app).not.toContain('machine-master-table')
+    expect(app).not.toContain('#item.body_part')
+  })
+
+  it('keeps master editor and unresolved resolution dialogs in dedicated Vue components', () => {
+    const app = readFileSync('src/frontend/maintenance-vue/src/App.vue', 'utf8')
+    const editor = readFileSync('src/frontend/maintenance-vue/src/MasterRecordEditorDialog.vue', 'utf8')
+    const resolution = readFileSync('src/frontend/maintenance-vue/src/UnresolvedReferenceResolutionDialog.vue', 'utf8')
+    const dialogFrame = readFileSync('src/frontend/maintenance-vue/src/MaintenanceDialogFrame.vue', 'utf8')
+
+    expect(app).toContain('<MasterRecordEditorDialog')
+    expect(app).toContain('<UnresolvedReferenceResolutionDialog')
+    expect(app).toContain('<MaintenanceDialogFrame')
+    expect(app).toContain('saveDialog')
+    expect(app).toContain('resolveToExisting')
+    expect(app).toContain('syncWorkoutData')
+    expect(app).toContain('参照先を設定しました')
+    expect(app).toContain('設定に失敗しました')
+    expect(app).not.toContain('<v-form class="record-form"')
+    expect(app).not.toContain('affectedHeaders')
+    expect(app).not.toContain('mdi-eye-outline')
+    expect(editor).toContain('v-model.trim="machineDraft.machine_id"')
+    expect(editor).toContain('v-model.trim="gymDraft.gym_id"')
+    expect(editor).toContain('label="有効" color="var(--wl-primary)" inset')
+    expect(editor).toContain('MaintenanceDialogFrame')
+    expect(dialogFrame).toContain('maintenance-dialog-toolbar')
+    expect(dialogFrame).toContain('background: var(--wl-primary-strong)')
+    expect(resolution).toContain('selectedUnresolved.affectedWorkouts')
+    expect(resolution).toContain('参照先の登録情報を選択')
+    expect(resolution).toContain('class="status-alert mb-4"')
+    expect(resolution).toContain('affected-workouts-table')
+    expect(resolution).toContain('データ内の行番号')
+    expect(resolution).toContain("affectedHeaders.filter((header) => header.key !== 'line')")
+    expect(resolution).toContain('このワークアウト記録が未登録のIDを参照しています。')
+  })
+
+  it('keeps affected workouts horizontally scrollable in the mobile resolution dialog', () => {
+    const styles = readFileSync('src/frontend/maintenance-vue/src/style.css', 'utf8')
+
+    expect(styles).toContain('@media (max-width: 720px)')
+    expect(styles).toMatch(/\.affected-workouts-table \.v-table__wrapper \{[^}]*overflow-x: auto;[^}]*\}/s)
+    expect(styles).toMatch(/\.affected-workouts-table table \{[^}]*min-width: 760px;[^}]*\}/s)
+  })
+
+  it('uses transient snackbar and interaction overlay for Maintenance write feedback', () => {
+    const app = readFileSync('src/frontend/maintenance-vue/src/App.vue', 'utf8')
+    const snackbar = readFileSync('src/frontend/maintenance-vue/src/MaintenanceSnackbar.vue', 'utf8')
+    const overlay = readFileSync('src/frontend/maintenance-vue/src/MaintenanceLoadingOverlay.vue', 'utf8')
+
+    expect(app).toContain('<MaintenanceSnackbar')
+    expect(app).toContain('<MaintenanceLoadingOverlay')
+    expect(app).not.toContain('v-alert v-if="message"')
+    expect(snackbar).toContain('<v-snackbar')
+    expect(snackbar).toContain('mdi-alert')
+    expect(snackbar).toContain('mdi-alert-circle')
+    expect(snackbar).toContain('mdi-check-circle')
+    expect(snackbar).toContain('mdi-information')
+    expect(snackbar).toContain('class="mr-2"')
+    expect(snackbar).not.toContain('#actions')
+    expect(snackbar).not.toContain('閉じる')
+    expect(overlay).toContain('<v-overlay')
+    expect(overlay).toContain(':z-index="2600"')
+    expect(overlay).not.toContain('contained')
+    expect(overlay).toContain('<v-progress-circular')
+  })
+})

@@ -196,6 +196,12 @@ export function loadSampleWorkoutSessions(): WorkoutSession[] {
   ], sampleMasterData).sessions
 }
 
+/**
+ * 実行環境の Runtime Data endpoint から Workout sessions を読み込む。
+ *
+ * Native AF response envelope と Node development runtime の file response の両方を受け付ける。
+ * AF errors は表示用 issue として返し、呼び出し画面は通信先や platform を直接推測しない。
+ */
 export async function loadRuntimeWorkoutSessions(
   options: RuntimeWorkoutLoadOptions = {},
 ): Promise<WorkoutLoadResult> {
@@ -377,6 +383,13 @@ export function parseWorkoutJsonl(
   return withWorkoutInspection(path, revision, result)
 }
 
+/**
+ * Raw Workout record を画面表示・集計用の Runtime session に正規化する。
+ *
+ * 必須構造違反は issue として session 採用を止める。
+ * Master reference の missing/deleted/invalid_excluded は warning と resolution facts に残し、
+ * Workout 自体は利用可能な Runtime Data として扱う。
+ */
 export function normalizeWorkoutRecord(
   value: unknown,
   masterDataOrLookup: WorkoutMasterData | MasterLookup = sampleMasterData,
@@ -508,6 +521,11 @@ export function normalizeWorkoutRecord(
   return { sessions: [session], issues, warnings }
 }
 
+/**
+ * Workout source から Recovery Draft の初期 field set を作る。
+ *
+ * Draft は source path/revision に結び付く local repair state であり、Raw source を直接更新するものではない。
+ */
 export function createWorkoutRecoveryDraft(
   path: string,
   revision: string,

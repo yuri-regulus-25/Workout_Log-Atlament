@@ -33,6 +33,8 @@ Frontendは画面ごとに複数Frameworkで実装されています。Navigatio
 
 Version情報は `src/version.json` をPrimary Sourceとし、Version CLIでWindows / Android metadataと同期します。Version値を人間が個別に直接編集する運用は避けてください。
 
+ルートと各ワークスペースの `package.json` にある `0.0.0` は、非公開Node.jsパッケージの管理用バージョンであり、アプリケーションのリリースバージョンではありません。画面とネイティブパッケージが表示するバージョンは、`src/version.json` と各プラットフォームの定義に従います。デバッグ版を示す接尾辞はリリースバージョンへ混在させず、開発成果物だけに付与します。
+
 ## Directory Structure
 
 ```text
@@ -47,8 +49,8 @@ Version情報は `src/version.json` をPrimary Sourceとし、Version CLIでWind
 │  └─ shared/                    # 共通Package
 ├─ tools/                        # Build / Preview / Validation / Version / Dev Runtime Script
 ├─ work/                         # 作業メモ。通常commit対象外
-├─ dist/                         # npm run buildで生成されるFrontend Artifact
-├─ dist-windows/                 # npm run build:windowsで生成されるWindows配布物
+├─ dist/                         # pnpm run buildで生成されるFrontend Artifact
+├─ dist-windows/                 # pnpm run build:windowsで生成されるWindows配布物
 ├─ src/version.json              # Version Primary Source
 ├─ package.json
 └─ package-lock.json
@@ -58,7 +60,7 @@ Version情報は `src/version.json` をPrimary Sourceとし、Version CLIでWind
 
 ## Prerequisites
 
-- Node.js / npm
+- Node.js / pnpm（依存取得時はRepository同梱の `package-lock.json` に従い `npm ci` を使用）
 - .NET SDK 8.0 以上
 - Windows 10/11
 - WebView2 Runtime
@@ -72,7 +74,7 @@ Version情報は `src/version.json` をPrimary Sourceとし、Version CLIでWind
 npm ci
 ```
 
-`package-lock.json` に従ってNode.js依存Packageを取得します。Windows AFのNuGet依存関係は `dotnet build`、Visual Studio Build、または `npm run build:windows` 実行時に復元されます。
+`package-lock.json` に従ってNode.js依存Packageを取得します。日常のNode.js package scriptは `pnpm run` 経由で実行します。Windows AFのNuGet依存関係は `dotnet build`、Visual Studio Build、または `pnpm run build:windows` 実行時に復元されます。
 
 ## Frontend
 
@@ -90,6 +92,7 @@ src/frontend/
 ├─ machines-angular/
 ├─ analytics-svelte/
 ├─ settings-solid/
+├─ maintenance-vue/
 └─ errors/
 ```
 
@@ -101,13 +104,14 @@ src/frontend/
 - Performance Detail: Angular
 - Analytics: Svelte
 - Settings: Solid
+- Resource Management: Vue 3 + Vuetify
 - Error pages: static HTML
 - Shared resources: `src/shared/frontend-common/`、`src/shared/design-tokens/`、`src/shared/shared-styles/`
 
 Build方法:
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 Frontend全体のProduction Artifactを `dist/` に生成します。内部では各Frontend Applicationをbuildし、`tools/build/build-mpa.mjs` でMPA配信用に集約します。
@@ -115,22 +119,22 @@ Frontend全体のProduction Artifactを `dist/` に生成します。内部で�
 実行 / 確認方法:
 
 ```sh
-npm run preview:mpa
+pnpm run preview:mpa
 ```
 
-Build済みの `dist/` を静的配信します。Buildは実行しないため、事前に `npm run build` が必要です。
+Build済みの `dist/` を静的配信します。Buildは実行しないため、事前に `pnpm run build` が必要です。
 
 Version情報の扱い:
 
-Frontend versionは `src/version.json` の `frontend` をPrimary Sourceとします。Status表示やFrontend artifact生成との整合性は `npm run version:check` で確認します。
+Frontend versionは `src/version.json` の `frontend` をPrimary Sourceとします。Status表示やFrontend artifact生成との整合性は `pnpm run version:check` で確認します。
 
 関連コマンド:
 
 ```sh
-npm test
-npm run build
-npm run check:mpa
-npm run check:all
+pnpm test
+pnpm run build
+pnpm run check:mpa
+pnpm run check:all
 ```
 
 ## Windows
@@ -160,10 +164,10 @@ Windows AF SolutionをDebug構成でBuildします。Repository直下に `dist/`
 配布Build:
 
 ```sh
-npm run build:windows
+pnpm run build:windows
 ```
 
-Windows x64向けの自己完結・単一exe配布物を作成します。内部で `npm run build` と `dotnet publish` を実行し、Frontend Artifactを `Atlament.exe` へ埋め込みます。
+Windows x64向けの自己完結・単一exe配布物を作成します。内部で `pnpm run build` と `dotnet publish` を実行し、Frontend Artifactを `Atlament.exe` へ埋め込みます。
 
 生成先:
 
@@ -186,7 +190,7 @@ Windows versionは `src/version.json` の `windows` と `src/application/windows
 ```sh
 dotnet build src/application/windows/Atlament.sln
 dotnet test src/application/windows/Atlament.sln
-npm run build:windows
+pnpm run build:windows
 ```
 
 Platform固有の注意事項:
@@ -224,15 +228,15 @@ src/application/android/
 Debug Build:
 
 ```sh
-npm run build:android
+pnpm run build:android
 ```
 
-Frontend assetsを再生成してAndroid projectへ同期し、Debug APKを生成します。内部で `npm run build`、`tools/build/copy-android-frontend.mjs`、`:app:assembleDebug` を実行します。
+Frontend assetsを再生成してAndroid projectへ同期し、Debug APKを生成します。内部で `pnpm run build`、`tools/build/copy-android-frontend.mjs`、`:app:assembleDebug` を実行します。
 
 Release Build:
 
 ```sh
-npm run build:android:release
+pnpm run build:android:release
 ```
 
 Frontend assetsを再生成してAndroid projectへ同期し、署名済みRelease APKを生成します。内部で `:app:assembleRelease` を実行します。
@@ -258,12 +262,7 @@ Android Release APKを端末へインストールする例:
 adb install -r src/application/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-既存アプリとの署名違い等で更新インストールできない場合は、既存アプリを削除してからインストールします。削除すると端末内のAtlamentアプリデータも消えます。
-
-```sh
-adb uninstall jp.yuri_regulus_25.atlament
-adb install src/application/android/app/build/outputs/apk/release/app-release.apk
-```
+既存アプリとの署名違い等で更新インストールできない場合は、その場で停止してください。既存アプリの削除は端末内のAtlamentデータも削除するため、バックアップと利用者の明示的な了承なしに実行しません。
 
 インストール後の確認:
 
@@ -286,9 +285,9 @@ Androidは `versionName` と `versionCode` を別々に扱います。`versionNa
 関連コマンド:
 
 ```sh
-npm run build:android
-npm run build:android:release
-npm run version:set -- --target android --version 1.1.0 --bump-version-code
+pnpm run build:android
+pnpm run build:android:release
+pnpm run version:set -- --target android --version 1.1.0 --bump-version-code
 ```
 
 Platform固有の注意事項:
@@ -302,7 +301,7 @@ Platform固有の注意事項:
 開発時はGatewayと各Frontend dev server、AF互換のDevelopment Runtime APIをまとめて起動できます。
 
 ```sh
-npm run watch
+pnpm run watch
 ```
 
 `http://127.0.0.1:5173/` から開発中の各Frontendを確認します。主なportは以下です。
@@ -316,12 +315,13 @@ npm run watch
 127.0.0.1:5178  Analytics / Svelte
 127.0.0.1:5179  Settings / Solid
 127.0.0.1:5180  Development Runtime API
+127.0.0.1:5181  Resource Management / Vue + Vuetify
 ```
 
 Development Runtime API単体:
 
 ```sh
-npm run dev:runtime
+pnpm run dev:runtime
 ```
 
 AF互換EnvelopeのStatus / Configuration / Credential / Sync / Runtime Data APIを開発用に提供します。
@@ -333,7 +333,7 @@ Version更新はVersion CLIを唯一の更新経路として扱います。
 ### version:check
 
 ```sh
-npm run version:check
+pnpm run version:check
 ```
 
 `src/version.json`、Windows metadata、Android metadataの整合性をread-onlyで検証します。不整合がある場合はnon-zero exitします。
@@ -341,11 +341,11 @@ npm run version:check
 ### version:set
 
 ```sh
-npm run version:set -- --target frontend --version 1.1.0
-npm run version:set -- --target windows --version 1.1.0
-npm run version:set -- --target android --version 1.1.0 --bump-version-code
-npm run version:set -- --target android --version 1.1.0 --version-code 24
-npm run version:set -- --target all --version 1.1.0 --bump-version-code
+pnpm run version:set -- --target frontend --version 1.1.0
+pnpm run version:set -- --target windows --version 1.1.0
+pnpm run version:set -- --target android --version 1.1.0 --bump-version-code
+pnpm run version:set -- --target android --version 1.1.0 --version-code 24
+pnpm run version:set -- --target all --version 1.1.0 --bump-version-code
 ```
 
 Version情報を更新します。`--target` は `frontend`、`windows`、`android`、`all` のいずれかです。`--version` は `x.y.z` 形式のSemantic Versionを指定します。
@@ -355,7 +355,7 @@ Androidを含む更新では `--bump-version-code` または `--version-code <in
 ### dry-run
 
 ```sh
-npm run version:set -- --target all --version 1.1.0 --bump-version-code --dry-run
+pnpm run version:set -- --target all --version 1.1.0 --bump-version-code --dry-run
 ```
 
 実際には書き換えず、現在Version、新Version、更新予定ファイル、更新予定field、warning、現在のcheck結果を表示します。
@@ -365,7 +365,7 @@ npm run version:set -- --target all --version 1.1.0 --bump-version-code --dry-ru
 ### Frontend
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 Frontend全体のProduction Artifactを `dist/` に生成します。
@@ -373,7 +373,7 @@ Frontend全体のProduction Artifactを `dist/` に生成します。
 ### Windows distribution
 
 ```sh
-npm run build:windows
+pnpm run build:windows
 ```
 
 Windows x64向けの自己完結・単一exe配布物を `dist-windows/Atlament-v<version>-win-x64/` に生成します。
@@ -381,7 +381,7 @@ Windows x64向けの自己完結・単一exe配布物を `dist-windows/Atlament-
 ### Android debug
 
 ```sh
-npm run build:android
+pnpm run build:android
 ```
 
 FrontendをAndroid assetsへ同期し、Debug APKを生成します。
@@ -389,17 +389,17 @@ FrontendをAndroid assetsへ同期し、Debug APKを生成します。
 ### Android release
 
 ```sh
-npm run build:android:release
+pnpm run build:android:release
 ```
 
 FrontendをAndroid assetsへ同期し、署名済みRelease APKを生成します。
 
 ## Check / Test
 
-### npm test
+### pnpm test
 
 ```sh
-npm test
+pnpm test
 ```
 
 Vitestのテストを実行します。主にworkout-core、workout-data、real data validationを確認します。
@@ -407,7 +407,7 @@ Vitestのテストを実行します。主にworkout-core、workout-data、real 
 ### check:mpa
 
 ```sh
-npm run check:mpa
+pnpm run check:mpa
 ```
 
 Build済み `dist/` の主要routeと404を検証します。
@@ -415,7 +415,7 @@ Build済み `dist/` の主要routeと404を検証します。
 ### check:all
 
 ```sh
-npm run check:all
+pnpm run check:all
 ```
 
 `version:check`、Analytics check、Data check、MPA smoke checkをまとめて実行します。
@@ -430,18 +430,19 @@ Windows AFのUnit Testを実行します。
 
 ## Troubleshooting
 
-- `npm run preview:mpa` で画面が古い場合: 先に `npm run build` を実行してください。
+- `pnpm run preview:mpa` で画面が古い場合: 先に `pnpm run build` を実行してください。
 - Angular buildでbundle budget warningが出る場合: 現時点では既知warningです。Build失敗とは区別してください。
 - Dashboard / AnalyticsでVite chunk size warningが出る場合: 現時点では既知warningです。
 - Windows実行時に画面が表示されない場合: WebView2 Runtimeが入っているか確認してください。
 - Android Release Buildが署名で失敗する場合: `ATLAMENT_RELEASE_STORE_PASSWORD` / `ATLAMENT_RELEASE_KEY_PASSWORD` または `src/application/android/local.properties` を確認してください。
-- Android更新インストールが失敗する場合: 署名差異やversionCode重複の可能性があります。必要に応じて `adb uninstall jp.yuri_regulus_25.atlament` 後に再インストールしてください。
-- Version不整合が疑われる場合: `npm run version:check` を実行し、直接編集ではなく `npm run version:set` で更新してください。
+- Android更新インストールが失敗する場合: 署名差異やversionCode重複の可能性があります。`adb uninstall` は端末内データを削除するため、バックアップと利用者の明示的な了承なしに実行しないでください。
+- Version不整合が疑われる場合: `pnpm run version:check` を実行し、直接編集ではなく `pnpm run version:set` で更新してください。
 
 ## Related Documents
 
 - [BUILD_COMMAND_LINE.md](BUILD_COMMAND_LINE.md): Build / CLIの詳細Reference
 - [docs/README.md](docs/README.md): docs配下の案内
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md): 初期設定から同期・閲覧・Recoveryまでの利用者向け操作ガイド
 - [docs/design/README.md](docs/design/README.md): 現行As-Is設計書Index
 - [docs/design/02_detailed-design/application-framework/windows/current-spec.md](docs/design/02_detailed-design/application-framework/windows/current-spec.md): Windows AF詳細設計
 - [docs/design/02_detailed-design/frontend-framework/application-settings.md](docs/design/02_detailed-design/frontend-framework/application-settings.md): Frontend Settings詳細設計

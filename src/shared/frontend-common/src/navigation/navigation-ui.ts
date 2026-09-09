@@ -1,45 +1,64 @@
 import { initializeBrandingLogo } from '../branding/index.js'
+import { initializeCharacterEasterEgg } from '../easter-egg/index.js'
 import { initializeThemeToggle } from '../theme/index.js'
-import { drawerApplications, type ApplicationMetadata } from './apps'
+import { drawerApplications, getApplicationMetadata, type ApplicationMetadata } from './apps'
 import type { ApplicationRouteId } from './routes'
+
+export type AppScreenHeader = {
+  eyebrow: string
+  title: string
+  description: string | readonly string[]
+  ariaLabel?: string
+}
 
 export type AppNavigationOptions = {
   currentRouteId: ApplicationRouteId
   shell?: HTMLElement | null
   logoBasePath?: string
+  easterEggBasePath?: string
+  screen?: AppScreenHeader
 }
 
 export type AppNavigationController = {
   dispose(): void
+  focusTitle(): void
+  updateScreen(screen: AppScreenHeader): void
 }
 
 const logoSourcePath = '/frontend-common/branding/assets/logo_svg_primary.svg'
 const logoBasePath = '/frontend-common/branding/assets/'
+const easterEggBasePath = '/frontend-common/easter-egg/assets/'
+const swipeEdgeWidth = 24
+const swipeOpenDistance = 72
+const swipeMaxVerticalDrift = 48
 
+/**
+ * Portal 以外の各 Application に共通 Shell/Navigation を注入する。
+ *
+ * App component は `data-application-shell-content` を持つ画面内容だけを提供し、
+ * Header、Navigation、Theme toggle、mobile drawer、Easter Egg lifecycle はここが所有する。
+ * 戻り値の controller は framework 側の unmount/destroy hook で必ず dispose する。
+ */
 export function initializeAppNavigation(options: AppNavigationOptions): AppNavigationController {
   const shell = options.shell ?? document.querySelector<HTMLElement>('.app-shell')
 
   // Portal remains the entry surface and owns its own header. Other apps receive the shared drawer
   // so cross-app navigation can be changed in one place.
   if (!shell || options.currentRouteId === 'portal') {
-    return { dispose() {} }
+    return { dispose() {}, focusTitle() {}, updateScreen() {} }
   }
 
-  const layout = document.createElement('div')
-  layout.className = 'atl-navigation-layout'
-
   const drawer = createDrawer(options.currentRouteId, 'desktop')
-  const mobileHeader = createMobileHeader()
   const mobileDrawer = createDrawer(options.currentRouteId, 'mobile')
+  const applicationShell = createApplicationShell(shell, options.screen ?? defaultScreenFor(options.currentRouteId))
   const overlay = document.createElement('button')
   overlay.className = 'atl-navigation-overlay'
   overlay.type = 'button'
   overlay.setAttribute('aria-label', 'Close navigation')
 
-  const parent = shell.parentElement
-  parent?.insertBefore(layout, shell)
-  layout.append(drawer.element, shell)
-  document.body.prepend(mobileHeader.element)
+  const parent = applicationShell.backgroundParent
+  const nextSibling = applicationShell.backgroundNextSibling
+  applicationShell.frame.prepend(drawer.element)
   document.body.append(overlay, mobileDrawer.element)
   document.body.classList.add('atl-has-navigation')
 
@@ -50,17 +69,17 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
       basePath: options.logoBasePath ?? logoBasePath,
     }),
     initializeBrandingLogo({
-      image: mobileHeader.logoImage,
-      trigger: mobileHeader.logoTrigger,
-      basePath: options.logoBasePath ?? logoBasePath,
-    }),
-    initializeBrandingLogo({
       image: mobileDrawer.logoImage,
       trigger: mobileDrawer.logoTrigger,
       basePath: options.logoBasePath ?? logoBasePath,
     }),
     initializeThemeToggle({ trigger: drawer.themeTrigger }),
     initializeThemeToggle({ trigger: mobileDrawer.themeTrigger }),
+    initializeCharacterEasterEgg({
+      trigger: applicationShell.characterTrigger,
+      host: document.body,
+      assetBasePath: options.easterEggBasePath ?? easterEggBasePath,
+    }),
   ]
 
   let open = false
@@ -70,7 +89,7 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
     // technology all read the same source of truth.
     open = nextOpen
     document.body.classList.toggle('atl-navigation-open', open)
-    mobileHeader.menuButton.setAttribute('aria-expanded', String(open))
+    applicationShell.mobileMenuButton.setAttribute('aria-expanded', String(open))
     mobileDrawer.element.setAttribute('aria-hidden', String(!open))
   }
 
@@ -88,52 +107,182 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
     setOpen(false)
   }
 
-  mobileHeader.menuButton.addEventListener('click', openDrawer)
+  let swipeStart: { x: number; y: number } | null = null
+
+  function handleTouchStart(event: TouchEvent) {
+    if (open || event.touches.length !== 1) {
+      swipeStart = null
+      return
+    }
+
+    const touch = event.touches[0]
+    swipeStart = touch.clientX <= swipeEdgeWidth ? { x: touch.clientX, y: touch.clientY } : null
+  }
+
+  function handleTouchMove(event: TouchEvent) {
+    if (!swipeStart || event.touches.length !== 1) {
+      return
+    }
+
+    const touch = event.touches[0]
+    const deltaX = touch.clientX - swipeStart.x
+    const deltaY = Math.abs(touch.clientY - swipeStart.y)
+    if (deltaX >= swipeOpenDistance && deltaY <= swipeMaxVerticalDrift) {
+      setOpen(true)
+      swipeStart = null
+    } else if (deltaY > swipeMaxVerticalDrift) {
+      swipeStart = null
+    }
+  }
+
+  function handleTouchEnd() {
+    swipeStart = null
+  }
+
+  applicationShell.mobileMenuButton.addEventListener('click', openDrawer)
   overlay.addEventListener('click', closeDrawer)
   mobileDrawer.element.addEventListener('click', handleNavigationClick)
+  document.addEventListener('touchstart', handleTouchStart, { passive: true })
+  document.addEventListener('touchmove', handleTouchMove, { passive: true })
+  document.addEventListener('touchend', handleTouchEnd)
   setOpen(false)
 
   return {
     dispose() {
-      mobileHeader.menuButton.removeEventListener('click', openDrawer)
+      applicationShell.mobileMenuButton.removeEventListener('click', openDrawer)
       overlay.removeEventListener('click', closeDrawer)
       mobileDrawer.element.removeEventListener('click', handleNavigationClick)
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
       brandingControllers.forEach((controller) => controller.dispose())
       drawer.element.remove()
-      mobileHeader.element.remove()
       mobileDrawer.element.remove()
       overlay.remove()
+      applicationShell.dispose()
       document.body.classList.remove('atl-navigation-open', 'atl-has-navigation')
 
-      if (parent && layout.parentElement === parent) {
-        parent.insertBefore(shell, layout)
+      if (parent) {
+        parent.insertBefore(shell, nextSibling)
       }
-      layout.remove()
+    },
+    focusTitle() {
+      applicationShell.focusTitle()
+    },
+    updateScreen(screen: AppScreenHeader) {
+      applicationShell.updateScreen(screen)
     },
   }
 }
 
-function createMobileHeader() {
-  const element = document.createElement('header')
-  element.className = 'atl-mobile-header'
+/**
+ * MHTML 由来の Shell 構造へ既存 Application root を包み直す。
+ */
+function createApplicationShell(shell: HTMLElement, screen: AppScreenHeader) {
+  const backgroundParent = shell.parentElement
+  const backgroundNextSibling = shell.nextSibling
+  const background = document.createElement('div')
+  background.className = 'app-background'
 
-  const menuButton = document.createElement('button')
-  menuButton.className = 'atl-mobile-menu-button'
-  menuButton.type = 'button'
-  menuButton.setAttribute('aria-label', 'Open navigation')
-  menuButton.setAttribute('aria-controls', 'atl-mobile-navigation-drawer')
-  menuButton.innerHTML = '<i class="mdi mdi-menu" aria-hidden="true"></i>'
+  backgroundParent?.insertBefore(background, shell)
+  background.append(shell)
+  shell.classList.add('atl-application-shell')
 
-  const { trigger: logoTrigger, image: logoImage } = createLogoTrigger('Toggle Atlament logo variant')
+  const header = document.createElement('header')
+  header.className = 'app-header'
 
-  element.append(menuButton, logoTrigger)
+  const mobileMenuButton = document.createElement('button')
+  mobileMenuButton.className = 'atl-mobile-menu-button'
+  mobileMenuButton.type = 'button'
+  mobileMenuButton.setAttribute('aria-label', 'Open navigation')
+  mobileMenuButton.setAttribute('aria-controls', 'atl-mobile-navigation-drawer')
+  mobileMenuButton.innerHTML = '<i class="mdi mdi-menu" aria-hidden="true"></i>'
 
-  return { element, menuButton, logoTrigger, logoImage }
+  const title = document.createElement('h1')
+  title.className = 'app-title atl-character-trigger'
+  title.tabIndex = -1
+  header.append(mobileMenuButton, title)
+
+  const body = document.createElement('div')
+  body.className = 'app-body'
+
+  const appContent = document.createElement('main')
+  appContent.className = 'app-content'
+  appContent.setAttribute('aria-label', 'Screen content')
+
+  const appScroll = document.createElement('div')
+  appScroll.className = 'app-scroll'
+
+  const content = shell.querySelector<HTMLElement>('[data-application-shell-content]')
+  if (content?.parentElement === shell) {
+    content.classList.add('atl-screen-content')
+    shell.insertBefore(body, content)
+    appScroll.append(content)
+  } else {
+    const fallbackContent = document.createElement('div')
+    fallbackContent.className = 'atl-screen-content'
+    fallbackContent.setAttribute('data-application-shell-content', '')
+    while (shell.firstChild) {
+      fallbackContent.append(shell.firstChild)
+    }
+    shell.append(body)
+    appScroll.append(fallbackContent)
+  }
+  appContent.append(appScroll)
+  body.append(header, appContent)
+
+  function updateScreen(nextScreen: AppScreenHeader) {
+    title.setAttribute('aria-label', nextScreen.ariaLabel ?? nextScreen.title)
+    title.textContent = `${nextScreen.title} - ${headerSummary(nextScreen.description)}`
+  }
+
+  function focusTitle() {
+    title.focus()
+  }
+
+  updateScreen(screen)
+
+  return {
+    backgroundParent,
+    backgroundNextSibling,
+    characterTrigger: title,
+    frame: shell,
+    mobileMenuButton,
+    dispose() {
+      const screenContent = appScroll.querySelector<HTMLElement>('[data-application-shell-content]')
+      if (screenContent) {
+        screenContent.classList.remove('atl-screen-content')
+        shell.append(screenContent)
+      }
+      body.remove()
+      shell.classList.remove('atl-application-shell')
+      background.remove()
+    },
+    focusTitle,
+    updateScreen,
+  }
+}
+
+function headerSummary(description: string | readonly string[]): string {
+  const lines: readonly string[] = typeof description === 'string' ? description.split('\n') : description
+  return lines.at(-1) ?? ''
+}
+
+function defaultScreenFor(routeId: ApplicationRouteId): AppScreenHeader {
+  const application = drawerApplications.find((item) => item.id === routeId)
+  const title = application?.displayName ?? routeId
+
+  return {
+    eyebrow: `Atlament / ${title}`,
+    title,
+    description: '',
+    ariaLabel: `Atlament ${title}`,
+  }
 }
 
 function createDrawer(currentRouteId: ApplicationRouteId, variant: 'desktop' | 'mobile') {
   const element = document.createElement('aside')
-  element.className = `atl-navigation-drawer atl-navigation-drawer-${variant}`
+  element.className = `app-navigation atl-navigation-drawer atl-navigation-drawer-${variant}`
   if (variant === 'mobile') {
     element.id = 'atl-mobile-navigation-drawer'
   }
@@ -142,15 +291,28 @@ function createDrawer(currentRouteId: ApplicationRouteId, variant: 'desktop' | '
   logoTrigger.classList.add('atl-navigation-logo-trigger')
   const themeTrigger = createThemeTrigger()
   themeTrigger.classList.add('atl-navigation-theme-trigger')
+  const topRegion = document.createElement('div')
+  topRegion.className = 'atl-navigation-region atl-navigation-region-top'
+  const scrollRegion = document.createElement('div')
+  scrollRegion.className = 'atl-navigation-region atl-navigation-region-scroll'
+  const bottomRegion = document.createElement('div')
+  bottomRegion.className = 'atl-navigation-region atl-navigation-region-bottom'
 
+  const portalLink = createNavigationLink(getApplicationMetadata('portal'), currentRouteId)
+  portalLink.classList.add('atl-navigation-portal-link')
   const nav = document.createElement('nav')
-  nav.className = 'atl-navigation-menu'
+  nav.className = 'navigation-items atl-navigation-menu'
   nav.setAttribute('aria-label', 'Application navigation')
-  nav.append(...drawerApplications.map((application) => createNavigationLink(application, currentRouteId)))
+  nav.append(...drawerApplications
+    .filter((application) => application.id !== 'portal')
+    .map((application) => createNavigationLink(application, currentRouteId)))
 
   // The Theme trigger is deliberately outside the nav item list; it changes application appearance
   // rather than navigating to a route.
-  element.append(logoTrigger, nav, themeTrigger)
+  topRegion.append(logoTrigger, portalLink)
+  scrollRegion.append(nav)
+  bottomRegion.append(themeTrigger)
+  element.append(topRegion, scrollRegion, bottomRegion)
 
   return { element, logoTrigger, logoImage, themeTrigger }
 }
@@ -187,10 +349,10 @@ function createThemeTrigger() {
 
 function createNavigationLink(application: ApplicationMetadata, currentRouteId: ApplicationRouteId) {
   const link = document.createElement('a')
-  link.className = 'atl-navigation-link'
+  link.className = 'navigation-item atl-navigation-link'
   link.href = application.route
   if (application.id === currentRouteId) {
-    link.classList.add('active')
+    link.classList.add('active', 'navigation-item--active')
     link.setAttribute('aria-current', 'page')
   }
 
@@ -199,6 +361,7 @@ function createNavigationLink(application: ApplicationMetadata, currentRouteId: 
   icon.setAttribute('aria-hidden', 'true')
 
   const label = document.createElement('span')
+  label.className = 'navigation-label'
   label.textContent = application.displayName
 
   link.append(icon, label)

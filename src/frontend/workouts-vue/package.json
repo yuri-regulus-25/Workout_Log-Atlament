@@ -16,8 +16,7 @@
     "@workout-lab/workout-core": "file:../../shared/workout-core",
     "@workout-lab/workout-data": "file:../../shared/workout-data",
     "@workout-lab/workout-types": "file:../../shared/workout-types",
-    "vue": "^3.5.40",
-    "vue-router": "^5.2.0"
+    "vue": "^3.5.40"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

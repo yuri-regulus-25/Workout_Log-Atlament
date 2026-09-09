@@ -1,6 +1,6 @@
 # Application Framework Localhost API Inventory
 
-Inventory result for the current v2.1.0 recovery release line.
+現行v3.0.0リリース系列のAPI棚卸し結果。
 
 ## Scope
 
@@ -37,7 +37,7 @@ Inventory target:
 | `PUT /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
 | `DELETE /api/v1/common/recovery/resources/{resourceKey}/draft` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
 | `POST /api/v1/common/recovery/resources/{resourceKey}/validate` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep |
-| `POST /api/v1/common/recovery/resources/{resourceKey}/commit` | Windows, Android, Node dev runtime | Maintenance Recovery UI | Keep; capability-gated on Android/Node |
+| `POST /api/v1/common/recovery/resources/{resourceKey}/commit` | Windows, Android, Node dev runtime | Maintenance Recovery UI | 維持。Windows/Androidは修復可否に従ってコミット可能、Node.js開発用ランタイムは機能可否で制限 |
 | `POST /api/v1/common/shutdown` | Windows, Android | Native/application lifecycle control endpoint | Keep |
 | `/api/common/*` | Former Windows, Android, Node dev runtime alias | No current frontend client or runtime loader | Remove |
 | `GET /api/workout-data` | Node dev/runtime preview tooling only | `@workout-lab/workout-data` fallback and Vite/preview dev tooling | Keep as dev-only legacy data endpoint outside native AF contract |
@@ -122,6 +122,6 @@ Configured credential failures are runtime failures rather than setup absence. R
 
 Status keeps existing component/readiness fields and adds only `runtimeData` facts required to distinguish current data availability, latest remote retrieval, latest validation, and active fallback. Credential lifecycle remains represented by credential status (`configured`, `state`, `limitDate`) plus the credential component state; configured-but-expired or invalid credentials are runtime degradation inputs, not setup absence.
 
-## v2.1.0 Recovery Contract
+## v3.0.0 Recovery Contract
 
-Recovery adds purpose-specific endpoint parity for Windows, Android, Node development runtime, frontend-common, and Maintenance UI. The API never exposes Raw JSON write, arbitrary path write, generic Git controls, Frontend-held credentials, force push, automatic merge, or bulk recovery. Android and Node must report unsupported Recovery commit through capability/error semantics instead of fake success.
+Recoveryは、Windows、Android、Node.js開発用ランタイム、フロントエンド共通処理、Maintenance UIの間で用途別エンドポイントを揃える。APIはRaw JSON書き込み、任意パスへの書き込み、汎用Git操作、フロントエンドが保持する認証情報、force push、自動マージ、一括修復を公開しない。WindowsとAndroidは修復可能なリソースをコミットできる。Node.js開発用ランタイムと、書き込み境界を安全に提供できない状態では、機能可否とエラーで利用不能を表し、偽の成功を返さない。

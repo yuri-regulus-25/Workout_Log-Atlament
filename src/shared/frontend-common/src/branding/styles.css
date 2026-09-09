@@ -42,10 +42,19 @@
 }
 
 .atl-theme-trigger.atl-navigation-theme-trigger {
-  bottom: 4px;
-  left: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  box-shadow: none;
+  color: white;
+  height: 48px;
   margin: 0;
-  position: absolute;
+  width: 84px;
+}
+
+.atl-theme-trigger.atl-navigation-theme-trigger:hover {
+  background: color-mix(in srgb, var(--wl-shell-primary-soft) 30%, transparent);
+  color: white;
 }
 
 .atl-theme-trigger:hover {
