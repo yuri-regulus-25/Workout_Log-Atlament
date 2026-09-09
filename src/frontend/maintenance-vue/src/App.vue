@@ -149,6 +149,13 @@ import {
   type UnresolvedMasterReference,
 } from '@workout-lab/frontend-common'
 
+/**
+ * Resource Management の Composition Root。
+ *
+ * Master/Unresolved/Recovery の画面切替、AF API との read/write orchestration、
+ * Dialog/Snackbar/Loading の共通 state を所有する。Master table、record editor、
+ * unresolved resolution、recovery workspace の表示責務は子 component へ委譲する。
+ */
 const bodyPartValues = ['chest', 'back', 'legs', 'shoulders', 'arms', 'glutes', 'core', 'cardio', 'other']
 const bodyParts = bodyPartValues.map((bodyPart) => ({ title: formatBodyPart(bodyPart), value: bodyPart }))
 const viewMode = ref<'masters' | 'unresolved' | 'recovery'>('masters')
@@ -268,6 +275,12 @@ const idError = computed(() => {
 
 const canSave = computed(() => activeDraft.value !== null && !idError.value && recordId(activeDraft.value) && activeDraft.value.name.trim())
 
+/**
+ * Master write UI が必要とする local Master snapshot と unresolved reference を同期的に揃える。
+ *
+ * Resource Management は AF の local Master snapshot を Source of Truth とし、
+ * 画面側から GitHub を直接読まない。
+ */
 async function loadAll() {
   loading.value = true
   try {
@@ -377,6 +390,11 @@ function createFromUnresolved(item: UnresolvedMasterReference) {
   dialogOpen.value = true
 }
 
+/**
+ * 未解決 raw ID を既存 Master record の `source_ids` として追加する。
+ *
+ * Raw Workout JSON は変更せず、次回 Runtime rebuild で canonical ID へ解決される契約である。
+ */
 async function resolveToExisting() {
   if (!selectedUnresolved.value || !resolveTargetId.value) return
   saving.value = true
@@ -479,6 +497,12 @@ async function saveRecord(record: RecordDraft, mode: 'create' | 'edit') {
   }
 }
 
+/**
+ * Master document を expected revision 付きで保存する。
+ *
+ * Conflict や validation failure は AF response code/error code を Source of Truth とし、
+ * UI は成功時に返された revision だけを次回 write の前提として保持する。
+ */
 async function saveRecords(type: MasterDocumentType, next: RecordDraft[]) {
   const result = await updateMasterDocument(type, {
     expectedRevision: type === 'MACHINE_MASTER' ? machineRevision.value : gymRevision.value,

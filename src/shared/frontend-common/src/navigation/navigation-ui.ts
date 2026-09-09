@@ -32,6 +32,13 @@ const swipeEdgeWidth = 24
 const swipeOpenDistance = 72
 const swipeMaxVerticalDrift = 48
 
+/**
+ * Portal 以外の各 Application に共通 Shell/Navigation を注入する。
+ *
+ * App component は `data-application-shell-content` を持つ画面内容だけを提供し、
+ * Header、Navigation、Theme toggle、mobile drawer、Easter Egg lifecycle はここが所有する。
+ * 戻り値の controller は framework 側の unmount/destroy hook で必ず dispose する。
+ */
 export function initializeAppNavigation(options: AppNavigationOptions): AppNavigationController {
   const shell = options.shell ?? document.querySelector<HTMLElement>('.app-shell')
 
@@ -168,6 +175,9 @@ export function initializeAppNavigation(options: AppNavigationOptions): AppNavig
   }
 }
 
+/**
+ * MHTML 由来の Shell 構造へ既存 Application root を包み直す。
+ */
 function createApplicationShell(shell: HTMLElement, screen: AppScreenHeader) {
   const backgroundParent = shell.parentElement
   const backgroundNextSibling = shell.nextSibling

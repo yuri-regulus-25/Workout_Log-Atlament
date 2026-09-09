@@ -1,5 +1,13 @@
 namespace Atlament.Core;
 
+/// <summary>
+/// Runtime file や credential/configuration を更新する AF operation の同時実行境界。
+/// </summary>
+/// <remarks>
+/// Startup sync、manual sync、Recovery commit などが同じ current Runtime snapshot を更新するため、
+/// API は重複実行を 409 として扱う。Snapshot は Frontend の進行中表示用 facts であり、
+/// lock の所有者情報や内部 thread 情報は公開しない。
+/// </remarks>
 public sealed class OperationGate
 {
     private readonly object _syncRoot = new();

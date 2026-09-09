@@ -8,6 +8,15 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Atlament.Core;
+
+/// <summary>
+/// Master write 前に Machine/Gym master 全体の repository contract を検証する。
+/// </summary>
+/// <remarks>
+/// 単一 record の見た目ではなく whole-master の整合性を判定する。
+/// active/deleted を問わない ID/source_ids 重複、Main Gym の一意性、deleted/inactive Main Gym を拒否し、
+/// Runtime 参照済み record の logical delete 自体はここでは禁止しない。
+/// </remarks>
 public static class MasterWriteValidator
 {
     private static readonly HashSet<string> BodyParts = new(StringComparer.Ordinal)
@@ -15,6 +24,9 @@ public static class MasterWriteValidator
         "chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other"
     };
 
+    /// <summary>
+    /// Machine と Gym の両 Master を同時に検証する。
+    /// </summary>
     public static IReadOnlyList<AfError> ValidateWholeMaster(string machineMasterContent, string gymMasterContent)
     {
         var errors = new List<AfError>();

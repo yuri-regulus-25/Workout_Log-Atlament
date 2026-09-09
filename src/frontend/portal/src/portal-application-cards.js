@@ -1,3 +1,8 @@
+/**
+ * Portal の application launcher cards を描画する。
+ *
+ * Application metadata を唯一の入力にし、カード側では route/framework/icon の意味を再定義しない。
+ */
 export function renderApplicationCards(appGrid, applications) {
   if (!appGrid) return
 
@@ -65,6 +70,11 @@ function createApplicationIcon(application) {
   return icon
 }
 
+/**
+ * Built with 表示用の framework descriptor を作る。
+ *
+ * Resource Management の Vue + Vuetify のような複数 framework 表示は metadata の順序を維持する。
+ */
 export function createFrameworkStackDescriptors(application) {
   if (Array.isArray(application.frameworkIcons) && application.frameworkIcons.length > 0) {
     return application.frameworkIcons.flatMap((frameworkIcon, index) => {

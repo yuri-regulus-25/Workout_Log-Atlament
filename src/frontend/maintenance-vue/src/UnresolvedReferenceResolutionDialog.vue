@@ -49,6 +49,12 @@ import { computed } from 'vue'
 import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
 import type { UnresolvedMasterReference } from '@workout-lab/frontend-common'
 
+/**
+ * 未解決 Master reference を既存登録情報へ紐付ける Dialog。
+ *
+ * 選択状態は親 App が所有し、この component は候補選択と影響Workoutの表示を担当する。
+ * 行番号が全て未提供の場合は列自体を隠し、AF warning の有無を UI 文言から推測しない。
+ */
 const props = defineProps<{
   open: boolean
   selectedUnresolved: UnresolvedMasterReference | null

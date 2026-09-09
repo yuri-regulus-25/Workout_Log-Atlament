@@ -8,6 +8,15 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Atlament.Core;
+
+/// <summary>
+/// Repository 上の Workout/Master source から Frontend 向け Runtime Data を構築する。
+/// </summary>
+/// <remarks>
+/// 構造的に壊れた Master は whole-runtime fallback 対象とする一方、壊れた Workout resource は
+/// resource 単位で隔離する。未解決または削除済みの Master reference は warning として保持し、
+/// Workout session 自体は集計対象に残す。
+/// </remarks>
 public sealed class RuntimeDataBuilder
 {
     private static readonly HashSet<string> BodyParts = new(StringComparer.Ordinal)
@@ -15,6 +24,13 @@ public sealed class RuntimeDataBuilder
         "chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other"
     };
 
+    /// <summary>
+    /// Runtime Data の採用可否、隔離対象、Master reference warning を判定する。
+    /// </summary>
+    /// <returns>
+    /// `TechnicalInvalid` が true の場合は新しい Runtime Data として採用してはならない。
+    /// false の場合は errors に Broken Workout resource が含まれていても、残りの session は採用可能である。
+    /// </returns>
     public RuntimeBuildResult Build(IReadOnlyList<RuntimeSourceFile> workoutFiles, RuntimeSourceFile machinesFile, RuntimeSourceFile gymsFile)
     {
         var errors = new List<AfError>();
@@ -230,6 +246,14 @@ public sealed class RuntimeDataBuilder
         foreach (var sourceId in ReadStringArray(item, "source_ids")) excludedIds.Add(sourceId);
     }
 
+    /// <summary>
+    /// 1 Workout record を Runtime session へ正規化する。
+    /// </summary>
+    /// <remarks>
+    /// schema/date/status/sets などの必須構造違反は Broken Resource として扱う。
+    /// Master reference の missing/deleted/invalid_excluded は warning 化し、元 ID と canonical ID の関係を
+    /// resolution に保持する。
+    /// </remarks>
     private static (WorkoutSession? Session, bool TechnicalInvalid) BuildSession(
         string filePath,
         int? line,

@@ -4,6 +4,13 @@ using System.Text.Json;
 
 namespace Atlament.Core;
 
+/// <summary>
+/// Windows DPAPI で GitHub credential を保護する store。
+/// </summary>
+/// <remarks>
+/// API へ返すのは configured/state/limitDate のみで、token 文字列は Frontend-visible data に含めない。
+/// 期限切れや invalid は setup 未完了ではなく credential component の runtime state として扱う。
+/// </remarks>
 public sealed class CredentialStore
 {
     private readonly WindowsPathProvider _paths;

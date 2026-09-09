@@ -6,12 +6,22 @@ import java.security.MessageDigest
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Android AF の Recovery read/draft/validate domain service。
+ *
+ * GitHub write の実行や HTTP response 変換は `AndroidLocalhostServer` 側に残し、
+ * ここでは Broken Resource inspection、Draft 生成、candidate validation の契約を扱う。
+ * Draft は device-local で source path/revision に結び付き、stale/incompatible/corrupted を明示状態で返す。
+ */
 internal class AndroidRecoveryService(
     private val loadConfigurationJson: () -> String,
     private val configuredResourceFetcher: AndroidConfiguredResourceFetcher,
     private val runtimeDataBuilder: AndroidRuntimeDataBuilder,
     private val recoveryDraftStore: AndroidRecoveryDraftStore
 ) {
+    /**
+     * current GitHub source set から Recovery 対象 resource の inspection を作成する。
+     */
     fun inspectWorkoutRecoveryResources(): List<RecoveryResource> {
         val configuration = JSONObject(loadConfigurationJson())
         val fetched = configuredResourceFetcher.fetchAll(configuration)
@@ -39,6 +49,12 @@ internal class AndroidRecoveryService(
         }
     }.getOrNull()
 
+    /**
+     * Draft から replacement candidate を生成し、whole-resource validation を実行する。
+     *
+     * unresolved field は API error ではなく `health: broken` の validation result として返す。
+     * `healthy` と `degraded` は commit 可能、`broken` は commit 不可である。
+     */
     fun validateDraft(resourceKey: String): JSONObject {
         val configuration = runCatching { JSONObject(loadConfigurationJson()) }.getOrElse { ex ->
             val code = if (ex is AfException) ex.code else "RECOVERY_UNAVAILABLE"
@@ -96,6 +112,11 @@ internal class AndroidRecoveryService(
             .put("data", validationJson(draft, health, issues, health == "healthy" || health == "degraded", replacementPath, pathChange))
     }
 
+    /**
+     * Broken Workout source から初期 Draft を作成する。
+     *
+     * 必須 field が読めない場合は unresolved、optional field の欠落は recovered として初期化する。
+     */
     fun createWorkoutDraft(source: RuntimeSourceFile, broken: Boolean): JSONObject {
         val sourceRevision = sourceRevision(source)
         val existing = recoveryDraftStore.load("WORKOUT", source.path, sourceRevision)
@@ -381,6 +402,11 @@ internal class AndroidRecoveryService(
         }
     }
 
+    /**
+     * Frontend へ opaque として公開する Recovery resource key を生成する。
+     *
+     * key の中身は Frontend business logic で復号・解析してはならない。
+     */
     fun resourceKey(configuration: JSONObject, resourceType: String, sourcePath: String, sourceRevision: String): String {
         val repository = configuration.getJSONObject("repository")
         val key = listOf(

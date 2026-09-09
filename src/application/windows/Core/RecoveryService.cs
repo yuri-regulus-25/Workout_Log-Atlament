@@ -8,6 +8,14 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Atlament.Core;
+
+/// <summary>
+/// Broken Workout Resource の検査、Recovery Draft、候補検証を扱う domain service。
+/// </summary>
+/// <remarks>
+/// GitHub write は所有せず、Recovery UI と AF endpoint が共有する read/draft/validate の意味論を固定する。
+/// Draft は source path/revision に結び付く local state であり、stale/incompatible/corrupted を明示状態として返す。
+/// </remarks>
 public sealed class RecoveryService
 {
     private const int SourceViewLimitBytes = 256 * 1024;
@@ -36,6 +44,9 @@ public sealed class RecoveryService
     public bool MatchesWorkoutResourceKey(AfConfiguration configuration, string resourceKey, RuntimeSourceFile source, string sourceRevision) =>
         BuildResourceKey(configuration, "WORKOUT", source.Path, sourceRevision) == resourceKey;
 
+    /// <summary>
+    /// 現在の source set から broken な Workout resource だけを列挙する。
+    /// </summary>
     public IReadOnlyList<BrokenResourceSummary> ListBrokenResources(
         AfConfiguration configuration,
         IReadOnlyList<RuntimeSourceFile> workoutFiles,
@@ -192,6 +203,13 @@ public sealed class RecoveryService
             : (new RecoveryDraftSnapshot("none", null), Array.Empty<AfError>());
     }
 
+    /// <summary>
+    /// Draft から replacement candidate を作成し、whole-resource validation を実行する。
+    /// </summary>
+    /// <remarks>
+    /// unresolved field が残る場合は AF error ではなく `health: broken` の validation result として返す。
+    /// degraded は commit 可能、broken は commit 不可であり、GitHub への副作用はここでは発生しない。
+    /// </remarks>
     public (RecoveryValidationResult? Result, IReadOnlyList<AfError> Errors) ValidateDraft(
         AfConfiguration configuration,
         string resourceKey,
@@ -495,6 +513,13 @@ public sealed class RecoveryService
 
     private sealed record WorkoutRecoveryResource(RuntimeSourceFile Source, string ResourceKey, ResourceInspection Inspection);
 
+    /// <summary>
+    /// Broken Workout source から初期 Recovery Draft を生成する。
+    /// </summary>
+    /// <remarks>
+    /// 必須 field が読めない場合は unresolved、optional field が欠落する場合は recovered として扱う。
+    /// 既存 active draft がある場合は同じ snapshot を返し、重複作成しない。
+    /// </remarks>
     public (RecoveryDraftSnapshot Snapshot, IReadOnlyList<AfError> Errors) CreateWorkoutDraft(
         AfConfiguration configuration,
         RuntimeSourceFile source,
@@ -527,6 +552,12 @@ public sealed class RecoveryService
             : (new RecoveryDraftSnapshot("active", draft), Array.Empty<AfError>());
     }
 
+    /// <summary>
+    /// expected draft revision を満たす場合だけ Draft を保存する。
+    /// </summary>
+    /// <remarks>
+    /// browser storage は Source of Truth ではないため、caller は返却された draftRevision を次回保存の前提として使う。
+    /// </remarks>
     public (RecoveryDraftSnapshot Snapshot, IReadOnlyList<AfError> Errors) UpdateDraft(
         AfConfiguration configuration,
         string resourceType,

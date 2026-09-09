@@ -9,6 +9,13 @@ import java.security.MessageDigest
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Android AF が使用する GitHub REST/GraphQL I/O 境界。
+ *
+ * token は provider から都度取得し、client 自体では保持しない。
+ * Master write と Recovery write は expected revision と固定 commit message を使い、
+ * Frontend から任意 path、任意 commit message、汎用 Git 操作を指示できない契約にする。
+ */
 internal class AndroidGithubClient(
     private val tokenProvider: () -> String?
 ) {
@@ -27,6 +34,9 @@ internal class AndroidGithubClient(
         return GithubContent(revision, content)
     }
 
+    /**
+     * GitHub Contents API で Master document を revision 一致時だけ更新する。
+     */
     fun writeContentFile(
         configuration: JSONObject,
         path: String,
@@ -71,6 +81,9 @@ internal class AndroidGithubClient(
         }
     }
 
+    /**
+     * 同一 path の Recovery replacement を 1 GitHub commit として保存する。
+     */
     fun writeRecoveryContentFile(
         configuration: JSONObject,
         path: String,
@@ -132,6 +145,9 @@ internal class AndroidGithubClient(
         return sha
     }
 
+    /**
+     * path relocation Recovery の atomic fileChanges commit に使用する GraphQL 呼び出し。
+     */
     fun postGraphql(configuration: JSONObject, payload: String): JSONObject {
         val timeoutSec = configuration.optJSONObject("timeouts")?.optInt("githubRequestTimeoutSec", 10) ?: 10
         val url = "https://api.github.com/graphql"

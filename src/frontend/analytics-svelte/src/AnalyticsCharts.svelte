@@ -19,6 +19,12 @@
   export let trendPoints: TrendPoint[] = []
   export let bodyPartSummaryRows: BodyPartSummaryRow[] = []
 
+  /**
+   * Analytics chart presentation。
+   *
+   * ApexCharts の lifecycle と Design Token からの theme adaptation をこの component に閉じる。
+   * App は trend/bodyPart rows を渡すだけで、chart instance の生成・破棄・更新順序を知らなくてよい。
+   */
   $: trendReady = trendPoints.length > 0
   $: trendKey = trendPoints.map((point) => point.sessionId).join('|')
   $: void syncTrendChart(trendReady, trendKey)
@@ -53,6 +59,12 @@
     bodyPartChart?.destroy()
   })
 
+  /**
+   * Svelte の DOM 更新後に trend chart を生成または更新する。
+   *
+   * reactive statement が連続して走るため、request number で古い同期要求を破棄し、
+   * destroy 済み要素へ render しないようにする。
+   */
   async function syncTrendChart(ready: boolean, key: string): Promise<void> {
     const request = ++trendChartSyncRequest
     await tick()

@@ -22,6 +22,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Android AF の localhost HTTP server と Application orchestration ルート。
+ *
+ * HTTP request を `/api/v1/common` 契約へ変換し、Configuration、Credential、GitHub I/O、
+ * Runtime build、Master write、Recovery の各責務へ委譲する。Windows と同じ API shape を公開し、
+ * Android 固有差は asset 配信、credential 保護、local file path、packaging の範囲へ閉じ込める。
+ */
 class AndroidLocalhostServer(
     private val context: Context,
     private val onShutdown: () -> Unit = {}
@@ -82,6 +89,12 @@ class AndroidLocalhostServer(
     val baseUrl: String
         get() = "http://127.0.0.1:$port/"
 
+    /**
+     * Windows と同じ優先順の localhost port へ bind し、起動時同期を開始する。
+     *
+     * port 番号だけを process identity として扱わない。外部 tooling が AF を探す場合も、
+     * Status API の Atlament-compatible facts を確認する必要がある。
+     */
     fun start() {
         if (running.get()) return
 
@@ -159,6 +172,12 @@ class AndroidLocalhostServer(
     }
 
 
+    /**
+     * Android server 内の routing を AF endpoint 契約へ写像する。
+     *
+     * Legacy `/api/common/...` alias は公開せず、未知の `/api/...` は frontend fallback に流さない。
+     * 各 handler は AF response envelope を返す責務を持つ。
+     */
     private fun handleApi(output: OutputStream, method: String, path: String, body: String) {
         if (!path.startsWith("/api/v1/common")) {
             sendJson(output, 501, failJson("COMMON_NOT_IMPLEMENTED", "This Android API route is not implemented yet."))
@@ -205,6 +224,9 @@ class AndroidLocalhostServer(
         return "/" + normalized.joinToString("/")
     }
 
+    /**
+     * Frontend が platform 固有推測をせず利用可否を判定するための Status JSON を構成する。
+     */
     private fun statusJson(): String = statusComposer.statusJson(
         AndroidStatusSnapshot(
             frontendVersion = frontendVersionJson(),
@@ -228,6 +250,9 @@ class AndroidLocalhostServer(
         }
     }.getOrDefault(JSONObject())
 
+    /**
+     * Runtime Contract Matrix に沿った current/fallback/quarantine facts を返す。
+     */
     private fun runtimeDataFactsJson(): String {
         val runtimeStatus = runtimeDataStore.status()
         val currentAvailable = runtimeStatus != "unavailable"
@@ -320,6 +345,9 @@ class AndroidLocalhostServer(
         sendJson(output, response.status, response.body)
     }
 
+    /**
+     * Settings からの部分 Configuration 更新を適用し、必要な場合だけ remote check を行う。
+     */
     private fun configurationUpdateResponse(updateJson: String): SyncResponse {
         if (!operationGate.tryStart("configurationUpdate")) {
             return SyncResponse(409, failJson("OPERATION_ALREADY_RUNNING", "Configuration update is already running."), false)
@@ -906,6 +934,12 @@ class AndroidLocalhostServer(
         }
     }
 
+    /**
+     * GitHub source を取得して Runtime Data を再構築し、local current snapshot へ保存する。
+     *
+     * remote retrieval または validation に失敗しても既存 Runtime Data があれば degraded として継続し、
+     * Runtime Data がない場合だけ unavailable として返す。
+     */
     private fun syncRuntimeData(): SyncResponse {
         return try {
             val build = fetchRuntimeWorkoutData()
@@ -989,6 +1023,9 @@ class AndroidLocalhostServer(
 
     private fun githubStatus(): String = githubComponentStatus
 
+    /**
+     * Android APK 内で Windows と同じ Runtime build 意味論を実行する。
+     */
     private fun fetchRuntimeWorkoutData(): RuntimeBuildResult {
         // Android mirrors the Windows runtime builder contract in-place so packaged APKs can sync
         // without a shared .NET runtime dependency.

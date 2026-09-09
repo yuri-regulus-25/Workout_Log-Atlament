@@ -5,6 +5,15 @@ using System.Text.Json.Nodes;
 
 namespace Atlament.Core;
 
+/// <summary>
+/// Windows AF の Application orchestration ルート。
+/// </summary>
+/// <remarks>
+/// HTTP layer から呼び出されるユースケースを束ね、Configuration、Credential、GitHub I/O、
+/// Runtime build、Recovery、Master write の各サービスを契約どおりの AF response envelope と
+/// HTTP status に変換する。ここでは永続化形式や Runtime 正規化の詳細を所有せず、
+/// 操作順序、並行実行制御、Status facts の整合性を守る。
+/// </remarks>
 public sealed class AtlamentApplication
 {
     private static readonly IReadOnlyList<MasterWriteTarget> MasterWriteTargets = new[]
@@ -66,6 +75,14 @@ public sealed class AtlamentApplication
         _recovery = recovery;
     }
 
+    /// <summary>
+    /// 起動時のローカル状態を読み込み、初回同期をバックグラウンドで開始する。
+    /// </summary>
+    /// <remarks>
+    /// Shell の初回描画を同期完了まで待たせないことが契約である。
+    /// Frontend は `/status` の operation/component facts を見て startup 中、degraded、
+    /// unavailable を判定する。
+    /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         if (!_operations.TryStart("startup")) return Task.CompletedTask;
@@ -91,6 +108,9 @@ public sealed class AtlamentApplication
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Frontend が platform 固有推測をせずに利用可否を判断するための Status snapshot を返す。
+    /// </summary>
     public AfResponse<AfStatus> GetStatus() => AfResponses.Ok(new AfStatus(
         new StatusVersions(ApplicationFrameworkVersion, GetFrontendFrameworkVersion(), GetNativePackageVersions(), ApplicationBuildIdentity),
         DetermineReadiness(),
@@ -265,6 +285,13 @@ public sealed class AtlamentApplication
         };
     }
 
+    /// <summary>
+    /// 現在採用済みの Runtime Data を返す。
+    /// </summary>
+    /// <remarks>
+    /// 未解決 Master reference は warnings として返し、Workout 自体は Runtime Data に残す。
+    /// Runtime Data が存在しない場合だけ data unavailable として失敗させる。
+    /// </remarks>
     public AfResponse<RuntimeWorkoutData> GetRuntimeWorkouts()
     {
         var (data, errors) = _runtimeDataStore.LoadCurrent();
@@ -278,6 +305,13 @@ public sealed class AtlamentApplication
 
     public AfResponse<AfConfiguration> GetConfiguration() => AfResponses.Ok(_configuration);
 
+    /// <summary>
+    /// Settings からの部分 Configuration 更新を適用する。
+    /// </summary>
+    /// <remarks>
+    /// repository/resources の変更時だけ remote check を行う。未指定項目は現行値を維持し、
+    /// 独立した Settings card の保存が他領域を初期化しないようにする。
+    /// </remarks>
     public async Task<(int StatusCode, AfResponse<ConfigurationUpdateResult> Response)> UpdateConfigurationAsync(ConfigurationUpdate update, CancellationToken cancellationToken)
     {
         if (!_operations.TryStart("configurationUpdate"))
@@ -319,6 +353,13 @@ public sealed class AtlamentApplication
 
     public AfResponse<CredentialStatus> GetCredentialStatus() => AfResponses.Ok(_credentialStatus);
 
+    /// <summary>
+    /// Master write が許可する固定 target と security facts を返す。
+    /// </summary>
+    /// <remarks>
+    /// target path は Configuration の任意 path ではなく AF 内部 allowlist を正とする。
+    /// Frontend には Raw JSON write、Workout write、汎用 Git write を許可しない。
+    /// </remarks>
     public AfResponse<MasterWriteBoundary> GetMasterWriteBoundary()
     {
         var repositoryConfigured =
@@ -366,6 +407,9 @@ public sealed class AtlamentApplication
         return Task.FromResult(result);
     }
 
+    /// <summary>
+    /// GitHub 上の current source から Broken Resource 一覧を検査して返す。
+    /// </summary>
     public async Task<(int StatusCode, AfResponse<IReadOnlyList<BrokenResourceSummary>> Response)> ListRecoveryResourcesAsync(CancellationToken cancellationToken)
     {
         var context = await LoadRecoveryContextAsync(cancellationToken);
@@ -475,6 +519,14 @@ public sealed class AtlamentApplication
             : (200, AfResponses.Ok(result));
     }
 
+    /// <summary>
+    /// 検証済み Recovery Draft を GitHub へ 1 Resource 単位で反映する。
+    /// </summary>
+    /// <remarks>
+    /// Frontend は replacement content や任意 path を直接渡さない。
+    /// source/draft revision の optimistic concurrency と最終 validation を通過した場合のみ
+    /// Recovery write を行い、Git 成功後の Runtime reflection 失敗は Git 失敗とは区別して返す。
+    /// </remarks>
     public async Task<(int StatusCode, AfResponse<RecoveryCommitResult> Response)> CommitRecoveryDraftAsync(
         string resourceKey,
         RecoveryCommitRequest request,
@@ -833,6 +885,13 @@ public sealed class AtlamentApplication
         return Task.FromResult((200, AfResponses.Ok(BuildUnresolvedMasterReferences(data.Warnings ?? Array.Empty<RuntimeWarning>()))));
     }
 
+    /// <summary>
+    /// Master document を expected revision 付きで保存し、成功後に Runtime Data を再構築する。
+    /// </summary>
+    /// <remarks>
+    /// local revision、remote revision、whole-master validation、Gym lifecycle rule をすべて満たす必要がある。
+    /// PUT 成功後に Runtime reflection できない場合は同期要求として返し、古い local snapshot を信用し続けない。
+    /// </remarks>
     public async Task<(int StatusCode, AfResponse<MasterDocumentWriteResult> Response)> WriteMasterDocumentAsync(
         string type,
         MasterDocumentWriteRequest request,
@@ -988,6 +1047,13 @@ public sealed class AtlamentApplication
         }
     }
 
+    /// <summary>
+    /// ユーザー操作による同期を実行する。
+    /// </summary>
+    /// <remarks>
+    /// remote retrieval または validation に失敗しても LKG Runtime Data がある場合は degraded として継続し、
+    /// Runtime Data がない場合だけ通常利用不可にする。
+    /// </remarks>
     public async Task<(int StatusCode, AfResponse<SyncResult> Response)> ManualSyncAsync(CancellationToken cancellationToken)
     {
         if (!_operations.TryStart("manualSync"))

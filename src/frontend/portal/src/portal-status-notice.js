@@ -1,3 +1,9 @@
+/**
+ * Portal header の同期状態 notice を AF Status から更新する。
+ *
+ * 表示は operation/readiness/runtime facts に基づき、error message 本文を分岐条件にしない。
+ * Portal は Status を定期確認するだけで、同期操作そのものは各 Application/Settings 側に委譲する。
+ */
 export function initializePortalStatusNotice({ notice, noticeText, noticeIcon, getAfStatus, deriveApplicationReadiness, intervalMs = 1500 }) {
   const successVisibleMs = 3000
   const successFadeMs = 1500

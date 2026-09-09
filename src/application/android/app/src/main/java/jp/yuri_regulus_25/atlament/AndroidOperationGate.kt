@@ -1,5 +1,11 @@
 package jp.yuri_regulus_25.atlament
 
+/**
+ * Status API に公開する operation state の snapshot。
+ *
+ * `recoveryCommitRunning` は Android 内部の排他制御用 facts であり、public status では
+ * Windows と同じ shape へ composer が変換する。
+ */
 internal data class AndroidOperationSnapshot(
     val startup: String,
     val manualSync: String,
@@ -9,6 +15,12 @@ internal data class AndroidOperationSnapshot(
     val recoveryCommitRunning: Boolean
 )
 
+/**
+ * Runtime snapshot や credential/configuration を更新する Android AF operation の同時実行境界。
+ *
+ * Startup sync、manual sync、configuration/credential update、Recovery commit は互いに競合するため、
+ * 重複開始は handler 側で 409 response に変換される。
+ */
 internal class AndroidOperationGate {
     private val lock = Object()
     private val exclusiveOperations = setOf("startup", "manualSync", "configurationUpdate", "credentialUpdate", "recoveryCommit")

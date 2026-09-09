@@ -41,6 +41,12 @@ const resourceTypeLabels: Record<ResourceConfiguration['type'], string> = {
   GYM_MASTER: 'GYM_MASTER / ジムマスター',
 }
 
+/**
+ * Application Settings の Composition Root。
+ *
+ * AF status/configuration/credential の読み込み、部分保存、同期操作、setup assistant の派生状態を所有する。
+ * 各 section component は表示と入力単位を担当し、API interaction と operation busy state はこの component に集約する。
+ */
 function App() {
   const [status, setStatus] = createSignal<AfStatus | null>(null)
   const [credential, setCredential] = createSignal<CredentialStatus | null>(null)

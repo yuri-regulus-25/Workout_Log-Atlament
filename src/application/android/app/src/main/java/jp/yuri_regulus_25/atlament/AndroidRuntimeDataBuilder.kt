@@ -4,6 +4,13 @@ import java.time.LocalDate
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Repository source から Android AF の Runtime Data payload を構築する。
+ *
+ * Windows `RuntimeDataBuilder` と同じ product contract を Kotlin/JSON 実装で再現する。
+ * Broken Workout resource は resource 単位で隔離し、未解決または削除済み Master reference は
+ * warning と resolution facts に落として Runtime 採用を継続する。
+ */
 internal class AndroidRuntimeDataBuilder {
     private data class MasterRecordCatalog<T>(val lookup: Map<String, T>, val excludedIds: Set<String>, val structuralInvalid: Boolean)
     private data class MachineMasterItem(val id: String, val sourceIds: List<String>, val name: String, val bodyPart: String, val deleted: Boolean)
@@ -11,6 +18,12 @@ internal class AndroidRuntimeDataBuilder {
 
     private val bodyParts = setOf("chest", "back", "legs", "shoulders", "arms", "glutes", "core", "cardio", "other")
 
+    /**
+     * Workout files と local/remote Master snapshot から `/runtime/workouts` 互換 payload を作る。
+     *
+     * payload が null の場合は新しい Runtime Data として保存してはならない。
+     * payload が存在する場合、errors は隔離済み resource、warnings は user-actionable な確認事項として扱う。
+     */
     fun buildRuntimeDataPayload(
         workoutFiles: List<RuntimeSourceFile>,
         machineMaster: MasterDocument,
@@ -168,6 +181,11 @@ internal class AndroidRuntimeDataBuilder {
         excludedIds.addAll(readStringList(item?.optJSONArray("source_ids")))
     }
 
+    /**
+     * 1 Workout record を Runtime session JSON へ正規化する。
+     *
+     * 必須構造違反は broken、Master reference の missing/deleted/invalid_excluded は warning として分類する。
+     */
     private fun buildSession(
         filePath: String,
         line: Int?,

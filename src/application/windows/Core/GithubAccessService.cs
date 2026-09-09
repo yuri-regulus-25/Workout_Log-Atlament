@@ -8,6 +8,15 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Atlament.Core;
+
+/// <summary>
+/// Windows AF が使用する GitHub Contents/GraphQL I/O 境界。
+/// </summary>
+/// <remarks>
+/// Credential の値は呼び出し元から受け取るだけで保持しない。Master write と Recovery write は
+/// allowlist、expected revision、固定 commit message によって境界を閉じ、Frontend から任意 Git 操作を
+/// 指示できないようにする。
+/// </remarks>
 public sealed class GithubAccessService
 {
     private static readonly IReadOnlyDictionary<string, string> MasterWriteTargets =
@@ -29,6 +38,13 @@ public sealed class GithubAccessService
         _httpClient = httpClient;
     }
 
+    /// <summary>
+    /// Configuration に定義された Runtime source を GitHub から取得する。
+    /// </summary>
+    /// <remarks>
+    /// required resource の取得失敗または empty disallow 違反は同期失敗として返す。
+    /// HTTP status は stable `GITHUB_*`/Runtime error code へ分類し、message は表示用として扱う。
+    /// </remarks>
     public async Task<(IReadOnlyList<RuntimeSourceFile> Files, IReadOnlyList<AfError> Errors)> FetchAsync(
         AfConfiguration configuration,
         string? token,
@@ -287,6 +303,13 @@ public sealed class GithubAccessService
         }
     }
 
+    /// <summary>
+    /// Master document を GitHub Contents API へ optimistic concurrency で書き込む。
+    /// </summary>
+    /// <remarks>
+    /// ここでは remote revision の一致だけを確認する。whole-master validation と local snapshot reflection は
+    /// Application orchestration 側で行うため、呼び出し側は成功 revision を local state へ反映する必要がある。
+    /// </remarks>
     public async Task<(MasterDocumentWriteResult? Result, IReadOnlyList<AfError> Errors)> PushMasterDocumentAsync(
         AfConfiguration configuration,
         string? token,
@@ -358,6 +381,14 @@ public sealed class GithubAccessService
         }
     }
 
+    /// <summary>
+    /// Recovery replacement を 1 Broken Resource に対する Git commit として反映する。
+    /// </summary>
+    /// <remarks>
+    /// source/replacement path は Workout resource boundary 内に限定する。
+    /// 同一 path は Contents API、path relocation は tree/commit/ref update を使い、force update や自動 merge は行わない。
+    /// timeout 後は同じ replacement content が反映済みかだけを照合し、曖昧な結果は成功扱いしない。
+    /// </remarks>
     public async Task<(RecoveryGitWriteResult? Result, IReadOnlyList<AfError> Errors)> PushRecoveryReplacementAsync(
         AfConfiguration configuration,
         string? token,

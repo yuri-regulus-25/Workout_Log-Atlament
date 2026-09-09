@@ -28,6 +28,14 @@ import {
 } from './DashboardSections'
 import './App.css'
 
+/**
+ * Dashboard の Composition Root。
+ *
+ * この component は Runtime Data の取得、最上位 state、月次/直近期間の派生値、
+ * Application Shell の navigation/theme lifecycle を所有する。
+ * Chart や panel の表示責務は `DashboardSections` と `DashboardCharts` へ委譲し、
+ * ここでは画面全体の composition と data flow だけを追える状態にする。
+ */
 function App() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [mainGymContext, setMainGymContext] = useState<ReturnType<typeof resolveMainGymContext>>({

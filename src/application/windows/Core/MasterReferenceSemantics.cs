@@ -1,7 +1,17 @@
 namespace Atlament.Core;
 
+/// <summary>
+/// Runtime Data における Master reference の解決状態と warning code を固定する。
+/// </summary>
+/// <remarks>
+/// Windows/Android/shared frontend で同じ `resolved`/`missing`/`deleted`/`invalid_excluded` 意味論を使う。
+/// 表示文言は UI 用であり、呼び出し側の分岐条件は code と resolution state を使用する。
+/// </remarks>
 public static class MasterReferenceSemantics
 {
+    /// <summary>
+    /// Raw Workout ID と canonical Master ID の関係を Runtime response 用に表現する。
+    /// </summary>
     public static MasterReferenceResolution Resolve(string originalId, string? resolvedId, bool deleted, bool invalidExcluded)
     {
         if (invalidExcluded)
@@ -17,6 +27,9 @@ public static class MasterReferenceSemantics
         return new MasterReferenceResolution(deleted ? "deleted" : "resolved", originalId, resolvedId);
     }
 
+    /// <summary>
+    /// 採用済み Runtime Data に添付する user-actionable warning を生成する。
+    /// </summary>
     public static RuntimeWarning CreateWarning(
         string referenceKind,
         string originalId,

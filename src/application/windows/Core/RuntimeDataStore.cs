@@ -3,6 +3,13 @@ using System.Text.Json;
 
 namespace Atlament.Core;
 
+/// <summary>
+/// Windows AF の採用済み Runtime Data と local Master snapshot を管理する永続化境界。
+/// </summary>
+/// <remarks>
+/// Frontend が読む current file は同期完了後の一貫した snapshot だけにする。
+/// 一時領域へ書いてから置換することで、同期中の部分書き込みを Runtime API へ露出しない。
+/// </remarks>
 public sealed class RuntimeDataStore
 {
     private readonly WindowsPathProvider _paths;
@@ -22,6 +29,9 @@ public sealed class RuntimeDataStore
         Directory.CreateDirectory(_paths.TemporaryRuntimeRoot);
     }
 
+    /// <summary>
+    /// Runtime build 結果を current snapshot として原子的に保存する。
+    /// </summary>
     public IReadOnlyList<AfError> SaveCurrent(RuntimeBuildResult result, LocalMasterDocuments? masterDocuments = null)
     {
         try
@@ -43,6 +53,13 @@ public sealed class RuntimeDataStore
         }
     }
 
+    /// <summary>
+    /// Frontend/API が使用する current Runtime Data を読み込む。
+    /// </summary>
+    /// <remarks>
+    /// ファイル欠落は unavailable、schema 不整合や parse failure は invalid として返す。
+    /// 呼び出し側は errors の message を分岐条件に使わず、code/component status を契約として扱う。
+    /// </remarks>
     public (RuntimeDataFile? Data, IReadOnlyList<AfError> Errors) LoadCurrent()
     {
         try

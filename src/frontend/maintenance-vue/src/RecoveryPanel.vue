@@ -231,6 +231,13 @@ import {
   type ResourceType,
 } from '@workout-lab/frontend-common'
 
+/**
+ * Recovery workspace の container component。
+ *
+ * Broken Resource 一覧、選択中 resource、Draft の local editing state、validation result、
+ * source view request、commit confirmation を所有する。GitHub write や Runtime reflection の正否は
+ * AF response を契約として扱い、Raw source content を UI から直接保存しない。
+ */
 type FieldChange = { value: unknown }
 type DraftSaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
 
@@ -353,6 +360,9 @@ async function reloadDetail() {
   }
 }
 
+/**
+ * AF に Recovery Draft 作成を依頼し、返却 snapshot を画面の編集 state に採用する。
+ */
 async function createDraft() {
   if (!selectedResourceKey.value) return
   draftLoading.value = true
@@ -380,6 +390,11 @@ function updateField(fieldPath: string, change: FieldChange) {
   draftSaveState.value = 'idle'
 }
 
+/**
+ * expectedDraftRevision 付きで Draft を保存する。
+ *
+ * 保存競合時は表示中 snapshot を信用せず、detail を再読み込みして caller-visible state を更新する。
+ */
 async function saveDraft() {
   if (!selectedResourceKey.value) return
   const draft = activeDraft.value
@@ -427,6 +442,9 @@ async function discardDraft() {
   }
 }
 
+/**
+ * 未保存変更がない Draft だけを AF の whole-resource validation に渡す。
+ */
 async function validateDraft() {
   if (!selectedResourceKey.value || hasUnsavedDraftChanges.value) return
   validating.value = true
@@ -442,6 +460,12 @@ async function validateDraft() {
   }
 }
 
+/**
+ * validation 済み Draft を Recovery commit として確定する。
+ *
+ * Git 成功後の Runtime reflection 失敗は warning として扱い、write conflict/draft conflict は
+ * 再確認が必要な state へ戻す。
+ */
 async function commitDraft() {
   if (!selectedResourceKey.value || !detail.value || !activeDraft.value) return
   committing.value = true

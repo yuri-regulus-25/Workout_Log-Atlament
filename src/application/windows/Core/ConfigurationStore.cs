@@ -3,6 +3,13 @@ using System.Text.Json;
 
 namespace Atlament.Core;
 
+/// <summary>
+/// Windows AF の非秘匿 Configuration を読み書きする永続化境界。
+/// </summary>
+/// <remarks>
+/// credential は扱わない。Configuration schema、resource type/kind、timeout range を検証し、
+/// API の readiness 判定が同じ facts から再現できる状態だけを available とする。
+/// </remarks>
 public sealed class ConfigurationStore
 {
     private static readonly HashSet<string> ResourceTypes = new(StringComparer.Ordinal) { "WORKOUT", "MACHINE_MASTER", "GYM_MASTER" };
@@ -60,6 +67,9 @@ public sealed class ConfigurationStore
         }
     }
 
+    /// <summary>
+    /// AF configuration contract に対する validation error を返す。
+    /// </summary>
     public static IReadOnlyList<AfError> Validate(AfConfiguration configuration)
     {
         var errors = new List<AfError>();

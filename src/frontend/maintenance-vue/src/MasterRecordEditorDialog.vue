@@ -35,6 +35,12 @@
 import MaintenanceDialogFrame from './MaintenanceDialogFrame.vue'
 import type { GymRecord, MachineRecord } from './maintenance-master-records'
 
+/**
+ * Machine/Gym Master record の create/edit dialog。
+ *
+ * form draft は親 App が所有し、この component は field binding と validation state の表示だけを担当する。
+ * save/close の副作用は emit で親へ戻し、Master write や confirmation policy はここに持ち込まない。
+ */
 defineProps<{
   open: boolean
   title: string

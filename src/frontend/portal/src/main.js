@@ -13,6 +13,8 @@ const noticeText = document.getElementById('sync-notice-text')
 const noticeIcon = document.getElementById('sync-notice-icon')
 const appGrid = document.getElementById('portal-app-grid')
 
+// Portal は Application Shell の注入対象ではなく、入口画面として独立した layout と header を所有する。
+// Theme/Brand/Easter Egg は各 Application と同じ共有 initializer を使い、状態管理を分岐させない。
 renderApplicationCards(appGrid, portalCardApplications)
 
 const statusNotice = initializePortalStatusNotice({

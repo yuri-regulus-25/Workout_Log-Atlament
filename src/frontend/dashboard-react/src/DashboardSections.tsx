@@ -25,6 +25,11 @@ type MainGymVolumeTrendPoint = {
   volume: number
 }
 
+/**
+ * Dashboard の repeated metric card 群をまとめる presentation section。
+ *
+ * Metric の算出は App が担当し、この component は layout と card rendering だけを持つ。
+ */
 export function DashboardMetricSection(props: { label: string; metrics: Metric[] }) {
   return (
     <section className="metric-grid" aria-label={props.label}>
@@ -47,6 +52,12 @@ export function DashboardLoadWarning(props: { loadError: string | null }) {
   )
 }
 
+/**
+ * Dashboard 上段の主情報領域。
+ *
+ * Main Gym volume chart と最新Workout card を同じ section として配置するが、
+ * Chart option や Workout 集計の算出はここでは行わない。
+ */
 export function DashboardPrimarySection(props: {
   latestWorkout?: WorkoutSession
   mainGymVolumeTrendState: string
@@ -64,6 +75,9 @@ export function DashboardPrimarySection(props: {
   )
 }
 
+/**
+ * Dashboard の分析系 chart section。
+ */
 export function DashboardChartSection(props: {
   sessions: WorkoutSession[]
   bodyBalanceRows: BodyBalanceRow[]
@@ -83,6 +97,9 @@ export function DashboardChartSection(props: {
   )
 }
 
+/**
+ * 最近のWorkout tableを表示する section。
+ */
 export function DashboardRecentWorkoutsSection(props: { rows: Parameters<typeof RecentWorkoutsTable>[0]['rows'] }) {
   return (
     <section className="panel">

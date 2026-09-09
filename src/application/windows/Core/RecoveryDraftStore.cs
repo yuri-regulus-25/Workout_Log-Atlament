@@ -5,6 +5,13 @@ using System.Text.Json.Serialization;
 
 namespace Atlament.Core;
 
+/// <summary>
+/// Recovery Draft を Windows local storage に保存する repository-scoped store。
+/// </summary>
+/// <remarks>
+/// Draft の同一性は repository owner/repository/ref/rootPath、resource type、source path、source revision で決まる。
+/// GitHub や browser storage へは保存せず、source revision が変わった Draft は stale として返す。
+/// </remarks>
 public sealed class RecoveryDraftStore
 {
     private readonly WindowsPathProvider _paths;
@@ -14,6 +21,12 @@ public sealed class RecoveryDraftStore
         _paths = paths;
     }
 
+    /// <summary>
+    /// 現在の source revision に対する Draft 状態を読み込む。
+    /// </summary>
+    /// <returns>
+    /// `none`、`active`、`stale`、`incompatible`、`corrupted` のいずれかを返す。
+    /// </returns>
     public RecoveryDraftSnapshot Load(AfConfiguration configuration, string resourceType, string sourcePath, string currentSourceRevision)
     {
         try
@@ -80,6 +93,9 @@ public sealed class RecoveryDraftStore
         }
     }
 
+    /// <summary>
+    /// Draft envelope を一時ファイル経由で保存する。
+    /// </summary>
     public IReadOnlyList<AfError> Save(AfConfiguration configuration, RecoveryDraft draft)
     {
         try

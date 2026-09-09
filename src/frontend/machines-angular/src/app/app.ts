@@ -41,6 +41,13 @@ import {
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
+/**
+ * Performance Detail の Angular Composition Root。
+ *
+ * Runtime Data loading、URL上の machine selection、filter state、Main Gym scoped metric、
+ * chart theme refresh を所有する。共通 Shell は `initializeAppNavigation` に委譲し、
+ * chart option は Angular computed state と Design Token の現在値から組み立てる。
+ */
 export class App implements AfterViewInit, OnDestroy {
   @ViewChild('shell') private readonly shellRef?: ElementRef<HTMLElement>;
 

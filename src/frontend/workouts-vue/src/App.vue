@@ -11,6 +11,12 @@ import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
 import WorkoutsView from './views/WorkoutsView.vue'
 
+/**
+ * Workout Domain の Composition Root。
+ *
+ * 共通 Application Shell の lifecycle と最上位 view composition だけを担当する。
+ * Workout 一覧/詳細の状態と表示責務は `WorkoutsView` 以下に委譲する。
+ */
 export default {
   components: { WorkoutsView },
   data() {

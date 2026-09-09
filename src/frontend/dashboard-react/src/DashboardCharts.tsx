@@ -16,6 +16,11 @@ type BodyBalanceRow = {
   sets: number
 }
 
+/**
+ * Main Gym の volume trend を ApexCharts へ変換して表示する。
+ *
+ * `state` が available ではない場合、App 側ではなく Chart component 側で empty presentation を担う。
+ */
 export function MainGymVolumeChart(props: {
   state: string
   points: MainGymVolumeTrendPoint[]
@@ -36,16 +41,29 @@ export function MainGymVolumeChart(props: {
   )
 }
 
+/**
+ * 直近 session の set count 推移を表示する Chart presentation。
+ *
+ * bar selection は日付が一意に解決できる場合だけ Workout Detail へ遷移する。
+ */
 export function WorkoutFrequencyChart(props: { sessions: WorkoutSession[] }) {
   const chart = createFrequencyChart(props.sessions)
   return <ReactApexChart type="bar" height={300} options={chart.options} series={chart.series} />
 }
 
+/**
+ * 月内の body part balance を表示する Chart presentation。
+ */
 export function BodyBalanceChart(props: { rows: BodyBalanceRow[] }) {
   const chart = createBodyBalanceChart(props.rows)
   return <ReactApexChart type="bar" height={300} options={chart.options} series={chart.series} />
 }
 
+/**
+ * Design Token の chart theme を ApexCharts option へ写像する。
+ *
+ * Theme 切替時は呼び出し component が再評価し、Portal/Shell と同じ token source を使う。
+ */
 function createVolumeChart(points: MainGymVolumeTrendPoint[]) {
   const chartTheme = getChartTheme()
   const options: ApexOptions = {

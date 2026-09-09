@@ -29,6 +29,13 @@
   } from '@workout-lab/workout-core'
   import type { PeriodPreset } from '@workout-lab/workout-core'
 
+  /**
+   * Analytics の Composition Root。
+   *
+   * Runtime Data の取得、期間選択、派生 analytics data の orchestration、Shell lifecycle を所有する。
+   * Chart lifecycle は `AnalyticsCharts`、summary/table presentation は各子 component へ委譲し、
+   * この file では state ownership と component composition を中心に読めるようにする。
+   */
   let sessions: WorkoutSession[] = []
   let masterData: WorkoutMasterData | undefined
   let selectedPeriod: PeriodPreset = '28d'
@@ -87,6 +94,11 @@
 
   const bodyPartDisplayOrder = ['shoulders', 'arms', 'chest', 'core', 'back', 'glutes', 'legs'] as const
 
+  /**
+   * UI上の部位表示順を固定する presentation helper。
+   *
+   * Core集計の意味論は変更せず、Analytics画面での読解順だけをここで整える。
+   */
   function orderByBodyPartDisplayOrder<T extends { bodyPart: string }>(rows: T[]): T[] {
     const order = new Map<string, number>(bodyPartDisplayOrder.map((bodyPart, index) => [bodyPart, index]))
 
