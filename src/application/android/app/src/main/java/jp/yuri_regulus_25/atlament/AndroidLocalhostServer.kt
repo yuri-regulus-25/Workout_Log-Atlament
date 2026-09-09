@@ -25,9 +25,12 @@ import org.json.JSONObject
 /**
  * Android AF の localhost HTTP server と Application orchestration ルート。
  *
- * HTTP request を `/api/v1/common` 契約へ変換し、Configuration、Credential、GitHub I/O、
- * Runtime build、Master write、Recovery の各責務へ委譲する。Windows と同じ API shape を公開し、
- * Android 固有差は asset 配信、credential 保護、local file path、packaging の範囲へ閉じ込める。
+ * HTTP request を `/api/v1/common` 契約へ変換し、Configuration、Credential、Runtime build、
+ * Master write、Recovery の domain処理と永続化を各Serviceへ委譲する。Recovery commitでは
+ * source/draft revision確認、GitHub write、Runtime reflectionを調停し、path relocationに必要な
+ * atomic GraphQL commit protocolの組み立ても現状はこのClassが所有する。低水準のGitHub通信は
+ * `AndroidGithubClient`へ委譲する。Windowsと同じAPI shapeを公開し、Android固有差はasset配信、
+ * credential保護、local file path、packagingの範囲へ閉じ込める。
  */
 class AndroidLocalhostServer(
     private val context: Context,

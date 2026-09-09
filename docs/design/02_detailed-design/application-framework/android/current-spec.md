@@ -113,7 +113,9 @@ Write は Local Master snapshot revision と request `expectedRevision` の一�
 
 Android は Windows / Node / frontend-common と同じ `/api/v1/common/recovery/*` public endpoint set を公開する。Recovery inventory/detail/source/draft/validate は Workout Resource の current remote data と AF-local draft store を使う。Raw JSON write、arbitrary path write、generic Git write、bulk recovery は公開しない。
 
-Android v2.1.0 の Recovery Git commit は truthful capability-gated である。`RecoveryCapabilities.commit` は `false`、`POST /recovery/resources/{resourceKey}/commit` は fake success を返さず `RECOVERY_UNAVAILABLE` を返す。
+Android の Recovery Git commit は eligible な Broken Workout Resource に対して利用可能であり、`RecoveryCapabilities.commit` は eligibility に従って `true` になる。`POST /recovery/resources/{resourceKey}/commit` は source revision、draft revision、whole Resource validation を再確認した後に write を実行する。同一 path の replacement は GitHub Contents API、path relocation は追加と削除を 1 commit にまとめる GitHub GraphQL API を使用し、成功後に re-inspection、Runtime rebuild、local reflection を試行する。
+
+`RECOVERY_UNAVAILABLE` は Recovery write boundary を安全に提供できない runtime で使用する共通 error codeであり、現行 Android実装の Recovery commit を一律 unavailable とするものではない。FrontendへRaw replacement content、任意path、任意commit message、force update、automatic mergeは公開しない。
 
 Status は `runtimeData.quarantinedWorkoutResourceCount` と `recovery.*` facts を公開する。Workout quarantine は Runtime usable + readiness degraded であり、whole-runtime LKG fallback の `fallbackActive` とは別事象である。
 
