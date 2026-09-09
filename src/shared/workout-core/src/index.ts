@@ -796,6 +796,12 @@ export function getSessionsByGym(sessions: WorkoutSession[]): GymSessionDistribu
   )
 }
 
+/**
+ * Gym Master から Main Gym の設定状態を解決する。
+ *
+ * Main Gym 未設定は readiness failure ではなく feature-level unavailable として扱う。
+ * 複数指定や inactive/deleted 指定は invalid context として返し、呼び出し側が画面ごとの表示に変換する。
+ */
 export function resolveMainGymContext(master: GymMaster): MainGymContext {
   const mainGyms = master.gyms.filter((gym) => gym.main)
 
@@ -816,6 +822,9 @@ export function resolveMainGymContext(master: GymMaster): MainGymContext {
   return { state: 'configured', gym: mainGym }
 }
 
+/**
+ * Main Gym に依存する metric を、available/unconfigured/invalid の状態付きで返す。
+ */
 export function getMainGymSessionsMetric(
   context: MainGymContext,
   sessions: WorkoutSession[],
@@ -886,6 +895,11 @@ export function getMainGymAverageSetWeightMetric(
   )
 }
 
+/**
+ * Master Data 自体の write/read contract を検証する。
+ *
+ * ID/source_ids の重複と Main Gym の一意性は、Runtime参照とは独立した Master 側の責務として扱う。
+ */
 export function validateWorkoutMasterData(masterData: WorkoutMasterData): MasterValidationResult {
   const issues: MasterValidationIssue[] = [
     ...validateMasterSchemaVersions(masterData),
@@ -897,6 +911,12 @@ export function validateWorkoutMasterData(masterData: WorkoutMasterData): Master
   return { valid: issues.length === 0, issues }
 }
 
+/**
+ * Workout が参照する Master record の存在と利用可否を検証する。
+ *
+ * `historical` は過去Workoutの参照確認、`new-write` は新規作成時の利用可能性確認に使う。
+ * logical delete 済み record は historical では追跡可能だが、new-write では利用不可として扱う。
+ */
 export function validateWorkoutMasterReferences(
   masterData: WorkoutMasterData,
   sessions: RawWorkoutSession[],
@@ -955,6 +975,9 @@ export function validateWorkoutMasterReferences(
   return { valid: issues.length === 0, issues }
 }
 
+/**
+ * Raw Workout の Master reference を historical report 用に解決する。
+ */
 export function resolveHistoricalWorkoutReferences(
   masterData: WorkoutMasterData,
   session: RawWorkoutSession,

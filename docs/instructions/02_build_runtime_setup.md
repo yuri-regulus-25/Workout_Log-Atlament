@@ -1,5 +1,8 @@
 # Atlament 実装指示書 — Build / Development Runtime
 
+> [!NOTE]
+> この文書はリポジトリ再編時の実装指示を記録した履歴文書です。記載された旧コマンド・旧成果物構成を現行運用には使用せず、[ビルドコマンド一覧](../../BUILD_COMMAND_LINE.md) と [現行ビルド / ランタイム設計](../design/02_detailed-design/repository/build-runtime.md) を参照してください。
+
 ## 目的
 
 Repository再編完了後、Production Build / Preview / Development Watch / Node Development Runtimeを責務分離して実装する。

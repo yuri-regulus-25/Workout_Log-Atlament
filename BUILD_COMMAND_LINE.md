@@ -27,14 +27,14 @@ Workout Log Atlamentで使用する主要コマンドと、そのコマンドが
 
 ## Frontend Build
 
-### npm run build
+### pnpm run build
 
 Frontend全体のProduction Artifactを作成します。
 
 内部で行うこと:
 
-1. `npm run build:apps` を実行
-2. `npm run build:mpa` を実行
+1. `pnpm run build:apps` を実行
+2. `pnpm run build:mpa` を実行
 
 生成されるもの:
 
@@ -53,7 +53,8 @@ dist/
 ├─ workouts/
 ├─ machines/
 ├─ analytics/
-└─ settings/
+├─ settings/
+└─ maintenance/
 ```
 
 用途:
@@ -61,9 +62,9 @@ dist/
 - Production Frontend Artifact作成
 - Windows AF Debug BuildへFrontend Artifactを渡す前準備
 - Windows単体配布Buildの前段処理
-- `npm run check:mpa` や `npm run preview:mpa` の前準備
+- `pnpm run check:mpa` や `pnpm run preview:mpa` の前準備
 
-### npm run build:apps
+### pnpm run build:apps
 
 各Frontend Applicationの単体Buildを実行します。
 
@@ -76,15 +77,16 @@ dist/
 - Machines / Angular
 - Analytics / Svelte
 - Settings / Solid
+- Resource Management / Vue + Vuetify
 
 用途:
 
 - 各FrontendのBuildが個別に成功するか確認する
 - `dist/` へ統合する前のApplication Artifactを作る
 
-通常は直接実行せず、`npm run build` を使います。
+通常は直接実行せず、`pnpm run build` を使います。
 
-### npm run build:mpa
+### pnpm run build:mpa
 
 各Frontend ApplicationのBuild ArtifactをRepository直下の `dist/` に集約します。
 
@@ -92,7 +94,7 @@ dist/
 
 - Portal Artifactを `dist/` 直下へ配置
 - Error Page Artifactを `dist/` 直下へ配置
-- Dashboard / Workouts / Machines / Analytics / Settingsを各route配下へ配置
+- Dashboard / Workouts / Machines / Analytics / Settings / Maintenanceを各route配下へ配置
 - `frontend-common` の共有Assetを `dist/frontend-common/` へ配置
 
 用途:
@@ -102,17 +104,17 @@ dist/
 注意:
 
 - 事前に各FrontendのBuild Artifactが必要です。
-- 通常は直接実行せず、`npm run build` を使います。
+- 通常は直接実行せず、`pnpm run build` を使います。
 
 ## Windows配布Build
 
-### npm run build:windows
+### pnpm run build:windows
 
 Windows x64向けの自己完結・単一exe配布物を作成します。
 
 内部で行うこと:
 
-1. `npm run build` を実行
+1. `pnpm run build` を実行
 2. `dotnet publish` をRelease / win-x64 / self-contained / single-fileで実行
 3. `dist/` のFrontend Artifactを `Atlament.exe` に埋め込み
 4. 配布に不要な `.pdb` / `.xml` を除去
@@ -139,7 +141,7 @@ dist-windows/
 
 ## Frontend Preview / Validation
 
-### npm run version:check
+### pnpm run version:check
 
 `src/version.json`、Windows metadata、Android metadata、Frontend version artifact生成設定の整合性をread-onlyで検証します。
 
@@ -153,19 +155,19 @@ dist-windows/
 - ファイルは書き換えません。
 - 不整合がある場合はnon-zero exitします。
 
-### npm run version:set
+### pnpm run version:set
 
 AtlamentのVersion情報を更新します。Version値は直接編集せず、このコマンドを使用してください。
 
 例:
 
 ```sh
-npm run version:set -- --target frontend --version 1.1.0
-npm run version:set -- --target windows --version 1.1.0
-npm run version:set -- --target android --version 1.1.0 --bump-version-code
-npm run version:set -- --target android --version 1.1.0 --version-code 24
-npm run version:set -- --target all --version 1.1.0 --bump-version-code
-npm run version:set -- --target frontend --version 1.1.0 --dry-run
+pnpm run version:set -- --target frontend --version 1.1.0
+pnpm run version:set -- --target windows --version 1.1.0
+pnpm run version:set -- --target android --version 1.1.0 --bump-version-code
+pnpm run version:set -- --target android --version 1.1.0 --version-code 24
+pnpm run version:set -- --target all --version 1.1.0 --bump-version-code
+pnpm run version:set -- --target frontend --version 1.1.0 --dry-run
 ```
 
 target:
@@ -179,7 +181,7 @@ Androidを含む更新では、`versionName` とは別にAndroid更新判定用�
 
 dry-runでは実際に書き換えず、現在Version、新Version、更新予定ファイル、更新予定field、warning、整合性check結果を表示します。
 
-### npm run preview:mpa
+### pnpm run preview:mpa
 
 Build済みの `dist/` を静的配信します。
 
@@ -191,9 +193,9 @@ Build済みの `dist/` を静的配信します。
 注意:
 
 - Buildは実行しません。
-- 事前に `npm run build` が必要です。
+- 事前に `pnpm run build` が必要です。
 
-### npm run check:mpa
+### pnpm run check:mpa
 
 `dist/` の主要routeと404を検証します。
 
@@ -206,6 +208,7 @@ Build済みの `dist/` を静的配信します。
 - `/machines/:id`
 - `/analytics/`
 - `/settings/`
+- `/maintenance/`
 - unknown routeの404
 
 用途:
@@ -213,7 +216,7 @@ Build済みの `dist/` を静的配信します。
 - MPA Artifactのroute破損検知
 - Production Build後の軽量smoke check
 
-### npm test
+### pnpm test
 
 Vitestのテストを実行します。
 
@@ -228,7 +231,7 @@ Vitestのテストを実行します。
 - Frontend共通データ処理の回帰確認
 - Build前後の基本品質確認
 
-### npm run check:data
+### pnpm run check:data
 
 実データに対するworkout-dataの検証テストを実行します。
 
@@ -237,7 +240,7 @@ Vitestのテストを実行します。
 - Repository内 `data/` の形式確認
 - Parser / Loaderの回帰確認
 
-### npm run check:analytics
+### pnpm run check:analytics
 
 Analytics Frontendのcheck scriptを実行します。
 
@@ -245,16 +248,16 @@ Analytics Frontendのcheck scriptを実行します。
 
 - Analytics固有の型・構成確認
 
-### npm run check:all
+### pnpm run check:all
 
 複数のcheckをまとめて実行します。
 
 内部で行うこと:
 
-1. `npm run version:check`
-2. `npm run check:analytics`
-3. `npm run check:data`
-4. `npm run check:mpa`
+1. `pnpm run version:check`
+2. `pnpm run check:analytics`
+3. `pnpm run check:data`
+4. `pnpm run check:mpa`
 
 用途:
 
@@ -262,7 +265,7 @@ Analytics Frontendのcheck scriptを実行します。
 
 ## 開発起動
 
-### npm run watch
+### pnpm run watch
 
 Development Gateway、Development Runtime、Portal、各Frontend開発Serverをまとめて起動します。
 
@@ -277,6 +280,7 @@ Development Gateway、Development Runtime、Portal、各Frontend開発Serverを�
 127.0.0.1:5178  Analytics / Svelte
 127.0.0.1:5179  Settings / Solid
 127.0.0.1:5180  Development Runtime API
+127.0.0.1:5181  Resource Management / Vue + Vuetify
 ```
 
 用途:
@@ -289,7 +293,7 @@ Development Gateway、Development Runtime、Portal、各Frontend開発Serverを�
 - Port競合時は自動変更せず失敗します。
 - Windows AF Production Hostingには影響しません。
 
-### npm run watch:portal
+### pnpm run watch:portal
 
 Portal開発Serverを固定Portで起動します。
 
@@ -303,7 +307,7 @@ http://127.0.0.1:5174/
 
 - Portal Sourceだけを確認する
 
-### npm run watch:dashboard
+### pnpm run watch:dashboard
 
 Dashboard Reactの開発Serverを固定Portで起動します。
 
@@ -317,7 +321,7 @@ http://127.0.0.1:5175/dashboard/
 
 - Gateway連携前提のDashboard開発確認
 
-### npm run watch:workouts
+### pnpm run watch:workouts
 
 Workouts Vueの開発Serverを固定Portで起動します。
 
@@ -331,7 +335,7 @@ http://127.0.0.1:5176/workouts/
 
 - Gateway連携前提のWorkouts開発確認
 
-### npm run watch:machines
+### pnpm run watch:machines
 
 Machines Angularの開発Serverを固定Portで起動します。
 
@@ -349,7 +353,7 @@ http://127.0.0.1:5177/machines/
 
 - Angularは `--serve-path /machines/` を指定して起動します。
 
-### npm run watch:analytics
+### pnpm run watch:analytics
 
 Analytics Svelteの開発Serverを固定Portで起動します。
 
@@ -363,7 +367,7 @@ http://127.0.0.1:5178/analytics/
 
 - Gateway連携前提のAnalytics開発確認
 
-### npm run watch:settings
+### pnpm run watch:settings
 
 Settings Solidの開発Serverを固定Portで起動します。
 
@@ -377,9 +381,23 @@ http://127.0.0.1:5179/settings/
 
 - Gateway連携前提のSettings開発確認
 
+### pnpm run watch:maintenance
+
+Resource ManagementのVue開発サーバーを固定ポートで起動します。
+
+起動先:
+
+```text
+http://127.0.0.1:5181/maintenance/
+```
+
+用途:
+
+- ゲートウェイ連携を前提としたResource Managementの開発確認
+
 ## 単体Frontend開発起動
 
-### npm run dev:dashboard
+### pnpm run dev:dashboard
 
 Dashboard Reactを開発起動します。
 
@@ -388,7 +406,7 @@ Dashboard Reactを開発起動します。
 - Dashboard単体の開発確認
 - 必要に応じて既存Workout Data APIと併用
 
-### npm run dev:workouts
+### pnpm run dev:workouts
 
 Workouts Vueを開発起動します。
 
@@ -397,7 +415,7 @@ Workouts Vueを開発起動します。
 - Workouts単体の開発確認
 - 必要に応じて既存Workout Data APIと併用
 
-### npm run dev:machines
+### pnpm run dev:machines
 
 Machines Angularを開発起動します。
 
@@ -406,7 +424,7 @@ Machines Angularを開発起動します。
 - Machines単体の開発確認
 - Angular CLIの開発Serverで確認
 
-### npm run dev:analytics
+### pnpm run dev:analytics
 
 Analytics Svelteを開発起動します。
 
@@ -415,7 +433,7 @@ Analytics Svelteを開発起動します。
 - Analytics単体の開発確認
 - 必要に応じて既存Workout Data APIと併用
 
-### npm run dev:settings
+### pnpm run dev:settings
 
 Settings Solidを開発起動します。
 
@@ -423,7 +441,15 @@ Settings Solidを開発起動します。
 
 - Settings単体の開発確認
 
-### npm run dev:runtime
+### pnpm run dev:maintenance
+
+Resource ManagementのVueアプリを開発用ランタイムとともに起動します。
+
+用途:
+
+- マスターデータ保守、未解決参照、Recovery画面の開発確認
+
+### pnpm run dev:runtime
 
 Development Runtime APIを起動します。
 
@@ -446,7 +472,7 @@ http://127.0.0.1:5180/
 
 ## Production確認用Frontend Server
 
-### npm run prod:dashboard
+### pnpm run prod:dashboard
 
 DashboardのProduction相当previewを起動します。
 
@@ -454,7 +480,7 @@ DashboardのProduction相当previewを起動します。
 
 - Dashboard単体ArtifactのProduction寄り確認
 
-### npm run prod:workouts
+### pnpm run prod:workouts
 
 WorkoutsのProduction相当previewを起動します。
 
@@ -462,7 +488,7 @@ WorkoutsのProduction相当previewを起動します。
 
 - Workouts単体ArtifactのProduction寄り確認
 
-### npm run prod:machines
+### pnpm run prod:machines
 
 MachinesのProduction相当previewを起動します。
 
@@ -470,7 +496,7 @@ MachinesのProduction相当previewを起動します。
 
 - Machines単体ArtifactのProduction寄り確認
 
-### npm run prod:analytics
+### pnpm run prod:analytics
 
 AnalyticsのProduction相当previewを起動します。
 
@@ -478,13 +504,50 @@ AnalyticsのProduction相当previewを起動します。
 
 - Analytics単体ArtifactのProduction寄り確認
 
-### npm run prod:settings
+### pnpm run prod:settings
 
 SettingsのProduction相当previewを起動します。
 
 用途:
 
 - Settings単体ArtifactのProduction寄り確認
+
+### pnpm run prod:maintenance
+
+Resource Managementの本番相当プレビューを起動します。
+
+用途:
+
+- Resource Management単体成果物の本番相当確認
+
+## Android ビルド / テスト
+
+### pnpm run build:android
+
+フロントエンド成果物をAndroidのアセットへ同期し、デバッグAPKを生成します。デバッグ版では `versionName` に `-debug` の接尾辞が付きます。
+
+### pnpm run build:android:release
+
+リポジトリ既定の署名設定を使用してリリースAPKを生成します。署名情報は環境変数または未追跡の `src/application/android/local.properties` から取得し、リポジトリへ記録しません。
+
+生成先:
+
+```text
+src/application/android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Android 単体テスト
+
+```powershell
+cd src\application\android
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+## リリース運用
+
+アプリケーションバージョンは `src/version.json` を正式な参照元とし、`pnpm run version:set` と `pnpm run version:check` で各プラットフォームの定義との整合を保ちます。リリース候補は専用のリリースブランチで検証し、合格後に `master` へ明示的なマージコミットで統合します。リリースタグは検証済みのmasterマージコミットへ付与し、同じソースからWindows / Androidの正式成果物を生成します。
+
+テストブランチの試験データや検証記録は本番ソースと区別します。リリースへ必要な差分がないことを確認してから整理し、試験データをリリースブランチへ取り込みません。マージ競合、既存タグ、署名不整合、端末データ削除が必要な状態は推測で処理せず停止して確認します。
 
 ## Windows AF CLI
 
@@ -514,7 +577,7 @@ Windows AF SolutionをRelease構成でBuildします。
 注意:
 
 - これは単体配布Buildではありません。
-- 単体exe配布物を作る場合は `npm run build:windows` を使用します。
+- 単体exe配布物を作る場合は `pnpm run build:windows` を使用します。
 
 ### dotnet test src/application/windows/Atlament.sln
 
@@ -532,16 +595,16 @@ Windows AF Projectをpublishします。
 
 - 手動でpublish条件を検証する場合
 
-通常は直接実行せず、`npm run build:windows` を使用します。
+通常は直接実行せず、`pnpm run build:windows` を使用します。
 
 ## よく使う組み合わせ
 
 ### Frontend変更後
 
 ```sh
-npm test
-npm run build
-npm run check:mpa
+pnpm test
+pnpm run build
+pnpm run check:mpa
 ```
 
 ### Windows AF変更後
@@ -554,18 +617,18 @@ dotnet test src/application/windows/Atlament.sln
 ### Windows配布物を作る
 
 ```sh
-npm run build:windows
+pnpm run build:windows
 ```
 
 ### 最終Validation寄り
 
 ```sh
-npm test
-npm run build
-npm run check:mpa
+pnpm test
+pnpm run build
+pnpm run check:mpa
 dotnet build src/application/windows/Atlament.sln
 dotnet test src/application/windows/Atlament.sln
-npm run build:windows
+pnpm run build:windows
 ```
 
 ## 既知Warning

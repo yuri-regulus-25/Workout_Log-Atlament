@@ -20,15 +20,15 @@ React + TypeScript + ViteでDashboard画面を実装しています。
 ## 開発起動
 
 ```sh
-npm run dev:dashboard
+pnpm run dev:dashboard
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/dashboard/` を開きます。Dashboardの開発Server固定Portは `127.0.0.1:5175` です。
+Gateway経由で確認する場合はRepository直下で `pnpm run watch` を実行し、`http://127.0.0.1:5173/dashboard/` を開きます。Dashboardの開発Server固定Portは `127.0.0.1:5175` です。
 
 ## Build
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 統合Buildにより、最終的なProduction Artifactは `dist/dashboard/` に配置されます。

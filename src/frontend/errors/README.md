@@ -28,7 +28,7 @@ dist/
 Repository直下で実行します。
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 Error Page単体では以下を実行できます。

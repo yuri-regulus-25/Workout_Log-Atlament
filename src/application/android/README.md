@@ -38,7 +38,7 @@
   - `filesDir/log/atlament-log.sqlite` にAF operation logを保存する。
 - Primary Logo SVGのAndroid用Asset複製。
 - Release APK Build Flow。
-  - `npm run build:android:release` で署名済みRelease APKを生成する。
+  - `pnpm run build:android:release` で署名済みRelease APKを生成する。
   - Release keystoreは `app/signing/atlament-release.jks` を使用する。
   - 署名passwordは環境変数または未追跡 `local.properties` から読み込む。
 
@@ -57,7 +57,7 @@ src/application/android
 Repository rootからfrontend assetsを再生成してAndroidへ同期し、Debug APKを生成する。
 
 ```powershell
-npm run build:android
+pnpm run build:android
 ```
 
 Android project directoryで直接Gradleを実行する場合は次を使う。
@@ -97,7 +97,7 @@ atlament.release.keyPassword=<key password>
 `local.properties` はRepositoryへcommitしない。Release APKはRepository rootから次で生成する。
 
 ```powershell
-npm run build:android:release
+pnpm run build:android:release
 ```
 
 生成先:
@@ -120,7 +120,7 @@ Android APKへ同梱するfrontend assetsは次に配置する。
 src/application/android/app/src/main/assets/frontend
 ```
 
-このディレクトリは `npm run build:android` 実行時にRepository rootの `dist/` から同期される。`build:android` は同期前に `npm run build` を実行し、frontend source変更を反映する。
+このディレクトリは `pnpm run build:android` 実行時にRepository rootの `dist/` から同期される。`build:android` は同期前に `pnpm run build` を実行し、frontend source変更を反映する。
 
 ## 実機スモーク確認
 
@@ -147,11 +147,15 @@ Settings画面では次を確認する。
 - status上でConfiguration / Credential / Runtime Dataが利用可能になる。
 - status上でPortal / Dashboard / Workouts / Machines / Analytics / Settings / MaintenanceのHostingが利用可能になる。
 
-## 未完了事項
+## Test
 
-- GitHub accessのエラー表示・再試行制御の強化。
-- Windows AFと同等のRuntime Data validation / build parity。
-- SQLite Logの閲覧・export・rotation。
-- Android Unit / Instrumentation Test。
+Android projectのUnit TestはRepository rootから次で実行する。
+
+```powershell
+cd src\application\android
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+Windows / Android間で共有するRuntime、Master reference、Recoveryの意味論は、Android Unit TestとRepository rootのFrontend/shared contract testで確認する。Instrumentation Testは現行Repositoryには含まれないため、実機UI確認とは区別する。
 
 

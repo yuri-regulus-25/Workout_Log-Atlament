@@ -62,7 +62,7 @@ Frontend application の責務:
 - public web hosting
 - installer generation
 - Android AAB / Google Play packaging
-- v1.2.0 candidate applications
+- Planning段階にのみ存在する未実装Application
 
 ## Data Correctness Boundary
 

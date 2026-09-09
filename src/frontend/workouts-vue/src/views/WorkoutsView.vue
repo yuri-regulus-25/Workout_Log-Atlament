@@ -8,6 +8,9 @@
             <h2>検索対象</h2>
           </div>
         </div>
+        <div class="filter-actions" aria-live="polite">
+          <button type="button" @click="resetFilters">Reset</button>
+        </div>
       </div>
       <div class="panel-content">
         <WorkoutFilters
@@ -20,7 +23,6 @@
           :machine-options="machineOptions"
           :body-part-options="bodyPartOptions"
           :gym-options="gymOptions"
-          @reset="resetFilters"
         />
       </div>
     </section>
@@ -31,23 +33,7 @@
       <p class="muted">データ取得APIでエラーが発生しました。設定情報を確認し、再度同期を行ってください</p>
     </section>
 
-    <section class="panel workout-calendar-panel">
-      <div class="panel-header">
-        <div class="card-heading">
-          <div class="card-heading__icon"><i class="mdi mdi-calendar-month-outline" aria-hidden="true" /></div>
-          <div class="card-heading__text">
-            <p class="eyebrow">Workout Calendar</p>
-            <h2>{{ calendarTitle }}</h2>
-          </div>
-        </div>
-      </div>
-      <div class="workout-calendar" aria-label="Workout calendar">
-        <div v-for="day in calendarDays" :key="day.date" :class="['calendar-day', { 'calendar-day--trained': day.trainingDay }]">
-          <span>{{ Number(day.date.slice(8, 10)) }}</span>
-          <strong v-if="day.sessionCount > 0">{{ day.sessionCount }}</strong>
-        </div>
-      </div>
-    </section>
+    <WorkoutCalendar :sessions="workoutSessions" @open-date="openDate" />
 
     <section class="panel">
       <div class="panel-header">
@@ -73,20 +59,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { applicationRoutes } from '@workout-lab/frontend-common/navigation'
 import type { WorkoutSession } from '@workout-lab/workout-types'
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data'
 import {
-  getCalendarMonthAggregates,
-  getCurrentLocalYearMonth,
   getGymDisplayName,
   getMachineDisplayName,
 } from '@workout-lab/workout-core'
+import WorkoutCalendar from '../components/WorkoutCalendar.vue'
 import WorkoutFilters from '../components/WorkoutFilters.vue'
 import WorkoutGrid from '../components/WorkoutGrid.vue'
 import { defaultWorkoutListFilters, filterWorkoutSessions } from '../workout-list-filters'
 
-const router = useRouter()
 const workoutSessions = ref<WorkoutSession[]>([])
 const loadError = ref<string | null>(null)
 
@@ -96,24 +80,6 @@ const selectedBodyPart = ref(defaultWorkoutListFilters.selectedBodyPart)
 const selectedGym = ref(defaultWorkoutListFilters.selectedGym)
 const dateFrom = ref(defaultWorkoutListFilters.dateFrom)
 const dateTo = ref(defaultWorkoutListFilters.dateTo)
-const currentCalendarMonth = computed(() => {
-  const latestSession = workoutSessions.value.at(-1)
-  if (!latestSession) {
-    return getCurrentLocalYearMonth()
-  }
-
-  const [year, month] = latestSession.date.split('-').map(Number)
-  return { year, month }
-})
-const calendarTitle = computed(() => {
-  const month = currentCalendarMonth.value
-  return `${month.year}-${String(month.month).padStart(2, '0')}`
-})
-const calendarDays = computed(() => {
-  const month = currentCalendarMonth.value
-  return getCalendarMonthAggregates(workoutSessions.value, month.year, month.month)
-})
-
 onMounted(async () => {
   try {
     const result = await loadRuntimeWorkoutSessions()
@@ -172,7 +138,15 @@ const filteredSessions = computed(() => {
 })
 
 function openSession(session: WorkoutSession) {
-  router.push({ name: 'workout-detail', params: { date: session.date } })
+  window.location.href = workoutDetailRoute(session.date)
+}
+
+function openDate(date: string) {
+  window.location.href = workoutDetailRoute(date)
+}
+
+function workoutDetailRoute(date: string) {
+  return `${applicationRoutes.workouts}${date}/`
 }
 
 function resetFilters() {

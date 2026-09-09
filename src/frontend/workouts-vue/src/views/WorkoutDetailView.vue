@@ -83,21 +83,21 @@ function machineNames(machines: Array<{ machineName: string }>): string {
     </div>
 
     <nav v-if="workoutNavigation" class="detail-navigation" aria-label="Workout navigation">
-      <RouterLink
+      <a
         v-if="workoutNavigation.previous"
         class="text-action"
-        :to="{ name: 'workout-detail', params: { date: workoutNavigation.previous.date } }"
+        :href="`${applicationRoutes.workouts}${workoutNavigation.previous.date}/`"
       >
         <i class="mdi mdi-chevron-left" aria-hidden="true" />Previous
-      </RouterLink>
+      </a>
       <span v-else class="muted">Previous</span>
-      <RouterLink
+      <a
         v-if="workoutNavigation.next"
         class="text-action"
-        :to="{ name: 'workout-detail', params: { date: workoutNavigation.next.date } }"
+        :href="`${applicationRoutes.workouts}${workoutNavigation.next.date}/`"
       >
         Next<i class="mdi mdi-chevron-right" aria-hidden="true" />
-      </RouterLink>
+      </a>
       <span v-else class="muted">Next</span>
     </nav>
 
@@ -220,6 +220,7 @@ function machineNames(machines: Array<{ machineName: string }>): string {
               </tbody>
             </table>
             <div v-if="(machine.notes?.length ?? 0) > 0" class="machine-notes">
+              <p class="eyebrow">Notes</p>
               <p v-for="note in machine.notes ?? []" :key="note" class="note-line">{{ note }}</p>
             </div>
           </div>

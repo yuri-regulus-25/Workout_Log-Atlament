@@ -1,17 +1,5 @@
 <main #shell class="app-shell {{ pageTransitionClassName }}">
-  <header class="page-hero">
-    <div class="hero-top">
-      <div class="atl-brand-row" aria-label="Atlament Machines">
-        <p #characterTrigger class="eyebrow atl-character-trigger">Atlament / Performance Detail</p>
-      </div>
-    </div>
-    <h1>Performance Detail</h1>
-    <p class="lead">
-      種目ごとの変化を追う<br />
-      種目ごとの記録と推移を確認します
-    </p>
-  </header>
-
+  <div data-application-shell-content>
   <section class="panel search-panel">
     <div class="panel-header">
       <div class="card-heading">
@@ -20,6 +8,9 @@
           <p class="eyebrow">Search Target</p>
           <h2>検索対象</h2>
         </div>
+      </div>
+      <div class="filter-actions" aria-live="polite">
+        <button type="button" (click)="clearMachineFilters()">Reset</button>
       </div>
     </div>
     <div class="selector-panel" aria-label="Machine selector filters">
@@ -50,6 +41,7 @@
             [disabled]="filteredMachineOptions().length === 0"
             (change)="selectMachine($any($event.target).value)"
           >
+            <option value="">-</option>
             @for (machine of filteredMachineOptions(); track machine.machine_id) {
               <option
                 [value]="machine.machine_id"
@@ -60,10 +52,6 @@
             }
           </select>
         </label>
-
-        <div class="filter-actions" aria-live="polite">
-          <button type="button" (click)="clearMachineFilters()">Reset</button>
-        </div>
     </div>
   </section>
 
@@ -93,7 +81,7 @@
             d="M13 13h-2V7h2m0 10h-2v-2h2M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2Z"
           />
         </svg>
-        <span>存在しないマシンIDが指定されたため、初期表示を行います。</span>
+        <span>存在しないマシンIDが指定されています。表示するマシンを選択してください。</span>
       </p>
       <p class="muted">指定ID: {{ invalidMachineId() }}</p>
     </section>
@@ -110,7 +98,7 @@
       <strong>{{ bestWeightLabel() }}</strong>
     </article>
     <article class="metric-card">
-      <span>Main Gym Estimated 1RM</span>
+      <span>Main Gym Est. 1RM</span>
       <strong>{{ estimatedOneRepMaxLabel() }}</strong>
     </article>
     <article class="metric-card">
@@ -206,4 +194,17 @@
     </div>
   </section>
   }
+
+  @if (!hasActiveMachineSelection() && !hasInvalidMachineIdParameter() && filteredMachineOptions().length > 0) {
+    <section class="panel information-panel" role="status" aria-live="polite">
+      <div class="card-heading">
+        <div class="card-heading__icon"><i class="mdi mdi-information" aria-hidden="true"></i></div>
+        <div class="card-heading__text">
+          <p class="eyebrow">Information</p>
+          <h2>検索条件を指定してください</h2>
+        </div>
+      </div>
+    </section>
+  }
+  </div>
 </main>

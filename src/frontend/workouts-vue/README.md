@@ -19,15 +19,15 @@ Vue 3 + TypeScript + ViteでWorkout History画面を実装しています。
 ## 開発起動
 
 ```sh
-npm run dev:workouts
+pnpm run dev:workouts
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/workouts/` を開きます。Workoutsの開発Server固定Portは `127.0.0.1:5176` です。
+Gateway経由で確認する場合はRepository直下で `pnpm run watch` を実行し、`http://127.0.0.1:5173/workouts/` を開きます。Workoutsの開発Server固定Portは `127.0.0.1:5176` です。
 
 ## Build
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 統合Buildにより、最終的なProduction Artifactは `dist/workouts/` に配置されます。

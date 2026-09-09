@@ -22,15 +22,15 @@ SolidJS + TypeScript + ViteでApplication Settings画面を実装しています
 Repository直下で実行します。
 
 ```sh
-npm run dev:settings
+pnpm run dev:settings
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/settings/` を開きます。Settingsの開発Server固定Portは `127.0.0.1:5179` です。
+Gateway経由で確認する場合はRepository直下で `pnpm run watch` を実行し、`http://127.0.0.1:5173/settings/` を開きます。Settingsの開発Server固定Portは `127.0.0.1:5179` です。
 
 ## Build
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 統合Buildにより、最終的なProduction Artifactは `dist/settings/` に配置されます。

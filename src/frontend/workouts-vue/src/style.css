@@ -16,12 +16,12 @@
 
 .field input,
 .field select {
-  min-width: 220px;
+  min-width: 0;
 }
 
 .workout-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
 }
@@ -56,6 +56,42 @@
   margin-bottom: 16px;
 }
 
+.workout-calendar-header {
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .workout-calendar-header {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+.calendar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-actions button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--wl-input-border);
+  border-radius: var(--wl-radius-control);
+  background: var(--wl-input-bg);
+  color: var(--wl-primary-strong);
+  cursor: pointer;
+}
+
+.calendar-actions button:disabled {
+  cursor: not-allowed;
+  opacity: var(--wl-disabled-opacity);
+}
+
 .workout-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -71,7 +107,18 @@
   border-radius: var(--wl-radius-inner);
   background: var(--wl-surface-muted);
   color: var(--wl-text-muted);
+  cursor: default;
+  font: inherit;
   padding: 8px;
+  text-align: left;
+}
+
+.calendar-day:not(:disabled) {
+  cursor: pointer;
+}
+
+.calendar-day:not(:disabled):hover {
+  border-color: var(--wl-primary);
 }
 
 .calendar-day span,
@@ -87,7 +134,7 @@
 
 .calendar-day--trained {
   border-color: var(--wl-primary-soft);
-  background: var(--wl-success-bg);
+  background: color-mix(in srgb, var(--wl-brand) 16%, var(--wl-surface));
   color: var(--wl-text-strong);
 }
 
@@ -400,7 +447,7 @@
   }
 }
 
-@container (max-width: 720px) {
+@container (max-width: 560px) {
   .workout-filters {
     grid-template-columns: 1fr;
   }

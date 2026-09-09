@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build:apps && npm run build:mpa",
     "build:apps": "node src/frontend/portal/build.mjs && node src/frontend/errors/build.mjs && npm run build -w @workout-lab/workouts-vue && npm run build -w @workout-lab/dashboard-react && npm run build -w @workout-lab/machines-angular && npm run build -w @workout-lab/analytics-svelte && npm run build -w @workout-lab/settings-solid && npm run build -w @workout-lab/maintenance-vue",
+    "build:debug": "node tools/build/build-debug.mjs",
     "build:mpa": "node tools/build/build-mpa.mjs",
     "check:analytics": "npm run check -w @workout-lab/analytics-svelte",
     "check:all": "npm run version:check && npm run check:analytics && npm run check:data && npm run check:mpa",

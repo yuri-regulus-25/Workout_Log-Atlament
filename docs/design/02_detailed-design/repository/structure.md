@@ -33,6 +33,7 @@
 - `machines-angular`
 - `analytics-svelte`
 - `settings-solid`
+- `maintenance-vue`
 - `errors`
 
 `src/shared/` は workspace package を含む。

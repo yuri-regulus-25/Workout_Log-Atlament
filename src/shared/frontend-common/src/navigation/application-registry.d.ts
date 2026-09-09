@@ -6,10 +6,11 @@ export type ApplicationMetadata = {
   drawer: boolean
   portalCategory?: string
   portalPointer?: string
+  portalDescription?: string
   frameworkName?: string
   frameworkIcons?: ReadonlyArray<{
-    href?: string
-    className?: string
+    name: string
+    href: string
   }>
   frameworkIconHref?: string
   frameworkIconClass?: string

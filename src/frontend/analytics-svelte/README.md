@@ -20,15 +20,15 @@ Svelte + TypeScript + ViteでAnalytics画面を実装しています。
 ## 開発起動
 
 ```sh
-npm run dev:analytics
+pnpm run dev:analytics
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/analytics/` を開きます。Analyticsの開発Server固定Portは `127.0.0.1:5178` です。
+Gateway経由で確認する場合はRepository直下で `pnpm run watch` を実行し、`http://127.0.0.1:5173/analytics/` を開きます。Analyticsの開発Server固定Portは `127.0.0.1:5178` です。
 
 ## Build
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 統合Buildにより、最終的なProduction Artifactは `dist/analytics/` に配置されます。

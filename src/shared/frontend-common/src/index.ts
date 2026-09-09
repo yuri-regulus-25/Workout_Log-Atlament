@@ -43,6 +43,10 @@ export type AfStatus = {
         versionCode: number
       }
     }
+    build?: {
+      variant: string
+      debug: boolean
+    }
   }
   readiness: ApplicationReadiness
   runtimeData: RuntimeDataStatusFacts
@@ -115,6 +119,12 @@ export type ApplicationAccessPolicy = {
   fallbackActive: boolean
 }
 
+/**
+ * AF Status の component facts から Frontend 共通の readiness を導出する。
+ *
+ * Frontend は OS や hosting runtime を推測せず、`requiredActions` と component status だけを契約として扱う。
+ * Credential の invalid/expired は setup 未完了へ戻さず、runtime failure として degraded/unavailable に分類する。
+ */
 export function deriveApplicationReadiness(status: Pick<AfStatus, 'application' | 'components' | 'requiredActions'>): ApplicationReadiness {
   const requiredActions = Array.from(new Set(status.requiredActions)).sort()
   const unavailableComponents = [
@@ -142,6 +152,12 @@ export function deriveApplicationReadiness(status: Pick<AfStatus, 'application' 
   return { state: 'ready', requiredActions, unavailableComponents: [], degradedComponents: [] }
 }
 
+/**
+ * Readiness と Runtime facts から Application navigation の許可状態を導出する。
+ *
+ * `degraded` は通常Applicationを継続可能にし、`unconfigured` と `unavailable` は安全でない通常領域を制限する。
+ * `fallbackActive` は Runtime Data が存在する degraded case のみ UI へ伝播する。
+ */
 export function deriveApplicationAccessPolicy(
   readiness: ApplicationReadiness,
   runtimeData?: RuntimeDataStatusFacts,
@@ -531,6 +547,11 @@ export async function getMasterWriteBoundary(): Promise<AfCallResult<MasterWrite
   return callAf<MasterWriteBoundary>('/api/v1/common/master-write/boundary')
 }
 
+/**
+ * AF の local Master snapshot を取得する。
+ *
+ * Resource Management はこの snapshot revision を write 前提とし、GitHub を Frontend から直接読まない。
+ */
 export async function getMasterDocument(
   type: MasterDocumentType,
 ): Promise<AfCallResult<MasterDocumentSnapshot>> {
@@ -541,6 +562,11 @@ export async function getUnresolvedMasterReferences(): Promise<AfCallResult<Unre
   return callAf<UnresolvedMasterReference[]>('/api/v1/common/master-write/unresolved')
 }
 
+/**
+ * expected revision 付きで Master document を保存する。
+ *
+ * caller は `httpStatus` と stable error code を分岐条件とし、message は表示用に限定する。
+ */
 export async function updateMasterDocument(
   type: MasterDocumentType,
   request: MasterDocumentWriteRequest,
@@ -595,6 +621,11 @@ export async function validateRecoveryDraft(resourceKey: string): Promise<AfCall
   })
 }
 
+/**
+ * Recovery Draft を AF 側の Git write boundary で確定する。
+ *
+ * caller は replacement content や任意 commit message を渡さず、source/draft revision の一致だけを要求する。
+ */
 export async function commitRecoveryDraft(
   resourceKey: string,
   request: RecoveryCommitRequest,

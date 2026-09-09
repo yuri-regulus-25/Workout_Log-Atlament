@@ -27,7 +27,7 @@ public sealed class AfHttpHost : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        foreach (var port in new[] { 14108, 45194 })
+        foreach (var port in LocalhostEndpointPolicy.Ports)
         {
             try
             {

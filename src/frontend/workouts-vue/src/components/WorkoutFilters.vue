@@ -7,10 +7,6 @@ defineProps<{
   gymOptions: string[]
 }>()
 
-defineEmits<{
-  reset: []
-}>()
-
 const searchText = defineModel<string>('searchText', { required: true })
 const selectedMachine = defineModel<string>('selectedMachine', { required: true })
 const selectedBodyPart = defineModel<string>('selectedBodyPart', { required: true })
@@ -65,8 +61,5 @@ const dateTo = defineModel<string>('dateTo', { required: true })
       <input v-model="dateTo" type="date" />
     </label>
 
-    <div class="filter-actions" aria-live="polite">
-      <button type="button" @click="$emit('reset')">Reset</button>
-    </div>
   </div>
 </template>

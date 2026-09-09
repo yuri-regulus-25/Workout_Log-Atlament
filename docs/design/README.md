@@ -2,7 +2,7 @@
 
 このディレクトリは Workout Log Atlament の現行 As-Is 仕様書である。
 
-各文書は、現行 Source Code、Data file、Build 定義、Test、Native project 定義に存在する挙動を記述する。v1.2.0 Planning 資料ではなく、将来の Application 追加を記述するものではない。
+各文書は、現行 Source Code、Data file、Build 定義、Test、Native project 定義に存在する挙動を記述する。過去の Planning 資料ではなく、将来の Application 追加を記述するものではない。
 
 文書と Source Code が異なる場合、Source Code を最優先 Evidence とする。旧 reverse-engineered source snapshot はこの構成へ吸収済みであり、削除済みである。
 

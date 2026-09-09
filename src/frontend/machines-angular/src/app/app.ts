@@ -14,7 +14,6 @@ import type {
 } from 'ng-apexcharts';
 import { applicationRoutes, initializeAppNavigation } from '@workout-lab/frontend-common/navigation';
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition';
-import { initializeCharacterEasterEgg } from '@workout-lab/frontend-common/easter-egg';
 import { getChartTheme, observeThemeChanges } from '@workout-lab/design-tokens';
 import { loadRuntimeWorkoutSessions } from '@workout-lab/workout-data';
 import type { BodyPart, WorkoutMachine, WorkoutSession } from '@workout-lab/workout-types';
@@ -42,14 +41,19 @@ import {
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
+/**
+ * Performance Detail の Angular Composition Root。
+ *
+ * Runtime Data loading、URL上の machine selection、filter state、Main Gym scoped metric、
+ * chart theme refresh を所有する。共通 Shell は `initializeAppNavigation` に委譲し、
+ * chart option は Angular computed state と Design Token の現在値から組み立てる。
+ */
 export class App implements AfterViewInit, OnDestroy {
   @ViewChild('shell') private readonly shellRef?: ElementRef<HTMLElement>;
-  @ViewChild('characterTrigger') private readonly characterTriggerRef?: ElementRef<HTMLParagraphElement>;
 
   protected readonly applicationRoutes = applicationRoutes;
   protected readonly pageTransitionClassName = pageTransitionClassName;
   private navigation: { dispose(): void } | null = null;
-  private characterEasterEgg: { dispose(): void } | null = null;
   private disposeThemeObserver: (() => void) | null = null;
   protected readonly sessions = signal<WorkoutSession[]>([]);
   protected readonly mainGymContext = signal<ReturnType<typeof resolveMainGymContext>>({ state: 'unconfigured' });
@@ -89,11 +93,12 @@ export class App implements AfterViewInit, OnDestroy {
     this.navigation = initializeAppNavigation({
       currentRouteId: 'machines',
       shell: this.shellRef?.nativeElement,
-    });
-    this.characterEasterEgg = initializeCharacterEasterEgg({
-      trigger: this.characterTriggerRef?.nativeElement,
-      host: document.body,
-      assetBasePath: '/frontend-common/easter-egg/assets/',
+      screen: {
+        eyebrow: 'Atlament / Performance Detail',
+        title: 'Performance Detail',
+        description: ['種目ごとの変化を追う', '種目ごとの記録と推移を確認します'],
+        ariaLabel: 'Atlament Machines',
+      },
     });
     this.disposeThemeObserver = observeThemeChanges(() => {
       this.themeRevision.update((revision) => revision + 1);
@@ -102,7 +107,6 @@ export class App implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.navigation?.dispose();
-    this.characterEasterEgg?.dispose();
     this.disposeThemeObserver?.();
   }
 
@@ -303,28 +307,26 @@ export class App implements AfterViewInit, OnDestroy {
 
   private selectMachineIdFromPath() {
     const pathMachineId = this.getPathMachineId();
-    const fallbackMachineId = this.machineOptions()[0]?.machine_id ?? '';
     const hasValidPathMachineId =
       pathMachineId !== undefined &&
       this.machineOptions().some((machine) => machine.machine_id === pathMachineId);
-    const nextMachineId = hasValidPathMachineId && pathMachineId ? pathMachineId : fallbackMachineId;
 
     this.hasInvalidMachineIdParameter.set(pathMachineId !== undefined && !hasValidPathMachineId);
     this.invalidMachineId.set(pathMachineId ?? '');
-    this.selectedMachineId.set(nextMachineId);
-
-    if (nextMachineId && window.location.pathname !== `${applicationRoutes.machines}${nextMachineId}/`) {
-      window.history.replaceState(null, '', `${applicationRoutes.machines}${nextMachineId}/`);
-    }
+    this.selectedMachineId.set(hasValidPathMachineId && pathMachineId ? pathMachineId : '');
   }
 
   private reconcileSelectedMachineWithFilters() {
     const filtered = this.filteredMachineOptions();
-    if (filtered.length === 0 || filtered.some((machine) => machine.machine_id === this.selectedMachineId())) {
+    if (
+      this.selectedMachineId().length === 0 ||
+      filtered.length === 0 ||
+      filtered.some((machine) => machine.machine_id === this.selectedMachineId())
+    ) {
       return;
     }
 
-    this.selectMachine(filtered[0].machine_id);
+    this.selectedMachineId.set('');
   }
 }
 

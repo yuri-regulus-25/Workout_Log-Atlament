@@ -9,7 +9,7 @@ function readSource(relativePath: string): string {
   return readFileSync(join(repoRoot, relativePath), 'utf8')
 }
 
-const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'settings', 'maintenance'] as const
+const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
 
 describe('application registry and hosting integration', () => {
   it('keeps the shared application registry limited to current v2.0.0 applications', () => {
@@ -41,7 +41,7 @@ describe('application registry and hosting integration', () => {
   })
 
   it('keeps platform hosting status aware of every hosted application', () => {
-    const windows = readSource('src/application/windows/Core/AfServices.cs')
+    const windows = readSource('src/application/windows/Core/HostingStatusService.cs')
     const android = readSource('src/application/android/app/src/main/java/jp/yuri_regulus_25/atlament/AndroidLocalhostServer.kt')
 
     for (const id of currentHostedApplicationIds) {

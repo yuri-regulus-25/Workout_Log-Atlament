@@ -32,6 +32,9 @@ export const radii = {
   inner: '18px',
 } as const
 
+/**
+ * 現在の document に適用されている Light/Dark theme を返す。
+ */
 export function getThemeName(element: Element = document.documentElement): ThemeName {
   return element.getAttribute('data-theme') === 'dark' || element.classList.contains('atl-theme-dark')
     ? 'dark'
@@ -43,6 +46,12 @@ export function getThemeToken(name: string, fallback: string, element: Element =
   return value || fallback
 }
 
+/**
+ * Chart component が CSS custom property を直接解釈せずに使うための theme adapter。
+ *
+ * `--wl-primary` などの brand token は Light/Dark で意味を変えず、mode 依存の text/grid/tooltip は
+ * CSS 側の現在値を採用する。
+ */
 export function getChartTheme(element: Element = document.documentElement): ChartTheme {
   return {
     mode: getThemeName(element),
@@ -58,6 +67,9 @@ export function getChartTheme(element: Element = document.documentElement): Char
   }
 }
 
+/**
+ * Theme/brand/class の変更を Chart や Shell presentation へ通知する。
+ */
 export function observeThemeChanges(callback: () => void, element: Element = document.documentElement): () => void {
   const observer = new MutationObserver((mutations) => {
     if (mutations.some((mutation) => mutation.attributeName === 'data-theme' || mutation.attributeName === 'data-brand' || mutation.attributeName === 'class')) {

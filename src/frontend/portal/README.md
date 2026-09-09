@@ -14,7 +14,7 @@ Portal画面のSource Applicationです。
 Repository直下で実行します。
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 Portal単体では以下を実行できます。
@@ -30,13 +30,13 @@ Build後、Portal単体のArtifactは `src/frontend/portal/dist/` に生成さ�
 Portal開発Serverのみを起動する場合は以下を使用します。
 
 ```sh
-npm run watch:portal
+pnpm run watch:portal
 ```
 
 Development Gateway経由で他Frontendと合わせて確認する場合は以下を使用します。
 
 ```sh
-npm run watch
+pnpm run watch
 ```
 
 Gatewayは `http://127.0.0.1:5173/`、Portal開発Serverは `127.0.0.1:5174` で起動します。

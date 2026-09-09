@@ -1,6 +1,6 @@
 .selector-panel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -30,6 +30,10 @@
 }
 
 .search-panel {
+  margin-bottom: 16px;
+}
+
+.information-panel {
   margin-bottom: 16px;
 }
 
