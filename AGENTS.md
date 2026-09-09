@@ -81,6 +81,15 @@
 - Commit 前には `git diff --check` を実行する。
 - Test を通すために仕様、Contract、Test intent を勝手に変更しない。
 
+### 9.1 Windows native Computer Use E2E Preflight
+
+- Windows native Application を対象とする E2E を開始する前に、その時点の実行環境で native Computer Use が利用可能か runtime probe を行う。
+- Computer Use Skill / Tool が利用可能な場合は、利用不能と判断する前に当該 Skill / Tool の最新の利用手順を確認し、必要な setup を実施する。
+- 単一の tool surface で native Application API が公開されていない、または Application 一覧が空であることだけを理由に、native Computer Use を利用不能と判定しない。利用可能な Skill / Tool が示す別の正規経路がある場合は、それも確認する。
+- 特定の内部 API、package、RPC 名を恒久的な前提にしない。E2E 実施時点で利用可能な Skill / Tool が指定する経路を優先する。
+- native Computer Use が利用可能で対象 Atlament Application / Window を取得できる場合、Windows native 固有 E2E は Browser 等へ代替せず、実際の Atlament Windows Application を操作して実施する。
+- 必要な setup と runtime probe を実施しても native Computer Use を利用できない場合は、失敗した経路と理由を記録し、native 固有試験を `NT (Not Tested)` として明示する。Browser 等による代替試験を実施する場合も、Windows native E2E の PASS として扱わない。
+
 ## 10. STOP Conditions
 
 以下の場合は推測で製造を継続せず、STOP してユーザーへ報告する。
