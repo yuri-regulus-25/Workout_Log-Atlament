@@ -12,17 +12,19 @@ src/frontend/
 ├─ workouts-vue/
 ├─ machines-angular/
 ├─ analytics-svelte/
-└─ settings-solid/
+├─ settings-solid/
+└─ maintenance-vue/
 ```
 
 Portalは `src/frontend/portal/`、Error Pageは `src/frontend/errors/` のSource Applicationとして管理します。
+Resource Managementは `src/frontend/maintenance-vue/` で管理し、Master Data maintenance、未解決参照、Recovery UIを担当します。
 
 ## 統合Build
 
 Repository直下で実行します。
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 各FrontendをBuildした後、`tools/build/build-mpa.mjs` が `dist/` にProduction Artifactを集約します。
@@ -42,7 +44,8 @@ dist/
 ├─ workouts/
 ├─ machines/
 ├─ analytics/
-└─ settings/
+├─ settings/
+└─ maintenance/
 ```
 
 ## 開発起動
@@ -50,17 +53,18 @@ dist/
 画面ごとの開発起動はRepository直下から実行します。
 
 ```sh
-npm run dev:dashboard
-npm run dev:workouts
-npm run dev:machines
-npm run dev:analytics
-npm run dev:settings
+pnpm run dev:dashboard
+pnpm run dev:workouts
+pnpm run dev:machines
+pnpm run dev:analytics
+pnpm run dev:settings
+pnpm run dev:maintenance
 ```
 
 複数FrontendをGateway経由でまとめて確認する場合は以下を使用します。
 
 ```sh
-npm run watch
+pnpm run watch
 ```
 
 ## Runtime Data接続

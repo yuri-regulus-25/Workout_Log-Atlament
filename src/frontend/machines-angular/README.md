@@ -22,15 +22,15 @@ Angular + TypeScriptでPerformance Detail画面を実装しています。
 ## 開発起動
 
 ```sh
-npm run dev:machines
+pnpm run dev:machines
 ```
 
-Gateway経由で確認する場合はRepository直下で `npm run watch` を実行し、`http://127.0.0.1:5173/machines/` を開きます。Machinesの開発Server固定Portは `127.0.0.1:5177` です。
+Gateway経由で確認する場合はRepository直下で `pnpm run watch` を実行し、`http://127.0.0.1:5173/machines/` を開きます。Machinesの開発Server固定Portは `127.0.0.1:5177` です。
 
 ## Build
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 統合Buildにより、AngularのBuild Artifactは `dist/machines/` に配置されます。Production buildでは `/machines/` をbase hrefとして使用します。

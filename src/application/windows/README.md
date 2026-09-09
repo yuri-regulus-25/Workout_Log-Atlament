@@ -43,7 +43,7 @@ src/application/windows/bin/Debug/net8.0-windows/data/frontend/
 Windows x64向けの自己完結・単一exe配布物はRepository直下から生成します。
 
 ```sh
-npm run build:windows
+pnpm run build:windows
 ```
 
 出力先は以下です。
@@ -82,6 +82,7 @@ Visual Studio Debug起動、Build出力先の `Atlament.exe`、または `dist-w
 /machines/
 /analytics/
 /settings/
+/maintenance/
 ```
 
 主要APIは `/api/v1/common/` 配下です。

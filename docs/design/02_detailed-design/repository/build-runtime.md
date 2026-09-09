@@ -6,16 +6,16 @@ Root `package.json` は主要な build / validation workflow を定義する。
 
 主要 script:
 
-- `npm run build`: すべての frontend application を build し、MPA artifact を assemble する。
-- `npm run build:apps`: Portal、Error Pages、各 framework app を build する。
-- `npm run build:mpa`: `dist/` を assemble する。
-- `npm run preview:mpa`: build 済みの `dist/` を serve する。
-- `npm run watch`: development runtime、development gateway、frontend dev server を起動する。
-- `npm test`: Vitest を実行する。
-- `npm run check:all`: version check、Analytics check、data check、MPA smoke check を実行する。
-- `npm run build:windows`: Windows distribution を作成する。
-- `npm run build:android`: frontend を build し、Android assets へ copy して debug APK を build する。
-- `npm run build:android:release`: frontend を build し、Android assets を copy して release APK を build する。
+- `pnpm run build`: すべての frontend application を build し、MPA artifact を assemble する。
+- `pnpm run build:apps`: Portal、Error Pages、各 framework app を build する。
+- `pnpm run build:mpa`: `dist/` を assemble する。
+- `pnpm run preview:mpa`: build 済みの `dist/` を serve する。
+- `pnpm run watch`: development runtime、development gateway、frontend dev server を起動する。
+- `pnpm test`: Vitest を実行する。
+- `pnpm run check:all`: version check、Analytics check、data check、MPA smoke check を実行する。
+- `pnpm run build:windows`: Windows distribution を作成する。
+- `pnpm run build:android`: frontend を build し、Android assets へ copy して debug APK を build する。
+- `pnpm run build:android:release`: frontend を build し、Android assets を copy して release APK を build する。
 
 ## MPA Assembly
 

@@ -2,9 +2,9 @@
 
 ## Scope
 
-This document defines the v2.1.0 Data Recovery contract shared by Windows AF, Android AF, Node development runtime, shared frontend client, and Maintenance UI.
+この文書は、Windows AF、Android AF、Node.js開発用ランタイム、共通フロントエンドクライアント、Maintenance UIが共有するv3.0.0のData Recovery契約を定義する。
 
-Planning source: `work/v2.1.0-plan/04_recovery_architecture_contract.md` and `05_recovery_api_and_implementation_plan.md`.
+契約の起点となった計画資料は `work/v2.1.0-plan/04_recovery_architecture_contract.md` と `05_recovery_api_and_implementation_plan.md` である。現行契約は本書とソース、テストを正とする。
 
 ## Public Namespace
 
@@ -35,7 +35,7 @@ Windows, Android, Node development runtime, shared frontend client, and Maintena
 - One JSON / JSONL file is one Resource.
 - Resource identity: `path + revision`.
 - Inspection identity: `path + revision + inspectionVersion`.
-- v2.1.0 inspectionVersion: `1`.
+- 現行の検査バージョン（`inspectionVersion`）: `1`。
 - Resource health: `healthy | degraded | broken`.
 - Broken Resource is logically quarantined; detection never mutates Git.
 - Broken Workout Resource is excluded as a whole; other independent Workout Resources continue.
@@ -45,7 +45,7 @@ Windows, Android, Node development runtime, shared frontend client, and Maintena
 
 - Native AF local storage only; never Git and never browser-storage SoT.
 - Binds to source path/revision.
-- Device-local in v2.1.0.
+- 下書きは端末ごとのローカルデータであり、別端末とは同期しない。
 - Uses `draftRevision` optimistic concurrency.
 - Source revision change makes Draft stale and non-committable.
 - No automatic merge.
@@ -81,7 +81,7 @@ Same-path replacement may use existing Contents API semantics. Path relocation m
 
 After Git success AF attempts re-inspection and Runtime reflection. Git success is not rolled back when reflection fails. The API/UI must distinguish Git failure, Git success + reflection failure, and full Recovery success.
 
-Windows performs the Recovery Git write through the native GitHub write boundary when configured. Android exposes the same public endpoint set and read/draft/validate semantics; if packaged Android cannot safely execute the Recovery Git write boundary, `capabilities.commit` is `false` and `POST /commit` returns `RECOVERY_UNAVAILABLE`. Node development runtime must not return fake commit success.
+WindowsとAndroidは、設定と認証情報が利用可能で対象リソースが修復可能な場合、ネイティブ側のGitHub書き込み境界を通じてRecoveryの変更をGitへ反映する。Androidも同一パスの置換と、追加・削除を1コミットにまとめるパス移動を実行でき、`RecoveryCapabilities.commit` は修復可否に従う。`RECOVERY_UNAVAILABLE` は書き込み境界を安全に提供できないランタイムまたは状態に用いる共通エラーであり、Androidを一律利用不能とするものではない。Node.js開発用ランタイムは偽のコミット成功を返さない。
 
 ## Status Facts
 
