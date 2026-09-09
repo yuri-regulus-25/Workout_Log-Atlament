@@ -574,6 +574,16 @@
 }
 
 @media (max-width: 720px) {
+  .affected-workouts-table .v-table__wrapper {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .affected-workouts-table table {
+    min-width: 760px;
+  }
+
   .recovery-heading-row,
   .recovery-detail-title,
   .recovery-section-header,

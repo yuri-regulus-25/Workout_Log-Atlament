@@ -25,8 +25,8 @@
     />
     <v-data-table
       v-if="selectedUnresolved"
-      class="maintenance-table compact-table"
-        :headers="visibleAffectedHeaders"
+      class="maintenance-table compact-table affected-workouts-table"
+      :headers="visibleAffectedHeaders"
       :items="selectedUnresolved.affectedWorkouts"
       :items-per-page-text="'Show Items'"
       density="compact"

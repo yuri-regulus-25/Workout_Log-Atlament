@@ -42,9 +42,18 @@ describe('Maintenance composition contract', () => {
     expect(resolution).toContain('selectedUnresolved.affectedWorkouts')
     expect(resolution).toContain('参照先の登録情報を選択')
     expect(resolution).toContain('class="status-alert mb-4"')
+    expect(resolution).toContain('affected-workouts-table')
     expect(resolution).toContain('データ内の行番号')
     expect(resolution).toContain("affectedHeaders.filter((header) => header.key !== 'line')")
     expect(resolution).toContain('このワークアウト記録が未登録のIDを参照しています。')
+  })
+
+  it('keeps affected workouts horizontally scrollable in the mobile resolution dialog', () => {
+    const styles = readFileSync('src/frontend/maintenance-vue/src/style.css', 'utf8')
+
+    expect(styles).toContain('@media (max-width: 720px)')
+    expect(styles).toMatch(/\.affected-workouts-table \.v-table__wrapper \{[^}]*overflow-x: auto;[^}]*\}/s)
+    expect(styles).toMatch(/\.affected-workouts-table table \{[^}]*min-width: 760px;[^}]*\}/s)
   })
 
   it('uses transient snackbar and interaction overlay for Maintenance write feedback', () => {
