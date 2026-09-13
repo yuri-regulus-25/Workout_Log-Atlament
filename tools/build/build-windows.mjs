@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } fr
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runPackageScript } from '../package-manager/package-manager.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '..', '..');
@@ -56,7 +57,7 @@ rmSync(distributionRoot, { recursive: true, force: true });
 mkdirSync(publishRoot, { recursive: true });
 
 // Build frontend first so the publish target can embed the exact static assets that will ship.
-run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build']);
+runPackageScript('build', { cwd: repositoryRoot });
 run('dotnet', [
   'publish',
   projectPath,
