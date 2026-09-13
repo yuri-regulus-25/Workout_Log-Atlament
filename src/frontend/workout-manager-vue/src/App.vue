@@ -3,7 +3,15 @@
     <main ref="shell" :class="['app-shell', 'workout-manager-shell', pageTransitionClassName]">
       <div data-application-shell-content>
         <section class="panel wide manager-panel">
-          <v-stepper v-model="step" hide-actions flat aria-orientation="vertical" class="workout-stepper workout-stepper--vertical">
+          <v-stepper
+            v-model="step"
+            hide-actions
+            flat
+            aria-orientation="vertical"
+            prev-text="戻る"
+            next-text="次へ"
+            class="workout-stepper workout-stepper--vertical"
+          >
             <section class="workout-step">
               <v-stepper-item :complete="step > 1" :value="1" title="操作するワークアウトの日付選択" />
               <div v-show="step === 1" class="workout-step-content">

@@ -20,9 +20,15 @@
       />
       <Row v-if="session.notes" label="Notes" :value="session.notes" />
     </div>
-    <v-stepper-actions :disabled="busy" class="step-actions">
+    <v-stepper-actions
+      :disabled="busy"
+      :next-text="actionLabel"
+      class="step-actions"
+      @click:prev="emit('back')"
+      @click:next="emit('submit')"
+    >
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" class="mr-2" variant="text" @click="emit('back')">戻る</v-btn>
+        <v-btn v-bind="actionProps" class="mr-2" variant="text" />
       </template>
       <template #next="{ props: actionProps }">
         <v-btn
@@ -31,8 +37,7 @@
           :class="{ 'delete-action': mode === 'delete' }"
           variant="flat"
           density="compact"
-          @click="emit('submit')"
-        >{{ actionLabel }}</v-btn>
+        />
       </template>
     </v-stepper-actions>
   </div>

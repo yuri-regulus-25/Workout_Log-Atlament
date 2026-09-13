@@ -9,7 +9,10 @@ import mainSource from './main.ts?raw'
 
 describe('Workout Manager stepper contract', () => {
   it('Vuetify stepper itemを縦方向に3段階構成する', () => {
-    expect(appSource).toContain('<v-stepper v-model="step" hide-actions flat aria-orientation="vertical" class="workout-stepper workout-stepper--vertical">')
+    expect(appSource).toContain('v-model="step"')
+    expect(appSource).toContain('aria-orientation="vertical"')
+    expect(appSource).toContain('prev-text="戻る"')
+    expect(appSource).toContain('next-text="次へ"')
     expect(appSource.match(/<v-stepper-item/g)).toHaveLength(3)
     expect(appSource).toContain('title="操作するワークアウトの日付選択"')
     expect(appSource).toContain('title="操作内容"')
@@ -25,11 +28,17 @@ describe('Workout Manager stepper contract', () => {
 
   it('全Stepの操作をStepper Actionsに配置し、主要ボタンをdense相当にする', () => {
     expect(stepOneSource).toContain('<v-stepper-actions')
-    expect(stepOneSource).toContain('variant="flat" density="compact"')
+    expect(stepOneSource).toContain('@click:next="continueToSession"')
+    expect(stepOneSource).toContain('variant="flat"')
+    expect(stepOneSource).toContain('density="compact"')
     expect(stepTwoSource).toContain('<v-stepper-actions')
+    expect(stepTwoSource).toContain('@click:prev="emit(\'back\')"')
+    expect(stepTwoSource).toContain('@click:next="confirmUpdate"')
     expect(stepTwoSource).toContain('class="mr-2" variant="text"')
     expect(stepTwoSource).toContain('variant="flat" density="compact"')
     expect(stepThreeSource).toContain('<v-stepper-actions')
+    expect(stepThreeSource).toContain(':next-text="actionLabel"')
+    expect(stepThreeSource).toContain('@click:next="emit(\'submit\')"')
     expect(stepThreeSource).toContain('class="mr-2" variant="text"')
     expect(stepThreeSource).toContain('density="compact"')
   })

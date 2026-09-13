@@ -34,16 +34,21 @@
       <NotesField :model-value="working.notes" :errors="errorsFor('notes')" @update:model-value="updateNotes" />
     </div>
 
-    <v-stepper-actions :disabled="validationErrors.length > 0 ? 'next' : false" class="step-actions">
+    <v-stepper-actions
+      :disabled="validationErrors.length > 0 ? 'next' : false"
+      class="step-actions"
+      @click:prev="emit('back')"
+      @click:next="confirmUpdate"
+    >
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" class="mr-2" variant="text" @click="emit('back')">戻る</v-btn>
+        <v-btn v-bind="actionProps" class="mr-2" variant="text" />
       </template>
       <template #next="{ props: actionProps }">
         <div class="step-next-actions">
           <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
             <template #activator="{ props: tooltipProps }">
               <span v-bind="tooltipProps">
-                <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" @click="confirmUpdate">次へ</v-btn>
+                <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" />
               </span>
             </template>
           </v-tooltip>
