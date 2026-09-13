@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <v-app :theme="themeName">
     <main ref="shell" :class="['app-shell', 'workout-manager-shell', pageTransitionClassName]">
       <div data-application-shell-content>
         <section class="panel wide manager-panel">
@@ -22,7 +22,6 @@
                 <StepOne
                   v-model="selectedDate"
                   :maximum="today"
-                  :markers="boundary?.workoutDates ?? []"
                   :writable="boundary?.writable ?? false"
                   :write-reason="boundary?.reason ?? null"
                   @next="openDate"
@@ -76,6 +75,7 @@ import {
 } from '@workout-lab/frontend-common'
 import { initializeAppNavigation } from '@workout-lab/frontend-common/navigation'
 import { pageTransitionClassName } from '@workout-lab/frontend-common/page-transition'
+import { getCurrentTheme } from '@workout-lab/frontend-common/theme'
 import LoadingOverlay from './common/LoadingOverlay.vue'
 import Snackbar, { type SnackbarMessage } from './common/Snackbar.vue'
 import type { Mode } from './model'
@@ -91,6 +91,8 @@ import StepThree from './step3/Step.vue'
  */
 const today = localIso(new Date())
 const shell = ref<HTMLElement | null>(null)
+const themeName = ref(getCurrentTheme())
+const themeObserver = new MutationObserver(() => { themeName.value = getCurrentTheme() })
 const step = ref<1 | 2 | 3>(1)
 const selectedDate = ref<string | null>(null)
 const boundary = ref<WorkoutWriteBoundary | null>(null)
@@ -105,6 +107,8 @@ const message = ref<SnackbarMessage>(null)
 let navigation: { dispose: () => void; focusTitle: () => void } | null = null
 
 onMounted(() => {
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  themeName.value = getCurrentTheme()
   navigation = initializeAppNavigation({
     currentRouteId: 'workout-manager',
     shell: shell.value ?? document.body,
@@ -119,7 +123,10 @@ onMounted(() => {
   void loadBoundary()
 })
 
-onBeforeUnmount(() => navigation?.dispose())
+onBeforeUnmount(() => {
+  themeObserver.disconnect()
+  navigation?.dispose()
+})
 
 const actionLabel = computed(() => pendingMode.value === 'create' ? '登録' : pendingMode.value === 'update' ? '更新' : '削除')
 

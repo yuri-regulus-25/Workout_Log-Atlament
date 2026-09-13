@@ -43,19 +43,15 @@
       @click:next="confirmUpdate"
     >
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" class="mr-2" variant="text" />
+        <v-btn v-bind="actionProps" class="mr-2" variant="outlined" density="compact" />
       </template>
       <template #next="{ props: actionProps }">
-        <div class="step-next-actions">
-          <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
-            <template #activator="{ props: tooltipProps }">
-              <span v-bind="tooltipProps">
-                <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" />
-              </span>
-            </template>
-          </v-tooltip>
-          <v-btn v-if="selectedKey !== newKey" color="error" variant="text" @click="confirmDelete">削除</v-btn>
-        </div>
+        <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
+          <template #activator="{ props: tooltipProps }">
+            <v-btn v-bind="{ ...tooltipProps, ...actionProps }" color="var(--wl-primary)" variant="flat" density="compact" />
+          </template>
+        </v-tooltip>
+        <v-btn v-if="selectedKey !== newKey" class="ml-2" color="error" variant="outlined" density="compact" @click="confirmDelete">削除</v-btn>
       </template>
     </v-stepper-actions>
 

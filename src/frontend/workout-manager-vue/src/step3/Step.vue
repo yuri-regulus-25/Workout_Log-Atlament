@@ -28,13 +28,12 @@
       @click:next="emit('submit')"
     >
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" class="mr-2" variant="text" />
+        <v-btn v-bind="actionProps" class="mr-2" variant="outlined" density="compact" />
       </template>
       <template #next="{ props: actionProps }">
         <v-btn
           v-bind="actionProps"
-          class="primary-action"
-          :class="{ 'delete-action': mode === 'delete' }"
+          :color="mode === 'delete' ? 'error' : 'var(--wl-primary)'"
           variant="flat"
           density="compact"
         />

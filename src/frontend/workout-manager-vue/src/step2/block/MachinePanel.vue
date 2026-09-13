@@ -1,59 +1,57 @@
 <template>
-  <v-row dense class="machine-row">
-    <v-col cols="11">
-      <v-expansion-panels
-        :model-value="expanded ? index : null"
-        variant="accordion"
-        class="machine-panels"
-        @update:model-value="emit('update:expanded', $event === index)"
-      >
-        <v-expansion-panel :value="index" class="machine-panel">
-          <v-expansion-panel-title>
-            <template #default>
-              <div class="machine-panel-title">
-                <v-icon :icon="stateIcon" :color="stateColor" aria-hidden="true" />
-                <span :class="{ 'machine-title-error': validationFailed }">{{ machineName || '？' }}</span>
-              </div>
-            </template>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div class="machine-form">
-              <MachineField
-                :model-value="machine.machineId"
-                :items="items"
-                :selected-ids="selectedIds"
-                :errors="errorsFor('machineId')"
-                @update:model-value="emit('update', { ...machine, machineId: $event })"
-              />
-              <v-alert v-for="warning in warnings" :key="warning" type="warning" variant="tonal" density="compact" class="field-warning">
-                {{ warning }}
-              </v-alert>
-              <SetCard
-                v-for="(set, setIndex) in machine.sets"
-                :key="`${set.sourceIndex ?? 'new'}-${setIndex}`"
-                :set="set"
-                :number="setIndex + 1"
-                :errors="setErrors(setIndex)"
-                :add-disabled="machine.sets.length >= 10"
-                :delete-disabled="machine.sets.length <= 1"
-                @update="updateSet(setIndex, $event)"
-                @add="emit('add-set', setIndex)"
-                @delete="emit('delete-set', setIndex)"
-              />
+  <div class="machine-row">
+    <v-expansion-panels
+      :model-value="expanded ? index : null"
+      variant="accordion"
+      class="machine-panels"
+      @update:model-value="emit('update:expanded', $event === index)"
+    >
+      <v-expansion-panel :value="index" class="machine-panel">
+        <v-expansion-panel-title>
+          <template #default>
+            <div class="machine-panel-title">
+              <v-icon :icon="stateIcon" :color="stateColor" aria-hidden="true" />
+              <span :class="{ 'machine-title-error': validationFailed }">{{ machineName || '？' }}</span>
             </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
-    </v-col>
-    <v-col cols="1" class="item-actions machine-actions">
+          </template>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <div class="machine-form">
+            <MachineField
+              :model-value="machine.machineId"
+              :items="items"
+              :selected-ids="selectedIds"
+              :errors="errorsFor('machineId')"
+              @update:model-value="emit('update', { ...machine, machineId: $event })"
+            />
+            <v-alert v-for="warning in warnings" :key="warning" type="warning" variant="tonal" density="compact" class="field-warning">
+              {{ warning }}
+            </v-alert>
+            <SetCard
+              v-for="(set, setIndex) in machine.sets"
+              :key="`${set.sourceIndex ?? 'new'}-${setIndex}`"
+              :set="set"
+              :number="setIndex + 1"
+              :errors="setErrors(setIndex)"
+              :add-disabled="machine.sets.length >= 10"
+              :delete-disabled="machine.sets.length <= 1"
+              @update="updateSet(setIndex, $event)"
+              @add="emit('add-set', setIndex)"
+              @delete="emit('delete-set', setIndex)"
+            />
+          </div>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
+    <div class="item-actions machine-actions">
       <v-btn size="small" variant="text" aria-label="このマシンの直後に追加" :disabled="addDisabled" @click="emit('add')">
         <v-icon icon="mdi-plus-thick" size="small" />
       </v-btn>
       <v-btn size="small" variant="text" color="red" aria-label="このマシンを削除" :disabled="deleteDisabled" @click="emit('delete')">
         <v-icon icon="mdi-trash-can" size="small" />
       </v-btn>
-    </v-col>
-  </v-row>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">

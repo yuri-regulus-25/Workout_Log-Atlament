@@ -106,14 +106,14 @@
 
 .workout-stepper .v-stepper-item--selected .v-stepper-item__avatar,
 .workout-stepper .v-stepper-item--complete .v-stepper-item__avatar {
-  background: var(--wl-primary-strong);
+  background: var(--wl-primary) !important;
   color: #ffffff;
 }
 
 .workout-step-content {
   min-width: 0;
   margin-left: 33px;
-  padding: 0 20px 24px 35px;
+  padding: 8px 20px 24px 35px;
 }
 
 .step-body,
@@ -128,31 +128,15 @@
   padding: 0;
 }
 
-.step-next-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.primary-action {
-  background: var(--wl-primary-strong) !important;
-  color: #ffffff !important;
-}
-
-.delete-action {
-  background: var(--wl-error-text) !important;
-}
-
 .date-field {
-  display: grid;
-  gap: 10px;
-  justify-items: start;
+  width: min(100%, 360px);
   min-width: 0;
+  padding-top: 10px;
 }
 
-.date-field .v-picker {
-  width: min(100%, 360px);
+.workout-date-picker {
+  width: 360px;
+  max-width: calc(100vw - 24px);
   min-width: 0;
   border: 1px solid var(--wl-border);
   border-radius: 8px;
@@ -185,10 +169,6 @@
   color: var(--wl-warning-text) !important;
 }
 
-.selected-date {
-  font-weight: 700;
-}
-
 .machine-panels .v-expansion-panel,
 .set-card {
   background: var(--wl-surface) !important;
@@ -199,6 +179,20 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.machine-row,
+.set-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.machine-panels,
+.set-card {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -221,6 +215,7 @@
 }
 
 .item-actions {
+  flex: 0 0 auto;
   display: grid;
   gap: 4px;
   align-content: start;
@@ -233,13 +228,13 @@
 }
 
 .set-number {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   min-height: 40px;
 }
 
 .set-card {
-  padding: 12px;
   border: 1px solid var(--wl-border);
   border-radius: 8px;
 }
@@ -326,36 +321,36 @@
     padding-left: 19px;
   }
 
-  .date-field .v-date-picker-controls {
+  .workout-date-picker .v-date-picker-controls {
     padding-inline: 0;
   }
 
-  .date-field .v-date-picker-controls .v-btn {
+  .workout-date-picker .v-date-picker-controls .v-btn {
     min-width: 24px;
     padding-inline: 2px;
   }
 
-  .date-field .v-date-picker-controls .v-btn--icon {
+  .workout-date-picker .v-date-picker-controls .v-btn--icon {
     width: 24px;
   }
 
-  .date-field .v-date-picker-month {
+  .workout-date-picker .v-date-picker-month {
     width: 100%;
     min-width: 0;
     padding-inline: 0;
   }
 
-  .date-field .v-date-picker-month__days {
+  .workout-date-picker .v-date-picker-month__days {
     grid-template-columns: repeat(7, minmax(0, 1fr));
     column-gap: 0;
   }
 
-  .date-field .v-date-picker-month__day {
+  .workout-date-picker .v-date-picker-month__day {
     width: 100%;
     height: 36px;
   }
 
-  .date-field .v-date-picker-month__day .v-btn {
+  .workout-date-picker .v-date-picker-month__day .v-btn {
     width: 24px;
     min-width: 24px;
     height: 24px;

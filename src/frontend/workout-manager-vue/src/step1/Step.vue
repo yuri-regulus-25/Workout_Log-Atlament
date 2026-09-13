@@ -5,7 +5,7 @@
     }}</v-alert>
     <v-row class="step-one-field">
       <v-col cols="3"><p class="field-label">ワークアウト日</p></v-col>
-      <v-col cols="9"><DateField v-model="selected" :maximum="maximum" :markers="markers" /></v-col>
+      <v-col cols="9"><DateField v-model="selected" :maximum="maximum" /></v-col>
     </v-row>
     <v-stepper-actions
       :disabled="!selected || !writable ? 'next' : false"
@@ -16,7 +16,7 @@
       <template #next="{ props: actionProps }">
         <v-btn
           v-bind="actionProps"
-          class="primary-action"
+          color="var(--wl-primary)"
           variant="flat"
           density="compact"
         />
@@ -32,7 +32,6 @@ import { writeBoundaryMessage } from "./write-boundary";
 const props = defineProps<{
   modelValue: string | null;
   maximum: string;
-  markers: string[];
   writable: boolean;
   writeReason: string | null;
 }>();
