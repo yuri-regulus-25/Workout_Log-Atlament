@@ -22,69 +22,48 @@
   overflow: hidden;
 }
 
-.vertical-stepper {
-  display: grid;
+.workout-stepper {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
-.step-section {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  padding: 0 20px;
-}
-
-.step-section:not(:last-child)::before {
-  content: "";
-  grid-column: 1;
-  grid-row: 2;
-  justify-self: center;
-  width: 2px;
-  min-height: 18px;
-  background: var(--wl-border);
-}
-
-.step-header {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  align-items: center;
-  min-height: 64px;
+.workout-stepper .v-stepper-header {
   border-bottom: 1px solid var(--wl-border);
+  box-shadow: none;
 }
 
-.step-section:last-child .step-header,
-.step-section.active .step-header {
-  border-bottom-color: transparent;
+.workout-stepper.v-stepper--alt-labels .v-stepper-item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 20px 8px;
 }
 
-.step-number {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  justify-self: center;
-  border-radius: 50%;
-  background: var(--wl-border);
-  color: var(--wl-text-muted);
-  font-weight: 700;
+.workout-stepper.v-stepper--alt-labels .v-stepper-header .v-divider {
+  flex: 0 1 64px;
+  min-width: 12px;
+  margin: 35px 0 0;
 }
 
-.step-section.active .step-number,
-.step-section.complete .step-number {
-  background: var(--wl-primary-strong);
-  color: #ffffff;
+.workout-stepper .v-stepper-item__content {
+  width: 100%;
+  min-width: 0;
 }
 
-.step-header h2 {
-  margin: 0;
+.workout-stepper .v-stepper-item__title {
   font-size: 1rem;
   line-height: 1.4;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
-.step-content {
-  grid-column: 2;
+.workout-stepper .v-stepper-window {
+  margin: 0;
+}
+
+.workout-stepper .v-stepper-window-item {
   min-width: 0;
-  padding: 0 0 24px 12px;
+  padding: 24px 20px;
 }
 
 .step-body,
@@ -250,17 +229,21 @@
 }
 
 @media (max-width: 640px) {
-  .step-section {
-    grid-template-columns: 40px minmax(0, 1fr);
-    padding: 0 12px;
+  .workout-stepper.v-stepper--alt-labels .v-stepper-item {
+    padding-inline: 4px;
   }
 
-  .step-header {
-    grid-template-columns: 40px minmax(0, 1fr);
+  .workout-stepper.v-stepper--alt-labels .v-stepper-header .v-divider {
+    flex-basis: 16px;
+    min-width: 4px;
   }
 
-  .step-content {
-    padding-left: 8px;
+  .workout-stepper .v-stepper-item__title {
+    font-size: 0.875rem;
+  }
+
+  .workout-stepper .v-stepper-window-item {
+    padding: 20px 12px;
   }
 
   .numeric-fields,

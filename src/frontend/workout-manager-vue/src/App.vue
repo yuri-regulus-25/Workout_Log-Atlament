@@ -3,42 +3,39 @@
     <main ref="shell" :class="['app-shell', 'workout-manager-shell', pageTransitionClassName]">
       <div data-application-shell-content>
         <section class="panel wide manager-panel">
-          <div class="vertical-stepper">
-            <section v-for="item in steps" :key="item.value" class="step-section" :class="{ active: step === item.value, complete: step > item.value }">
-              <header class="step-header">
-                <span class="step-number" aria-hidden="true">{{ item.value }}</span>
-                <h2>{{ item.title }}</h2>
-              </header>
-              <div v-show="step === item.value" class="step-content">
-                <StepOne
-                  v-if="item.value === 1"
-                  v-model="selectedDate"
-                  :maximum="today"
-                  :markers="boundary?.workoutDates ?? []"
-                  :writable="boundary?.writable ?? false"
-                  @next="openDate"
-                />
-                <StepTwo
-                  v-else-if="item.value === 2 && snapshot"
-                  :snapshot="snapshot"
-                  :server-errors="serverErrors"
-                  @back="returnToDate"
-                  @changed="serverErrors = []"
-                  @confirm="openConfirmation"
-                />
-                <StepThree
-                  v-else-if="item.value === 3 && snapshot && pendingSession && pendingMode"
-                  :mode="pendingMode"
-                  :session="pendingSession"
-                  :gyms="snapshot.gyms"
-                  :machines="snapshot.machines"
-                  :busy="loading"
-                  @back="step = 2"
-                  @submit="submitMutation"
-                />
-              </div>
-            </section>
-          </div>
+          <v-stepper v-model="step" :items="steps" alt-labels hide-actions flat class="workout-stepper">
+            <template #item.1>
+              <StepOne
+                v-model="selectedDate"
+                :maximum="today"
+                :markers="boundary?.workoutDates ?? []"
+                :writable="boundary?.writable ?? false"
+                @next="openDate"
+              />
+            </template>
+            <template #item.2>
+              <StepTwo
+                v-if="snapshot"
+                :snapshot="snapshot"
+                :server-errors="serverErrors"
+                @back="returnToDate"
+                @changed="serverErrors = []"
+                @confirm="openConfirmation"
+              />
+            </template>
+            <template #item.3>
+              <StepThree
+                v-if="snapshot && pendingSession && pendingMode"
+                :mode="pendingMode"
+                :session="pendingSession"
+                :gyms="snapshot.gyms"
+                :machines="snapshot.machines"
+                :busy="loading"
+                @back="step = 2"
+                @submit="submitMutation"
+              />
+            </template>
+          </v-stepper>
         </section>
       </div>
 
