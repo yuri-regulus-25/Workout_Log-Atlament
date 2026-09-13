@@ -233,6 +233,11 @@
   justify-items: center;
 }
 
+.machine-list-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .set-number {
   display: grid;
   place-items: center;

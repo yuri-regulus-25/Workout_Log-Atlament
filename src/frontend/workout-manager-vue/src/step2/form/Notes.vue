@@ -6,6 +6,7 @@
     auto-grow
     counter="400"
     density="compact"
+    variant="outlined"
     :error-messages="errors"
     @update:model-value="emit('update:modelValue', $event || null)"
   />

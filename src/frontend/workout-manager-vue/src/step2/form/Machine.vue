@@ -7,6 +7,7 @@
     item-props="props"
     label="マシン"
     density="compact"
+    variant="outlined"
     no-data-text="マスターデータに存在しません"
     :error-messages="errors"
     @update:model-value="emit('update:modelValue', $event)"

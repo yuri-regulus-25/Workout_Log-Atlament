@@ -6,6 +6,7 @@
     item-value="value"
     label="編集するセッション"
     density="compact"
+    variant="outlined"
     hide-details
     @update:model-value="emit('update:modelValue', $event)"
   />

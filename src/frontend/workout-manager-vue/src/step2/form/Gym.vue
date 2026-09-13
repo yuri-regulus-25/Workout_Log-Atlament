@@ -6,6 +6,7 @@
     item-value="id"
     label="ジム"
     density="compact"
+    variant="outlined"
     no-data-text="マスターデータに存在しません"
     :error-messages="errors"
     @update:model-value="emit('update:modelValue', $event)"

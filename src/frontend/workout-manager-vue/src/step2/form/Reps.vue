@@ -8,6 +8,7 @@
     max="100"
     step="1"
     density="compact"
+    variant="outlined"
     :error-messages="errors"
     @update:model-value="onUpdate"
   />
