@@ -1,11 +1,11 @@
 <template>
   <div class="date-field">
-    <strong>ワークアウト日</strong>
     <v-date-picker
       :model-value="modelValue"
       :max="maximum"
       :events="markers"
       event-color="primary"
+      locale="ja-JP"
       hide-header
       show-adjacent-months
       @update:model-value="onUpdate"

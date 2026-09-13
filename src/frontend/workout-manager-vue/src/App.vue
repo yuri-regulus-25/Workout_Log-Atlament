@@ -3,44 +3,54 @@
     <main ref="shell" :class="['app-shell', 'workout-manager-shell', pageTransitionClassName]">
       <div data-application-shell-content>
         <section class="panel wide manager-panel">
-          <v-stepper v-model="step" :items="steps" alt-labels hide-actions flat class="workout-stepper">
-            <template #item.1>
-              <StepOne
-                v-model="selectedDate"
-                :maximum="today"
-                :markers="boundary?.workoutDates ?? []"
-                :writable="boundary?.writable ?? false"
-                @next="openDate"
-              />
-            </template>
-            <template #item.2>
-              <StepTwo
-                v-if="snapshot"
-                :snapshot="snapshot"
-                :server-errors="serverErrors"
-                @back="returnToDate"
-                @changed="serverErrors = []"
-                @confirm="openConfirmation"
-              />
-            </template>
-            <template #item.3>
-              <StepThree
-                v-if="snapshot && pendingSession && pendingMode"
-                :mode="pendingMode"
-                :session="pendingSession"
-                :gyms="snapshot.gyms"
-                :machines="snapshot.machines"
-                :busy="loading"
-                @back="step = 2"
-                @submit="submitMutation"
-              />
-            </template>
+          <v-stepper v-model="step" hide-actions flat aria-orientation="vertical" class="workout-stepper workout-stepper--vertical">
+            <section class="workout-step">
+              <v-stepper-item :complete="step > 1" :value="1" title="操作するワークアウトの日付選択" />
+              <div v-show="step === 1" class="workout-step-content">
+                <StepOne
+                  v-model="selectedDate"
+                  :maximum="today"
+                  :markers="boundary?.workoutDates ?? []"
+                  :writable="boundary?.writable ?? false"
+                  :write-reason="boundary?.reason ?? null"
+                  @next="openDate"
+                />
+              </div>
+            </section>
+            <section class="workout-step">
+              <v-stepper-item :complete="step > 2" :value="2" title="操作内容" />
+              <div v-show="step === 2" class="workout-step-content">
+                <StepTwo
+                  v-if="snapshot"
+                  :snapshot="snapshot"
+                  :server-errors="serverErrors"
+                  @back="returnToDate"
+                  @changed="serverErrors = []"
+                  @confirm="openConfirmation"
+                />
+              </div>
+            </section>
+            <section class="workout-step">
+              <v-stepper-item :value="3" title="操作内容確認" />
+              <div v-show="step === 3" class="workout-step-content">
+                <StepThree
+                  v-if="snapshot && pendingSession && pendingMode"
+                  :mode="pendingMode"
+                  :session="pendingSession"
+                  :gyms="snapshot.gyms"
+                  :machines="snapshot.machines"
+                  :busy="loading"
+                  @back="step = 2"
+                  @submit="submitMutation"
+                />
+              </div>
+            </section>
           </v-stepper>
+          <LoadingOverlay :active="loading" :label="loadingLabel" />
         </section>
       </div>
 
       <Snackbar :message="message" @clear="message = null" />
-      <LoadingOverlay :active="loading" :label="loadingLabel" />
     </main>
   </v-app>
 </template>
@@ -73,11 +83,6 @@ import StepThree from './step3/Step.vue'
  * Step 遷移、AF API orchestration、共通 Loading/Snackbar state のみを所有し、
  * Session 編集と Validation は各 Step へ委譲する。
  */
-const steps = [
-  { value: 1, title: '操作するワークアウトの日付選択' },
-  { value: 2, title: '操作内容' },
-  { value: 3, title: '操作内容確認' },
-] as const
 const today = localIso(new Date())
 const shell = ref<HTMLElement | null>(null)
 const step = ref<1 | 2 | 3>(1)
