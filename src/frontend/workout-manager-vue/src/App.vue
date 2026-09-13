@@ -12,9 +12,13 @@
             next-text="次へ"
             class="workout-stepper workout-stepper--vertical"
           >
-            <section class="workout-step">
-              <v-stepper-item :complete="step > 1" :value="1" title="操作するワークアウトの日付選択" />
-              <div v-show="step === 1" class="workout-step-content">
+            <div class="workout-stepper-connector" aria-hidden="true" />
+            <v-stepper-item class="workout-step-item workout-step-item--1" :complete="step > 1" :value="1" title="操作するワークアウトの日付選択" />
+            <v-stepper-item class="workout-step-item workout-step-item--2" :complete="step > 2" :value="2" title="操作内容" />
+            <v-stepper-item class="workout-step-item workout-step-item--3" :value="3" title="操作内容確認" />
+
+            <v-stepper-window :class="['workout-stepper-window', `workout-stepper-window--step-${step}`]">
+              <v-stepper-window-item :value="1" class="workout-step-content">
                 <StepOne
                   v-model="selectedDate"
                   :maximum="today"
@@ -23,11 +27,8 @@
                   :write-reason="boundary?.reason ?? null"
                   @next="openDate"
                 />
-              </div>
-            </section>
-            <section class="workout-step">
-              <v-stepper-item :complete="step > 2" :value="2" title="操作内容" />
-              <div v-show="step === 2" class="workout-step-content">
+              </v-stepper-window-item>
+              <v-stepper-window-item :value="2" class="workout-step-content">
                 <StepTwo
                   v-if="snapshot"
                   :snapshot="snapshot"
@@ -36,11 +37,8 @@
                   @changed="serverErrors = []"
                   @confirm="openConfirmation"
                 />
-              </div>
-            </section>
-            <section class="workout-step">
-              <v-stepper-item :value="3" title="操作内容確認" />
-              <div v-show="step === 3" class="workout-step-content">
+              </v-stepper-window-item>
+              <v-stepper-window-item :value="3" class="workout-step-content">
                 <StepThree
                   v-if="snapshot && pendingSession && pendingMode"
                   :mode="pendingMode"
@@ -51,8 +49,8 @@
                   @back="step = 2"
                   @submit="submitMutation"
                 />
-              </div>
-            </section>
+              </v-stepper-window-item>
+            </v-stepper-window>
           </v-stepper>
           <LoadingOverlay :active="loading" :label="loadingLabel" />
         </section>
