@@ -1410,7 +1410,7 @@ public sealed class AfCoreTests
     }
 
     [Fact]
-    public async Task GithubAccessReportsCombinedDirectoryPathWhenDirectoryRequestFails()
+    public async Task GithubAccessAllowsMissingWorkoutDirectoryAndReportsMissingRequiredMaster()
     {
         var service = new GithubAccessService(new HttpClient(new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))));
 
@@ -1418,7 +1418,7 @@ public sealed class AfCoreTests
 
         var error = Assert.Single(errors);
         Assert.Equal(AfErrorCodes.GithubResourceNotFound, error.Code);
-        Assert.Contains("data/workouts", error.Message, StringComparison.Ordinal);
+        Assert.Contains("data/master/machines.json", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

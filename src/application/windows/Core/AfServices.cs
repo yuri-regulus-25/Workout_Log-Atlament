@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Atlament.Core.Write;
 
 namespace Atlament.Core;
 
@@ -42,6 +43,7 @@ public sealed class AtlamentApplication
     private readonly HostingStatusService _hosting;
     private readonly AfLog _log;
     private readonly RecoveryService? _recovery;
+    private readonly Service _workoutWrite;
     private readonly OperationGate _operations = new();
     private AfConfiguration _configuration = AfConfiguration.Default;
     private CredentialStatus _credentialStatus = new(false, CredentialState.missing.ToString(), null);
@@ -63,7 +65,8 @@ public sealed class AtlamentApplication
         GithubAccessService github,
         HostingStatusService hosting,
         AfLog log,
-        RecoveryService? recovery = null)
+        RecoveryService? recovery = null,
+        Service? workoutWrite = null)
     {
         _configurationStore = configurationStore;
         _credentialStore = credentialStore;
@@ -73,6 +76,7 @@ public sealed class AtlamentApplication
         _hosting = hosting;
         _log = log;
         _recovery = recovery;
+        _workoutWrite = workoutWrite ?? new Service(github, runtimeDataBuilder, new Repository(), new Reflection(github, runtimeDataBuilder, runtimeDataStore));
     }
 
     /// <summary>
@@ -304,6 +308,27 @@ public sealed class AtlamentApplication
     }
 
     public AfResponse<AfConfiguration> GetConfiguration() => AfResponses.Ok(_configuration);
+
+    public Task<(int StatusCode, AfResponse<Boundary> Response)> GetWorkoutWriteBoundaryAsync(CancellationToken cancellationToken) =>
+        _workoutWrite.GetBoundaryAsync(
+            _configuration,
+            _token,
+            _configurationStatus == ComponentStatus.available,
+            _credentialStatus.State == CredentialState.available.ToString(),
+            DetermineRuntimeDataStatus().FallbackActive,
+            cancellationToken);
+
+    public Task<(int StatusCode, AfResponse<DateSnapshot> Response)> GetWorkoutWriteDateAsync(string date, CancellationToken cancellationToken) =>
+        _workoutWrite.GetDateAsync(_configuration, _token, date, cancellationToken);
+
+    public Task<(int StatusCode, AfResponse<MutationOutcome> Response)> CreateWorkoutSessionAsync(CreateRequest request, CancellationToken cancellationToken) =>
+        _workoutWrite.CreateAsync(_configuration, _token, request, cancellationToken);
+
+    public Task<(int StatusCode, AfResponse<MutationOutcome> Response)> UpdateWorkoutSessionAsync(string sessionId, UpdateRequest request, CancellationToken cancellationToken) =>
+        _workoutWrite.UpdateAsync(_configuration, _token, sessionId, request, cancellationToken);
+
+    public Task<(int StatusCode, AfResponse<MutationOutcome> Response)> DeleteWorkoutSessionAsync(string sessionId, DeleteRequest request, CancellationToken cancellationToken) =>
+        _workoutWrite.DeleteAsync(_configuration, _token, sessionId, request, cancellationToken);
 
     /// <summary>
     /// Settings からの部分 Configuration 更新を適用する。

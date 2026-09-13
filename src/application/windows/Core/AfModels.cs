@@ -378,6 +378,7 @@ public sealed record HostingComponentState(
     [property: JsonPropertyName("portal")] string Portal,
     [property: JsonPropertyName("dashboard")] string Dashboard,
     [property: JsonPropertyName("workouts")] string Workouts,
+    [property: JsonPropertyName("workoutManager")] string WorkoutManager,
     [property: JsonPropertyName("machines")] string Machines,
     [property: JsonPropertyName("analytics")] string Analytics,
     [property: JsonPropertyName("settings")] string Settings,
