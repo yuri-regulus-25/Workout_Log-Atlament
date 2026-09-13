@@ -72,6 +72,7 @@ export type AfStatus = {
       portal: string
       dashboard: string
       workouts: string
+      workoutManager: string
       machines: string
       analytics: string
       settings: string
@@ -517,6 +518,97 @@ export type MasterWriteErrorCode =
   | 'GITHUB_CONNECTION_FAILED'
   | 'GITHUB_TIMEOUT'
   | 'GITHUB_SERVER_ERROR'
+
+export type WorkoutWriteBoundary = {
+  writable: boolean
+  reason: string | null
+  remoteAvailable: boolean
+  source: 'remote' | 'fallback' | 'unavailable'
+  revision: string | null
+  workoutDates: string[]
+}
+
+export type WorkoutMasterOption = {
+  id: string
+  name: string
+  active: boolean
+  deleted: boolean
+}
+
+export type WorkoutSetInput = {
+  sourceIndex: number | null
+  reps: number | null
+  weightKg: number | null
+  notes: string | null
+}
+
+export type WorkoutMachineInput = {
+  sourceIndex: number | null
+  machineId: string | null
+  sets: WorkoutSetInput[]
+}
+
+export type WorkoutSessionInput = {
+  date: string
+  gymId: string | null
+  machines: WorkoutMachineInput[]
+  notes: string | null
+}
+
+export type WorkoutFieldMessage = { path: string; message: string }
+
+export type WorkoutSessionForEdit = {
+  sessionId: string
+  session: WorkoutSessionInput
+  warnings: WorkoutFieldMessage[]
+}
+
+export type WorkoutDateSnapshot = {
+  date: string
+  sessions: WorkoutSessionForEdit[]
+  gyms: WorkoutMasterOption[]
+  machines: WorkoutMasterOption[]
+  expectedContext: string
+}
+
+export type WorkoutMutationResult = {
+  operation: 'create' | 'update' | 'delete'
+  sessionId: string | null
+  date: string
+  commitRevision: string
+  reflection: { succeeded: boolean; errors: AfError[]; warnings: RuntimeWarning[] }
+}
+
+export type WorkoutMutationOutcome = {
+  result: WorkoutMutationResult | null
+  fieldErrors: WorkoutFieldMessage[]
+}
+
+export async function getWorkoutWriteBoundary(): Promise<AfCallResult<WorkoutWriteBoundary>> {
+  return callAf<WorkoutWriteBoundary>('/api/v1/common/workout-write/boundary')
+}
+
+export async function getWorkoutWriteDate(date: string): Promise<AfCallResult<WorkoutDateSnapshot>> {
+  return callAf<WorkoutDateSnapshot>(`/api/v1/common/workout-write/date/${encodeURIComponent(date)}`)
+}
+
+export async function createWorkoutSession(session: WorkoutSessionInput, expectedContext: string): Promise<AfCallResult<WorkoutMutationOutcome>> {
+  return callAf<WorkoutMutationOutcome>('/api/v1/common/workout-write/sessions', {
+    method: 'POST', body: JSON.stringify({ session, expectedContext }),
+  })
+}
+
+export async function updateWorkoutSession(sessionId: string, session: WorkoutSessionInput, expectedContext: string): Promise<AfCallResult<WorkoutMutationOutcome>> {
+  return callAf<WorkoutMutationOutcome>(`/api/v1/common/workout-write/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PUT', body: JSON.stringify({ session, expectedContext }),
+  })
+}
+
+export async function deleteWorkoutSession(sessionId: string, expectedContext: string): Promise<AfCallResult<WorkoutMutationOutcome>> {
+  return callAf<WorkoutMutationOutcome>(`/api/v1/common/workout-write/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE', body: JSON.stringify({ expectedContext }),
+  })
+}
 
 export type SyncResult = {
   degraded: boolean

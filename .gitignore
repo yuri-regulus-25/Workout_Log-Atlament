@@ -6,6 +6,7 @@ src/application/android/app/src/main/assets/frontend/
 .angular
 *.local
 *.log
+*.tsbuildinfo
 
 .DS_Store
 .idea

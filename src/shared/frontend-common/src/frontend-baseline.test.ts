@@ -166,7 +166,7 @@ describe('cross-frontend test baseline', () => {
 
   it('keeps cross-app navigation metadata stable and smoke-tested by each existing app', () => {
     const drawerRouteIds = drawerApplications.map((application) => application.id)
-    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'])
+    expect(drawerRouteIds).toEqual(['portal', 'dashboard', 'workouts', 'machines', 'workout-manager', 'analytics', 'maintenance', 'settings'])
 
     const routes = Object.values(applicationRoutes)
     expect(new Set(routes).size).toBe(routes.length)

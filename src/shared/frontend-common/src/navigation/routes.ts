@@ -2,6 +2,7 @@ export const applicationRoutes = {
   portal: '/',
   dashboard: '/dashboard/',
   workouts: '/workouts/',
+  'workout-manager': '/workout-manager/',
   machines: '/machines/',
   analytics: '/analytics/',
   settings: '/settings/',

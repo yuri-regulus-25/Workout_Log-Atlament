@@ -21,6 +21,7 @@ const processes = [
   start('development-runtime', process.execPath, ['tools/dev-runtime/development-runtime.mjs']),
   startNpm('dashboard', ['run', 'watch:dashboard']),
   startNpm('workouts', ['run', 'watch:workouts']),
+  startNpm('workout-manager', ['run', 'watch:workout-manager']),
   startNpm('machines', ['run', 'watch:machines']),
   startNpm('analytics', ['run', 'watch:analytics']),
   startNpm('settings', ['run', 'watch:settings']),

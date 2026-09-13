@@ -1,0 +1,279 @@
+@import "@workout-lab/shared-styles/css";
+@import "@workout-lab/frontend-common/page-transition.css";
+@import "@workout-lab/frontend-common/branding.css";
+@import "@workout-lab/frontend-common/easter-egg.css";
+
+#app {
+  min-height: 100vh;
+}
+
+.v-application,
+.v-application .v-application__wrap {
+  background: var(--wl-bg) !important;
+  color: var(--wl-text) !important;
+}
+
+.workout-manager-shell {
+  display: block;
+}
+
+.manager-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.vertical-stepper {
+  display: grid;
+}
+
+.step-section {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  padding: 0 20px;
+}
+
+.step-section:not(:last-child)::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: center;
+  width: 2px;
+  min-height: 18px;
+  background: var(--wl-border);
+}
+
+.step-header {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  min-height: 64px;
+  border-bottom: 1px solid var(--wl-border);
+}
+
+.step-section:last-child .step-header,
+.step-section.active .step-header {
+  border-bottom-color: transparent;
+}
+
+.step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  justify-self: center;
+  border-radius: 50%;
+  background: var(--wl-border);
+  color: var(--wl-text-muted);
+  font-weight: 700;
+}
+
+.step-section.active .step-number,
+.step-section.complete .step-number {
+  background: var(--wl-primary-strong);
+  color: #ffffff;
+}
+
+.step-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.step-content {
+  grid-column: 2;
+  min-width: 0;
+  padding: 0 0 24px 12px;
+}
+
+.step-body,
+.session-editor,
+.confirmation-content {
+  display: grid;
+  gap: 16px;
+}
+
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.primary-action {
+  background: var(--wl-primary-strong) !important;
+  color: #ffffff !important;
+}
+
+.delete-action {
+  background: var(--wl-error-text) !important;
+}
+
+.date-field {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.date-field .v-picker {
+  width: min(100%, 360px);
+  border: 1px solid var(--wl-border);
+  border-radius: 8px;
+  background: var(--wl-surface);
+}
+
+.selected-date {
+  font-weight: 700;
+}
+
+.machine-panels .v-expansion-panel,
+.set-card {
+  background: var(--wl-surface) !important;
+  color: var(--wl-text) !important;
+}
+
+.machine-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.machine-title-error {
+  color: var(--wl-error-text);
+}
+
+.machine-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 12px;
+  align-items: start;
+}
+
+.machine-panel-body,
+.machine-form,
+.set-list,
+.set-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.numeric-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.item-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.set-number {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+}
+
+.set-card {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--wl-border);
+  border-radius: 8px;
+}
+
+.field-warning {
+  margin-top: -8px;
+}
+
+.confirmation-alert {
+  margin-bottom: 0;
+}
+
+.confirmation-machine {
+  display: grid;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--wl-border);
+}
+
+.confirmation-machine h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.confirmation-set {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.confirmation-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 3fr) minmax(0, 9fr);
+  gap: 12px;
+  line-height: 1.6;
+}
+
+.confirmation-row p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirmation-row p:first-child {
+  font-weight: 700;
+}
+
+.manager-loading-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  min-width: 180px;
+  padding: 22px;
+  border: 1px solid var(--wl-border);
+  border-radius: 8px;
+  background: var(--wl-surface);
+  color: var(--wl-text);
+}
+
+.manager-snackbar-content {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .step-section {
+    grid-template-columns: 40px minmax(0, 1fr);
+    padding: 0 12px;
+  }
+
+  .step-header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .step-content {
+    padding-left: 8px;
+  }
+
+  .numeric-fields,
+  .confirmation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .machine-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .machine-actions {
+    grid-auto-flow: column;
+    justify-content: end;
+  }
+}

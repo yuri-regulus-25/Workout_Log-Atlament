@@ -75,6 +75,7 @@ describe('AF read contract refinement', () => {
           portal: 'available',
           dashboard: 'available',
           workouts: 'available',
+          workoutManager: 'available',
           machines: 'available',
           analytics: 'available',
           settings: 'available',
