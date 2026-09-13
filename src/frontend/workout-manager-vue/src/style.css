@@ -82,11 +82,20 @@
   gap: 16px;
 }
 
-.step-actions {
+.workout-stepper .v-stepper-actions.step-actions {
+  padding: 0;
+}
+
+.workout-stepper .v-stepper-actions.step-actions--next-only {
+  justify-content: flex-end;
+}
+
+.step-next-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .primary-action {

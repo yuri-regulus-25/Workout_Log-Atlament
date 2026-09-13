@@ -1,5 +1,6 @@
 <template>
   <div class="step-body step-one">
+    <v-alert v-if="!writable" type="warning" variant="tonal" class="status-alert mb-4">{{ writeBoundaryMessage(writeReason) }}</v-alert>
     <v-row class="step-one-field">
       <v-col cols="3"><p class="field-label">ワークアウト日</p></v-col>
       <v-col cols="9"><DateField v-model="selected" :maximum="maximum" :markers="markers" /></v-col>
@@ -7,12 +8,14 @@
     <v-row class="step-one-actions">
       <v-col cols="3" />
       <v-col cols="9">
-        <div class="step-actions">
-          <v-btn class="primary-action" variant="flat" :disabled="!selected || !writable" @click="selected && emit('next', selected)">次へ</v-btn>
-        </div>
+        <v-stepper-actions :disabled="!selected || !writable" class="step-actions step-actions--next-only">
+          <template #prev />
+          <template #next="{ props: actionProps }">
+            <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" @click="selected && emit('next', selected)">次へ</v-btn>
+          </template>
+        </v-stepper-actions>
       </v-col>
     </v-row>
-    <v-alert v-if="!writable" type="warning" variant="tonal" class="status-alert">{{ writeBoundaryMessage(writeReason) }}</v-alert>
   </div>
 </template>
 

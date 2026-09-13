@@ -34,17 +34,23 @@
       <NotesField :model-value="working.notes" :errors="errorsFor('notes')" @update:model-value="updateNotes" />
     </div>
 
-    <div class="step-actions">
-      <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
-        <template #activator="{ props: tooltipProps }">
-          <span v-bind="tooltipProps">
-            <v-btn class="primary-action" variant="flat" :disabled="validationErrors.length > 0" @click="confirmUpdate">次へ</v-btn>
-          </span>
-        </template>
-      </v-tooltip>
-      <v-btn v-if="selectedKey !== newKey" color="error" variant="text" @click="confirmDelete">削除</v-btn>
-      <v-btn variant="text" @click="emit('back')">戻る</v-btn>
-    </div>
+    <v-stepper-actions :disabled="validationErrors.length > 0 ? 'next' : false" class="step-actions">
+      <template #prev="{ props: actionProps }">
+        <v-btn v-bind="actionProps" variant="text" @click="emit('back')">戻る</v-btn>
+      </template>
+      <template #next="{ props: actionProps }">
+        <div class="step-next-actions">
+          <v-btn v-if="selectedKey !== newKey" color="error" variant="text" @click="confirmDelete">削除</v-btn>
+          <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
+            <template #activator="{ props: tooltipProps }">
+              <span v-bind="tooltipProps">
+                <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" @click="confirmUpdate">次へ</v-btn>
+              </span>
+            </template>
+          </v-tooltip>
+        </div>
+      </template>
+    </v-stepper-actions>
 
     <DialogFrame
       v-model:open="switchDialog"

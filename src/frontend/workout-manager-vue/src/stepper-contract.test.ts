@@ -3,6 +3,8 @@ import appSource from './App.vue?raw'
 import loadingOverlaySource from './common/LoadingOverlay.vue?raw'
 import stepOneSource from './step1/Step.vue?raw'
 import dateFieldSource from './step1/form/Date.vue?raw'
+import stepTwoSource from './step2/Step.vue?raw'
+import stepThreeSource from './step3/Step.vue?raw'
 import mainSource from './main.ts?raw'
 
 describe('Workout Manager stepper contract', () => {
@@ -19,6 +21,16 @@ describe('Workout Manager stepper contract', () => {
     expect(stepOneSource).toContain('<v-col cols="9"><DateField')
     expect(dateFieldSource).toContain('locale="ja-JP"')
     expect(mainSource).toContain("locale: 'ja'")
+  })
+
+  it('全Stepの操作をStepper Actionsに配置し、主要ボタンをdense相当にする', () => {
+    expect(stepOneSource).toContain('<v-stepper-actions')
+    expect(stepOneSource).toContain('step-actions--next-only')
+    expect(stepOneSource).toContain('variant="flat" density="compact"')
+    expect(stepTwoSource).toContain('<v-stepper-actions')
+    expect(stepTwoSource).toContain('variant="flat" density="compact"')
+    expect(stepThreeSource).toContain('<v-stepper-actions')
+    expect(stepThreeSource).toContain('density="compact"')
   })
 
   it('Loading Overlayを操作領域内に表示する', () => {

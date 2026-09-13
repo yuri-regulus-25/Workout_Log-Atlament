@@ -20,10 +20,21 @@
       />
       <Row v-if="session.notes" label="Notes" :value="session.notes" />
     </div>
-    <div class="step-actions">
-      <v-btn class="primary-action" :class="{ 'delete-action': mode === 'delete' }" variant="flat" :disabled="busy" @click="emit('submit')">{{ actionLabel }}</v-btn>
-      <v-btn variant="text" :disabled="busy" @click="emit('back')">戻る</v-btn>
-    </div>
+    <v-stepper-actions :disabled="busy" class="step-actions">
+      <template #prev="{ props: actionProps }">
+        <v-btn v-bind="actionProps" variant="text" @click="emit('back')">戻る</v-btn>
+      </template>
+      <template #next="{ props: actionProps }">
+        <v-btn
+          v-bind="actionProps"
+          class="primary-action"
+          :class="{ 'delete-action': mode === 'delete' }"
+          variant="flat"
+          density="compact"
+          @click="emit('submit')"
+        >{{ actionLabel }}</v-btn>
+      </template>
+    </v-stepper-actions>
   </div>
 </template>
 
