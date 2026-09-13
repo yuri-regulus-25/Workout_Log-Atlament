@@ -389,7 +389,11 @@ internal class AndroidWorkoutWriteService(
         val payload = JSONObject()
             .put("query", "mutation(\$input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: \$input) { commit { oid } } }")
             .put("variables", JSONObject().put("input", input)).toString()
-        val response = githubClient.postGraphql(configuration, payload)
+        val response = try {
+            githubClient.postWorkoutMutationGraphql(configuration, payload)
+        } catch (_: WorkoutMutationOutcomeUnknownException) {
+            return reconcileCommit(configuration, expectedHead, message, changes)
+        }
         val graphErrors = response.optJSONArray("errors")
         if (graphErrors != null && graphErrors.length() > 0) {
             val first = graphErrors.optJSONObject(0)
@@ -400,7 +404,24 @@ internal class AndroidWorkoutWriteService(
             throw AfException("WORKOUT_WRITE_FAILED", messageText.ifBlank { "Workout write failed." })
         }
         return response.optJSONObject("data")?.optJSONObject("createCommitOnBranch")?.optJSONObject("commit")?.optString("oid")
-            ?.takeIf(String::isNotBlank) ?: throw AfException("WORKOUT_WRITE_RESULT_AMBIGUOUS", "GitHub write result is ambiguous.")
+            ?.takeIf(String::isNotBlank) ?: reconcileCommit(configuration, expectedHead, message, changes)
+    }
+
+    private fun reconcileCommit(configuration: JSONObject, expectedHead: String, message: String, changes: List<Change>): String {
+        val result = githubClient.reconcileWorkoutCommit(
+            configuration,
+            expectedHead,
+            message,
+            changes.map { WorkoutRepositoryChange(it.path, it.content) }
+        )
+        return when (result.state) {
+            WorkoutCommitReconciliationState.COMMITTED -> result.revision
+                ?: throw AfException("WORKOUT_WRITE_RESULT_AMBIGUOUS", "GitHub write result is ambiguous.")
+            WorkoutCommitReconciliationState.NOT_COMMITTED ->
+                throw AfException("WORKOUT_WRITE_FAILED", "Workout commit was not applied to the repository branch.")
+            WorkoutCommitReconciliationState.UNKNOWN ->
+                throw AfException("WORKOUT_WRITE_RESULT_AMBIGUOUS", "GitHub write result is ambiguous.")
+        }
     }
 
     private fun reflect(configuration: JSONObject, commitRevision: String): JSONObject {

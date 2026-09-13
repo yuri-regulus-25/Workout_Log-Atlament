@@ -2,6 +2,7 @@ package jp.yuri_regulus_25.atlament
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -26,6 +27,48 @@ class AndroidWorkoutWriteServiceContractTest {
         assertTrue(service.contains("WORKOUT_REPOSITORY_CONFLICT"))
         assertFalse(service.contains("force\""))
         assertFalse(service.contains("autoMerge"))
+        assertEquals(1, "githubClient.postWorkoutMutationGraphql".toRegex().findAll(service).count())
+        assertTrue(service.contains("reconcileWorkoutCommit"))
+    }
+
+    @Test
+    fun reconciliationRecognizesTheCommittedMutation() {
+        val reconciler = WorkoutCommitReconciler(
+            readHead = { "commit" },
+            compare = { _, _ -> WorkoutCommitComparison(
+                "ahead",
+                listOf(WorkoutCommitCandidate("commit", "Update: Workout Log - 2026/09/13", setOf("head"))),
+                mapOf(path to "modified")
+            ) },
+            readContent = { _, _ -> "{}\n" }
+        )
+
+        val result = reconciler.reconcile(
+            "head",
+            "Update: Workout Log - 2026/09/13",
+            listOf(WorkoutRepositoryChange(path, "{}\n"))
+        )
+
+        assertEquals(WorkoutCommitReconciliationState.COMMITTED, result.state)
+        assertEquals("commit", result.revision)
+    }
+
+    @Test
+    fun reconciliationRecognizesThatTheMutationWasNotCommitted() {
+        val reconciler = WorkoutCommitReconciler({ "head" }, { _, _ -> error("comparison must not run") }, { _, _ -> null })
+
+        val result = reconciler.reconcile("head", "message", emptyList())
+
+        assertEquals(WorkoutCommitReconciliationState.NOT_COMMITTED, result.state)
+    }
+
+    @Test
+    fun reconciliationKeepsUnknownStateWhenRepositoryCannotBeRead() {
+        val reconciler = WorkoutCommitReconciler({ error("head unavailable") }, { _, _ -> error("comparison unavailable") }, { _, _ -> null })
+
+        val result = reconciler.reconcile("head", "message", emptyList())
+
+        assertEquals(WorkoutCommitReconciliationState.UNKNOWN, result.state)
     }
 
     @Test
@@ -64,5 +107,9 @@ class AndroidWorkoutWriteServiceContractTest {
 
         assertFalse(builder.contains("workoutFiles.isEmpty()"))
         assertTrue(fetcher.contains("GITHUB_RESOURCE_NOT_FOUND") && fetcher.contains("emptyList()"))
+    }
+
+    private companion object {
+        const val path = "workouts/2026/09/2026-09-13.json"
     }
 }

@@ -59,6 +59,9 @@ internal sealed class Repository : IRepository
         IReadOnlyList<ResourceChange> changes,
         CancellationToken cancellationToken)
     {
+        string? commitSha = null;
+        var objectMutationAttempted = false;
+        var refUpdateAttempted = false;
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -82,14 +85,20 @@ internal sealed class Repository : IRepository
                 string? blobSha = null;
                 if (change.Content is not null)
                 {
+                    objectMutationAttempted = true;
                     var blobResponse = await SendAsync(configuration, token, HttpMethod.Post, "git/blobs", new JsonObject
                     {
                         ["content"] = change.Content,
                         ["encoding"] = "utf-8"
                     }, timeout.Token);
-                    if (!blobResponse.IsSuccessStatusCode) return Failure<CommitResult>(blobResponse.StatusCode, change.Path);
+                    if (!blobResponse.IsSuccessStatusCode)
+                    {
+                        return IsAmbiguousStatus(blobResponse.StatusCode)
+                            ? await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None)
+                            : Failure<CommitResult>(blobResponse.StatusCode, change.Path);
+                    }
                     blobSha = JsonNode.Parse(await blobResponse.Content.ReadAsStringAsync(timeout.Token))?["sha"]?.GetValue<string>();
-                    if (string.IsNullOrWhiteSpace(blobSha)) return Failed<CommitResult>(AfErrorCodes.WorkoutWriteFailed, "GitHub blob response is invalid.");
+                    if (string.IsNullOrWhiteSpace(blobSha)) return await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None);
                 }
                 entries.Add(new JsonObject
                 {
@@ -100,33 +109,51 @@ internal sealed class Repository : IRepository
                 });
             }
 
+            objectMutationAttempted = true;
             var treeResponse = await SendAsync(configuration, token, HttpMethod.Post, "git/trees", new JsonObject
             {
                 ["base_tree"] = baseTree,
                 ["tree"] = entries
             }, timeout.Token);
-            if (!treeResponse.IsSuccessStatusCode) return Failure<CommitResult>(treeResponse.StatusCode, "git tree");
+            if (!treeResponse.IsSuccessStatusCode)
+            {
+                return IsAmbiguousStatus(treeResponse.StatusCode)
+                    ? await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None)
+                    : Failure<CommitResult>(treeResponse.StatusCode, "git tree");
+            }
             var treeSha = JsonNode.Parse(await treeResponse.Content.ReadAsStringAsync(timeout.Token))?["sha"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(treeSha)) return Failed<CommitResult>(AfErrorCodes.WorkoutWriteFailed, "GitHub tree response is invalid.");
+            if (string.IsNullOrWhiteSpace(treeSha)) return await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None);
 
+            objectMutationAttempted = true;
             var newCommitResponse = await SendAsync(configuration, token, HttpMethod.Post, "git/commits", new JsonObject
             {
                 ["message"] = message,
                 ["tree"] = treeSha,
                 ["parents"] = new JsonArray(expectedHead)
             }, timeout.Token);
-            if (!newCommitResponse.IsSuccessStatusCode) return Failure<CommitResult>(newCommitResponse.StatusCode, "git commit");
-            var commitSha = JsonNode.Parse(await newCommitResponse.Content.ReadAsStringAsync(timeout.Token))?["sha"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(commitSha)) return Failed<CommitResult>(AfErrorCodes.WorkoutWriteResultAmbiguous, "GitHub write result is ambiguous.");
+            if (!newCommitResponse.IsSuccessStatusCode)
+            {
+                return IsAmbiguousStatus(newCommitResponse.StatusCode)
+                    ? await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None)
+                    : Failure<CommitResult>(newCommitResponse.StatusCode, "git commit");
+            }
+            commitSha = JsonNode.Parse(await newCommitResponse.Content.ReadAsStringAsync(timeout.Token))?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(commitSha)) return await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None);
 
             var current = await ReadHeadAsync(configuration, token, timeout.Token);
-            if (current.Value is null) return new RepositoryResult<CommitResult>(null, current.Errors);
+            if (current.Value is null)
+            {
+                return current.Errors.Any(error => error.Code is AfErrorCodes.GithubTimeout or AfErrorCodes.GithubConnectionFailed)
+                    ? await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None)
+                    : new RepositoryResult<CommitResult>(null, current.Errors);
+            }
             if (!string.Equals(current.Value, expectedHead, StringComparison.Ordinal))
             {
                 return Failed<CommitResult>(AfErrorCodes.WorkoutRepositoryConflict, "Remote repository changed before Workout commit.");
             }
 
             var branchRef = NormalizeBranchRef(configuration.Repository.Ref);
+            refUpdateAttempted = true;
             var update = await SendAsync(configuration, token, HttpMethod.Patch, $"git/refs/{Escape(branchRef)}", new JsonObject
             {
                 ["sha"] = commitSha,
@@ -134,19 +161,113 @@ internal sealed class Repository : IRepository
             }, timeout.Token);
             if (!update.IsSuccessStatusCode)
             {
+                if (update.StatusCode == HttpStatusCode.RequestTimeout || (int)update.StatusCode >= 500)
+                {
+                    return await ReconcileAsync(configuration, token, expectedHead, commitSha, cancellationToken);
+                }
                 return update.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity
                     ? Failed<CommitResult>(AfErrorCodes.WorkoutRepositoryConflict, "Remote repository changed before Workout commit.")
                     : Failure<CommitResult>(update.StatusCode, "git ref");
             }
             return new RepositoryResult<CommitResult>(new CommitResult(commitSha), Array.Empty<AfError>());
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            return Failed<CommitResult>(AfErrorCodes.WorkoutWriteResultAmbiguous, "GitHub write result is ambiguous.");
+            if (refUpdateAttempted && !string.IsNullOrWhiteSpace(commitSha))
+            {
+                return await ReconcileAsync(configuration, token, expectedHead, commitSha, CancellationToken.None);
+            }
+            if (objectMutationAttempted)
+            {
+                return await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None);
+            }
+            if (cancellationToken.IsCancellationRequested) throw;
+            return Failed<CommitResult>(AfErrorCodes.WorkoutWriteFailed, "Workout commit was not applied to the repository branch.");
         }
         catch (HttpRequestException)
         {
-            return Failed<CommitResult>(AfErrorCodes.WorkoutWriteResultAmbiguous, "GitHub write result is ambiguous.");
+            return refUpdateAttempted && !string.IsNullOrWhiteSpace(commitSha)
+                ? await ReconcileAsync(configuration, token, expectedHead, commitSha, cancellationToken)
+                : objectMutationAttempted
+                    ? await ConfirmNotCommittedAsync(configuration, token, CancellationToken.None)
+                    : Failed<CommitResult>(AfErrorCodes.WorkoutWriteFailed, "Workout commit was not applied to the repository branch.");
+        }
+    }
+
+    private async Task<RepositoryResult<CommitResult>> ConfirmNotCommittedAsync(
+        AfConfiguration configuration,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var branchRef = NormalizeBranchRef(configuration.Repository.Ref);
+            var response = await SendAsync(configuration, token, HttpMethod.Get, $"git/ref/{Escape(branchRef)}", null, timeout.Token);
+            if (!response.IsSuccessStatusCode) return Ambiguous();
+            var head = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token))?["object"]?["sha"]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(head) ? Ambiguous() : NotCommitted();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Ambiguous();
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Ambiguous();
+        }
+    }
+
+    private async Task<RepositoryResult<CommitResult>> ReconcileAsync(
+        AfConfiguration configuration,
+        string? token,
+        string expectedHead,
+        string commitSha,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(configuration.Timeouts.GithubRequestTimeoutSec));
+            var branchRef = NormalizeBranchRef(configuration.Repository.Ref);
+            var headResponse = await SendAsync(configuration, token, HttpMethod.Get, $"git/ref/{Escape(branchRef)}", null, timeout.Token);
+            if (!headResponse.IsSuccessStatusCode) return Ambiguous();
+            var currentHead = JsonNode.Parse(await headResponse.Content.ReadAsStringAsync(timeout.Token))?["object"]?["sha"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(currentHead)) return Ambiguous();
+            if (string.Equals(currentHead, commitSha, StringComparison.Ordinal))
+            {
+                return Committed(commitSha);
+            }
+            if (string.Equals(currentHead, expectedHead, StringComparison.Ordinal))
+            {
+                return NotCommitted();
+            }
+
+            var comparison = await SendAsync(configuration, token, HttpMethod.Get, $"compare/{Escape(commitSha)}...{Escape(currentHead)}", null, timeout.Token);
+            if (!comparison.IsSuccessStatusCode) return Ambiguous();
+            var status = JsonNode.Parse(await comparison.Content.ReadAsStringAsync(timeout.Token))?["status"]?.GetValue<string>();
+            return status is "ahead" or "identical" ? Committed(commitSha) : NotCommitted();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Ambiguous();
+        }
+        catch (HttpRequestException)
+        {
+            return Ambiguous();
+        }
+        catch (JsonException)
+        {
+            return Ambiguous();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return Ambiguous();
         }
     }
 
@@ -173,6 +294,18 @@ internal sealed class Repository : IRepository
 
     private static RepositoryResult<T> Failed<T>(string code, string message) where T : class =>
         new(null, new[] { new AfError(code, message, true) });
+
+    private static RepositoryResult<CommitResult> Committed(string commitSha) =>
+        new(new CommitResult(commitSha), Array.Empty<AfError>());
+
+    private static RepositoryResult<CommitResult> NotCommitted() =>
+        Failed<CommitResult>(AfErrorCodes.WorkoutWriteFailed, "Workout commit was not applied to the repository branch.");
+
+    private static RepositoryResult<CommitResult> Ambiguous() =>
+        Failed<CommitResult>(AfErrorCodes.WorkoutWriteResultAmbiguous, "GitHub write result is ambiguous.");
+
+    private static bool IsAmbiguousStatus(HttpStatusCode status) =>
+        status == HttpStatusCode.RequestTimeout || (int)status >= 500;
 
     private static string NormalizeBranchRef(string value)
     {

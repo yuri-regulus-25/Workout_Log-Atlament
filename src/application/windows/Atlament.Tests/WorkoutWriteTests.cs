@@ -143,6 +143,103 @@ public sealed class WorkoutWriteTests
     }
 
     [Fact]
+    public async Task RepositoryReconciliationReturnsCommittedRevisionWithoutRetryingMutation()
+    {
+        var fixture = AmbiguousPatchRepository("commit");
+
+        var result = await fixture.Repository.CommitAsync(Configuration(), "token", "head", "Update: Workout Log - 2026/09/13", new[]
+        {
+            new ResourceChange("workouts/2026/09/2026-09-13.json", "{}\n")
+        }, CancellationToken.None);
+
+        Assert.Equal("commit", result.Value?.CommitRevision);
+        Assert.Empty(result.Errors);
+        Assert.Equal(1, fixture.PatchCalls());
+    }
+
+    [Fact]
+    public async Task RepositoryReconciliationRecognizesCommittedRevisionBehindCurrentHead()
+    {
+        var fixture = AmbiguousPatchRepository("later", "ahead");
+
+        var result = await fixture.Repository.CommitAsync(Configuration(), "token", "head", "Update: Workout Log - 2026/09/13", new[]
+        {
+            new ResourceChange("workouts/2026/09/2026-09-13.json", "{}\n")
+        }, CancellationToken.None);
+
+        Assert.Equal("commit", result.Value?.CommitRevision);
+        Assert.Empty(result.Errors);
+        Assert.Equal(1, fixture.PatchCalls());
+    }
+
+    [Fact]
+    public async Task RepositoryReconciliationReturnsWriteFailureWhenHeadDidNotChange()
+    {
+        var fixture = AmbiguousPatchRepository("head");
+
+        var result = await fixture.Repository.CommitAsync(Configuration(), "token", "head", "Update: Workout Log - 2026/09/13", new[]
+        {
+            new ResourceChange("workouts/2026/09/2026-09-13.json", "{}\n")
+        }, CancellationToken.None);
+
+        Assert.Null(result.Value);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.WorkoutWriteFailed);
+        Assert.Equal(1, fixture.PatchCalls());
+    }
+
+    [Fact]
+    public async Task RepositoryReconciliationKeepsAmbiguousWhenHeadCannotBeRead()
+    {
+        var fixture = AmbiguousPatchRepository(null);
+
+        var result = await fixture.Repository.CommitAsync(Configuration(), "token", "head", "Update: Workout Log - 2026/09/13", new[]
+        {
+            new ResourceChange("workouts/2026/09/2026-09-13.json", "{}\n")
+        }, CancellationToken.None);
+
+        Assert.Null(result.Value);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.WorkoutWriteResultAmbiguous);
+        Assert.Equal(1, fixture.PatchCalls());
+    }
+
+    [Fact]
+    public async Task RepositoryReconcilesObjectWriteFailureWithoutRetryOrRefUpdate()
+    {
+        var headReads = 0;
+        var blobCalls = 0;
+        var refUpdates = 0;
+        var handler = new RecordingHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/git/ref/heads/main"))
+            {
+                headReads++;
+                return Task.FromResult(Json("{\"object\":{\"sha\":\"head\"}}"));
+            }
+            if (path.EndsWith("/git/commits/head")) return Task.FromResult(Json("{\"tree\":{\"sha\":\"base-tree\"}}"));
+            if (path.EndsWith("/git/blobs"))
+            {
+                blobCalls++;
+                throw new HttpRequestException("response lost");
+            }
+            if (request.Method == HttpMethod.Patch) refUpdates++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+        var repository = new Repository(new HttpClient(handler));
+
+        var result = await repository.CommitAsync(Configuration(), "token", "head", "Create: Workout Log - 2026/09/13", new[]
+        {
+            new ResourceChange("workouts/2026/09/2026-09-13.json", "{}\n")
+        }, CancellationToken.None);
+
+        Assert.Null(result.Value);
+        Assert.Contains(result.Errors, error => error.Code == AfErrorCodes.WorkoutWriteFailed);
+        Assert.Equal(2, headReads);
+        Assert.Equal(1, blobCalls);
+        Assert.Equal(0, refUpdates);
+    }
+
+    [Fact]
     public async Task CreateConvertsSingleJsonToJsonlInOneDomainCommit()
     {
         var repository = new FakeRepository();
@@ -228,6 +325,38 @@ public sealed class WorkoutWriteTests
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json")
     };
+
+    private static (Repository Repository, Func<int> PatchCalls) AmbiguousPatchRepository(string? reconciliationHead, string? comparisonStatus = null)
+    {
+        var headReads = 0;
+        var patchCalls = 0;
+        var handler = new RecordingHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/git/ref/heads/main"))
+            {
+                headReads++;
+                if (headReads > 2 && reconciliationHead is null) throw new HttpRequestException("reconciliation failed");
+                var head = headReads > 2 ? reconciliationHead : "head";
+                return Task.FromResult(Json($"{{\"object\":{{\"sha\":\"{head}\"}}}}"));
+            }
+            if (path.EndsWith("/git/commits/head")) return Task.FromResult(Json("{\"tree\":{\"sha\":\"base-tree\"}}"));
+            if (path.EndsWith("/git/blobs")) return Task.FromResult(Json("{\"sha\":\"blob\"}"));
+            if (path.EndsWith("/git/trees")) return Task.FromResult(Json("{\"sha\":\"next-tree\"}"));
+            if (path.EndsWith("/git/commits")) return Task.FromResult(Json("{\"sha\":\"commit\"}"));
+            if (path.Contains("/compare/commit...", StringComparison.Ordinal) && comparisonStatus is not null)
+            {
+                return Task.FromResult(Json($"{{\"status\":\"{comparisonStatus}\"}}"));
+            }
+            if (request.Method == HttpMethod.Patch)
+            {
+                patchCalls++;
+                throw new HttpRequestException("response lost");
+            }
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+        return (new Repository(new HttpClient(handler)), () => patchCalls);
+    }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
     {
