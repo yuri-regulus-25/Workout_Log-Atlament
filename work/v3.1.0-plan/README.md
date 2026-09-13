@@ -1,12 +1,12 @@
-# v3.1.0 — Workout CRUD
+# v3.1.0 — Workout Manager
 
 Planning branch: `release-3.1.0-plan`
 
 ## 1. Purpose
 
-Workout LogをRaw JSONではなくDomain Modelとして安全にCreate / Update / Physical Deleteする、独立したWorkout CRUD Applicationを追加する。
+Workout LogをRaw JSONではなくDomain Modelとして安全にCreate / Update / Physical Deleteする、独立したWorkout CRUD Application `Workout Manager` を追加する。
 
-Frontend Frameworkは以下とする。
+Frontend Framework：
 
 - Vue 3
 - TypeScript
@@ -16,9 +16,15 @@ Frontend Frameworkは以下とする。
 
 既存Workout Domainは閲覧用途として維持し、存在しないDateへのアクセス等を含む既存ルーティング仕様をCRUD都合で変更しない。
 
-Workout CRUDは既存Workout Domainとは独立したApplication / Navigation導線として提供する。
+Workout Managerは既存Workout Domainとは独立したApplication / Navigation導線として提供する。
 
-Portal上の表示名、Navigation文言、画面名、Stepタイトル・説明文、各Vuetify ComponentのLabel等のUI Copyは別途決定する。
+Portal：
+
+- Application名：`Workout Manager`
+- Icon：`mdi-square-edit-outline`
+- Pointer：`管理 - 履歴`
+- Description：`ワークアウト記録を操作します`
+- Framework表示：`Vue.js + Vuetify`
 
 ## 2. Scope
 
@@ -38,6 +44,7 @@ Portal上の表示名、Navigation文言、画面名、Stepタイトル・説明
 - Server Validation
 - Optimistic Concurrency Control
 - Atomic Git Write
+- Application生成Commit Message
 - API Status Snackbar
 - Windows / Android Application Framework共通Write Contract
 
@@ -51,9 +58,6 @@ Portal上の表示名、Navigation文言、画面名、Stepタイトル・説明
 - Auto Save
 - Session間での未保存入力引継ぎ
 - 既存Workout DomainのRoute仕様変更
-- Portal / Navigation文言確定
-- Stepタイトル / Step説明文確定
-- 各ComponentのLabel / Placeholder等のUI Copy確定
 
 ## 3. Domain Identity
 
@@ -76,17 +80,17 @@ SessionとResourceの対応を1:1と仮定しない。
 
 ## 4. Application Flow
 
-Workout CRUD ApplicationはVertical Stepperを使用する。
+Workout ManagerはVertical Stepperを使用する。
 
 ```text
 Step 1
-Date Selection
+操作するワークアウトの日付選択
     ↓
 Step 2
-Create / Edit
+操作内容
     ↓
 Step 3
-Confirmation
+操作内容確認
     ↓
 API Write
  ├─ Success → Step 1
@@ -95,51 +99,7 @@ API Write
 
 Stepperは縦型を固定仕様とする。
 
-StepタイトルおよびStep説明文は別途決定する。
-
-## 5. Step Summary
-
-### Step 1
-
-Dateを `v-date-picker` で選択する。
-
-選択可能範囲は過去から画面アクセス時点の当日までとし、未来日は選択不可とする。
-
-既存Workoutが存在するDateはDatePicker上で視覚的に識別可能とする。
-
-Session数等の詳細情報はDatePicker上では表示しない。
-
-### Step 2
-
-選択Dateに存在するSessionを読み込み、CreateまたはEditを行う。
-
-Session選択は `v-select` とする。
-
-選択肢：
-
-- Session1
-- Session2
-- ...
-- + 新規Session
-
-既存Sessionが存在する場合の初期値はSession1とする。
-
-Create / Editは同一Form Componentを使用する。
-
-既存Session選択時のみDelete Actionを表示する。
-
-### Step 3
-
-Create / Update時はStep 2と同一情報構造をRead Onlyで表示する。
-
-Delete時は固定確認文言を表示する。
-
-Write実行後：
-
-- Success → Snackbar表示後、Step 1へ戻る
-- Failure → Snackbar表示後、Step 2へ戻る
-
-## 6. Save Contract
+## 5. Save Contract
 
 保存単位はDateではない。
 
@@ -151,7 +111,15 @@ Raw JSON、任意Path、任意Branch、任意Commit MessageをFrontendへ公開�
 
 Workout CRUD専用Domain Write APIのみを公開する。
 
-## 7. Validation Authority
+Workout LogのCommit Message：
+
+```text
+Create: Workout Log - YYYY/MM/DD
+Update: Workout Log - YYYY/MM/DD
+Delete: Workout Log - YYYY/MM/DD
+```
+
+## 6. Validation Authority
 
 Validationは二層とする。
 
@@ -166,7 +134,9 @@ Client Validation成功のみをWrite条件としない。
 
 Server側で必ずDomain / Resource / Reference / Revisionを再検証する。
 
-## 8. State Policy
+Historical invalid Master Referenceは未変更であればgrandfatherして保存可能とし、変更する場合のみValid Masterへの置換を要求する。詳細は `08_final_decisions.md` を参照する。
+
+## 7. State Policy
 
 Draft / Auto Saveは提供しない。
 
@@ -189,27 +159,52 @@ Step 3 → Step 2：
 
 Session切替時にDirtyの場合のみ確認Dialogを表示する。
 
-## 9. Design System
+## 8. Design System
 
-Workout CRUD独自のVisual Ruleは原則追加しない。
+Workout Manager独自のVisual Ruleは原則追加しない。
 
 以下はMaintenance画面と共通とする。
 
 - Button Design
 - dense
 - Dialog Design
-- Spacing感
+- Spacing
 - Destructive Action
 - Theme
 - Primary Action
 - Snackbar
+- Loading Overlay
 - Form Component Design
 
 Primary Actionは `--wl-primary-strong` を使用する。
 
-詳細は `01_interaction_model.md` を参照する。
+## 9. Documentation Index
 
-## 10. Implementation Rule
+1. `01_interaction_model.md`
+   - Base UI / UX interaction model
+   - Stepper / Form / State Transition
+2. `02_write_contract.md`
+   - Domain Mutation / Persistence / API / Atomic Git Write / Revision
+3. `03_validation_conflict_verification.md`
+   - Validation / Conflict / Error / Test / Verification
+4. `04_ui_copy_and_component_contract.md`
+   - 確定UI Copy / Component behavior / Maintenance common design
+5. `05_schema_reconciliation.md`
+   - Current Workout Schemaとの整合 / hidden field preservation / compatibility
+6. `06_frontend_component_structure.md`
+   - Vue frontend component / state ownership structure
+7. `07_backend_implementation_structure.md`
+   - Application Framework / Write Service / Resource / Repository / Reflection structure
+8. `08_final_decisions.md`
+   - 製造直前の最終判断 / documentation precedence / Commit Message / grandfather policy
+
+## 10. Documentation Authority
+
+同一事項の記述が衝突する場合は、`08_final_decisions.md` の優先順位に従う。
+
+`01` / `03` に残る旧TBD・旧案は未決事項ではなく、後続資料で確定済みの内容として扱う。
+
+## 11. Implementation Rule
 
 Implementation前に関連実装を横断調査する。
 
@@ -226,24 +221,4 @@ Investigation
 
 設計書と実装が乖離している場合、既存実装を無条件に正とせず、Domain Contractとの衝突を確認する。
 
-## 11. Work Units
-
-1. `01_interaction_model.md`
-   - UI / UX
-   - Stepper
-   - Form
-   - Component
-   - State Transition
-
-2. `02_write_contract.md`
-   - Domain Mutation
-   - Persistence
-   - API
-   - Atomic Git Write
-   - Revision
-
-3. `03_validation_conflict_verification.md`
-   - Validation
-   - Conflict
-   - Error
-   - Test / Verification
+製造開始前に追加のProduct Decisionを必須とする事項はない。
