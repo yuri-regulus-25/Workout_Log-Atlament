@@ -206,13 +206,6 @@
   color: var(--wl-error-text);
 }
 
-.machine-content {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  gap: 12px;
-  align-items: start;
-}
-
 .machine-panel-body,
 .machine-form,
 .set-list,
@@ -230,12 +223,13 @@
 .item-actions {
   display: grid;
   gap: 4px;
+  align-content: start;
   justify-items: center;
 }
 
-.machine-list-actions {
-  display: flex;
-  justify-content: flex-start;
+.machine-list {
+  display: grid;
+  gap: 12px;
 }
 
 .set-number {
@@ -245,10 +239,6 @@
 }
 
 .set-card {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 40px;
-  gap: 10px;
-  align-items: start;
   padding: 12px;
   border: 1px solid var(--wl-border);
   border-radius: 8px;
@@ -371,17 +361,7 @@
     height: 24px;
   }
 
-  .numeric-fields,
   .confirmation-row {
     grid-template-columns: 1fr;
-  }
-
-  .machine-content {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .machine-actions {
-    grid-auto-flow: column;
-    justify-content: end;
   }
 }

@@ -11,7 +11,7 @@
       <v-alert v-for="warning in snapshotWarning('gymId')" :key="warning.message" type="warning" variant="tonal" density="compact" class="field-warning">
         {{ warning.message }}
       </v-alert>
-      <v-expansion-panels v-model="openPanels" multiple variant="accordion" class="machine-panels">
+      <div class="machine-list">
         <MachinePanel
           v-for="(machine, index) in working.machines"
           :key="`${machine.sourceIndex ?? 'new'}-${index}`"
@@ -22,21 +22,15 @@
           :errors="machineErrors(index)"
           :warnings="machineWarnings(machine.sourceIndex)"
           :validated="validated"
+          :expanded="openPanels.includes(index)"
+          :add-disabled="working.machines.length >= 10"
           :delete-disabled="working.machines.length <= 1"
           @update="updateMachine(index, $event)"
+          @update:expanded="setPanelExpanded(index, $event)"
+          @add="addMachine(index)"
           @delete="deleteMachine(index)"
           @add-set="addSet(index, $event)"
           @delete-set="deleteSet(index, $event)"
-        />
-      </v-expansion-panels>
-      <div class="machine-list-actions">
-        <v-btn
-          icon="mdi-plus-thick"
-          size="small"
-          variant="text"
-          aria-label="マシンを追加"
-          :disabled="working.machines.length >= 10"
-          @click="addMachine"
         />
       </div>
       <NotesField :model-value="working.notes" :errors="errorsFor('notes')" @update:model-value="updateNotes" />
@@ -161,10 +155,15 @@ function markChanged() { validated.value = true; emit('changed') }
 function updateGym(value: string | null) { if (working.value) working.value.gymId = value; markChanged() }
 function updateNotes(value: string | null) { if (working.value) working.value.notes = value; markChanged() }
 function updateMachine(index: number, value: WorkoutMachineInput) { if (working.value) working.value.machines[index] = value; markChanged() }
-function addMachine() {
+function setPanelExpanded(index: number, expanded: boolean) {
+  openPanels.value = expanded
+    ? [...new Set([...openPanels.value, index])]
+    : openPanels.value.filter(value => value !== index)
+}
+function addMachine(index: number) {
   if (!working.value || working.value.machines.length >= 10) return
-  working.value.machines.push(emptyMachine())
-  openPanels.value = [working.value.machines.length - 1]
+  working.value.machines.splice(index + 1, 0, emptyMachine())
+  openPanels.value = [index + 1]
   markChanged()
 }
 function deleteMachine(index: number) {

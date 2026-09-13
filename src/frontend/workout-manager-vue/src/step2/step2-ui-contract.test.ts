@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { emptyMachine } from '../model'
 import stepSource from './Step.vue?raw'
 import machinePanelSource from './block/MachinePanel.vue?raw'
+import setCardSource from './block/SetCard.vue?raw'
 import gymSource from './form/Gym.vue?raw'
 import machineSource from './form/Machine.vue?raw'
 import notesSource from './form/Notes.vue?raw'
@@ -17,18 +18,17 @@ describe('Workout Manager Step 2 UI contract', () => {
     }
   })
 
-  it('Machine一覧直下から独立した初期値のMachineを末尾へ追加して展開する', () => {
-    const panelsEnd = stepSource.indexOf('</v-expansion-panels>')
-    const addAction = stepSource.indexOf('aria-label="マシンを追加"')
-    const notesField = stepSource.indexOf('<NotesField')
-
-    expect(addAction).toBeGreaterThan(panelsEnd)
-    expect(addAction).toBeLessThan(notesField)
-    expect(stepSource).toContain('icon="mdi-plus-thick"')
-    expect(stepSource).toContain(':disabled="working.machines.length >= 10"')
-    expect(stepSource).toContain('working.value.machines.push(emptyMachine())')
-    expect(stepSource).toContain('openPanels.value = [working.value.machines.length - 1]')
-    expect(stepSource).not.toContain('@add="addMachine')
+  it('各Machineの右横から独立した初期値のMachineを直後へ追加して展開する', () => {
+    expect(stepSource).toContain('@add="addMachine(index)"')
+    expect(stepSource).toContain(':add-disabled="working.machines.length >= 10"')
+    expect(stepSource).toContain('working.value.machines.splice(index + 1, 0, emptyMachine())')
+    expect(stepSource).toContain('openPanels.value = [index + 1]')
+    expect(machinePanelSource).toContain('<v-row dense class="machine-row">')
+    expect(machinePanelSource).toContain('<v-col cols="11">')
+    expect(machinePanelSource).toContain('<v-col cols="1" class="item-actions machine-actions">')
+    expect(machinePanelSource).toContain('<v-icon icon="mdi-plus-thick" size="small" />')
+    expect(machinePanelSource).toContain('<v-icon icon="mdi-trash-can" size="small" />')
+    expect(stepSource).not.toContain('machine-list-actions')
     expect(emptyMachine()).toEqual({
       sourceIndex: null,
       machineId: null,
@@ -50,5 +50,15 @@ describe('Workout Manager Step 2 UI contract', () => {
     expect(machinePanelSource).toContain("const validationFailed = computed(() => props.validated && hasErrors.value)")
     expect(machinePanelSource).toContain("{{ machineName || '？' }}")
     expect(machinePanelSource).not.toContain('<v-tooltip')
+  })
+
+  it('Setを1/10/1の行に分けてFieldとActionを配置する', () => {
+    expect(setCardSource).toContain('<v-row dense class="set-row">')
+    expect(setCardSource).toContain('<v-col cols="1" class="set-number">')
+    expect(setCardSource).toContain('<v-col cols="10">')
+    expect(setCardSource).toContain('<v-col cols="1" class="item-actions set-actions">')
+    expect(setCardSource).toContain('<div class="numeric-fields">')
+    expect(setCardSource).toContain('<v-icon icon="mdi-plus-thick" size="small" />')
+    expect(setCardSource).toContain('<v-icon icon="mdi-trash-can" size="small" />')
   })
 })
