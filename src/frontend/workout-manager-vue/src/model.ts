@@ -15,5 +15,19 @@ export function emptySession(date: string): WorkoutSessionInput {
 }
 
 export function cloneSession(session: WorkoutSessionInput): WorkoutSessionInput {
-  return structuredClone(session)
+  return {
+    date: session.date,
+    gymId: session.gymId,
+    machines: session.machines.map(machine => ({
+      sourceIndex: machine.sourceIndex,
+      machineId: machine.machineId,
+      sets: machine.sets.map(set => ({
+        sourceIndex: set.sourceIndex,
+        reps: set.reps,
+        weightKg: set.weightKg,
+        notes: set.notes,
+      })),
+    })),
+    notes: session.notes,
+  }
 }

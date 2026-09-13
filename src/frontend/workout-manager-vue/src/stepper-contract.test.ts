@@ -25,11 +25,12 @@ describe('Workout Manager stepper contract', () => {
 
   it('全Stepの操作をStepper Actionsに配置し、主要ボタンをdense相当にする', () => {
     expect(stepOneSource).toContain('<v-stepper-actions')
-    expect(stepOneSource).toContain('step-actions--next-only')
     expect(stepOneSource).toContain('variant="flat" density="compact"')
     expect(stepTwoSource).toContain('<v-stepper-actions')
+    expect(stepTwoSource).toContain('class="mr-2" variant="text"')
     expect(stepTwoSource).toContain('variant="flat" density="compact"')
     expect(stepThreeSource).toContain('<v-stepper-actions')
+    expect(stepThreeSource).toContain('class="mr-2" variant="text"')
     expect(stepThreeSource).toContain('density="compact"')
   })
 

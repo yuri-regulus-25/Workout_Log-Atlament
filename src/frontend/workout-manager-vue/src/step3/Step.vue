@@ -22,7 +22,7 @@
     </div>
     <v-stepper-actions :disabled="busy" class="step-actions">
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" variant="text" @click="emit('back')">戻る</v-btn>
+        <v-btn v-bind="actionProps" class="mr-2" variant="text" @click="emit('back')">戻る</v-btn>
       </template>
       <template #next="{ props: actionProps }">
         <v-btn

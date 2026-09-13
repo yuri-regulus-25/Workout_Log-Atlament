@@ -36,11 +36,10 @@
 
     <v-stepper-actions :disabled="validationErrors.length > 0 ? 'next' : false" class="step-actions">
       <template #prev="{ props: actionProps }">
-        <v-btn v-bind="actionProps" variant="text" @click="emit('back')">戻る</v-btn>
+        <v-btn v-bind="actionProps" class="mr-2" variant="text" @click="emit('back')">戻る</v-btn>
       </template>
       <template #next="{ props: actionProps }">
         <div class="step-next-actions">
-          <v-btn v-if="selectedKey !== newKey" color="error" variant="text" @click="confirmDelete">削除</v-btn>
           <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
             <template #activator="{ props: tooltipProps }">
               <span v-bind="tooltipProps">
@@ -48,6 +47,7 @@
               </span>
             </template>
           </v-tooltip>
+          <v-btn v-if="selectedKey !== newKey" color="error" variant="text" @click="confirmDelete">削除</v-btn>
         </div>
       </template>
     </v-stepper-actions>

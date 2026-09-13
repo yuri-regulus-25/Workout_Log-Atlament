@@ -8,7 +8,7 @@
     <v-row class="step-one-actions">
       <v-col cols="3" />
       <v-col cols="9">
-        <v-stepper-actions :disabled="!selected || !writable" class="step-actions step-actions--next-only">
+        <v-stepper-actions :disabled="!selected || !writable" class="step-actions">
           <template #prev />
           <template #next="{ props: actionProps }">
             <v-btn v-bind="actionProps" class="primary-action" variant="flat" density="compact" @click="selected && emit('next', selected)">次へ</v-btn>
