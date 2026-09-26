@@ -70,6 +70,10 @@ public sealed class GithubAccessService
 
                 if (fetched.Errors.Count > 0)
                 {
+                    if (resource.Type == "WORKOUT" && resource.ResourceKind == "directory" && fetched.Errors.All(error => error.Code == AfErrorCodes.GithubResourceNotFound))
+                    {
+                        continue;
+                    }
                     errors.AddRange(fetched.Errors);
                     if (resource.Required)
                     {
@@ -77,7 +81,7 @@ public sealed class GithubAccessService
                     }
                 }
 
-                if (!resource.EmptyAllowed && fetched.Files.Count == 0)
+                if (resource.Type != "WORKOUT" && !resource.EmptyAllowed && fetched.Files.Count == 0)
                 {
                     errors.Add(new AfError(AfErrorCodes.RuntimeDataEmpty, $"{resource.Path} is empty.", true));
                     if (resource.Required)
@@ -125,6 +129,10 @@ public sealed class GithubAccessService
                     : await FetchFileAsync(configuration, resource.Path, token, timeoutCts.Token);
                 if (fetched.Errors.Count > 0)
                 {
+                    if (resource.ResourceKind == "directory" && fetched.Errors.All(error => error.Code == AfErrorCodes.GithubResourceNotFound))
+                    {
+                        continue;
+                    }
                     errors.AddRange(fetched.Errors);
                     if (resource.Required) return (Array.Empty<RuntimeSourceFile>(), errors);
                 }

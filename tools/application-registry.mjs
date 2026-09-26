@@ -21,6 +21,12 @@ const buildIntegration = {
     smokePath: '/workouts/',
     dynamicSmokePath: '/workouts/2026-08-14',
   },
+  'workout-manager': {
+    distPath: 'workout-manager',
+    sourcePath: 'src/frontend/workout-manager-vue/dist',
+    devPort: 5182,
+    smokePath: '/workout-manager/',
+  },
   machines: {
     distPath: 'machines',
     sourcePath: 'src/frontend/machines-angular/dist/machines-angular/browser',

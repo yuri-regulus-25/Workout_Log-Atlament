@@ -86,6 +86,16 @@ public static class AfErrorCodes
     public const string RecoveryWriteConflict = "RECOVERY_WRITE_CONFLICT";
     public const string RecoveryWriteFailed = "RECOVERY_WRITE_FAILED";
     public const string RecoveryReflectionFailed = "RECOVERY_REFLECTION_FAILED";
+    public const string WorkoutWriteUnavailable = "WORKOUT_WRITE_UNAVAILABLE";
+    public const string WorkoutSessionNotFound = "WORKOUT_SESSION_NOT_FOUND";
+    public const string WorkoutSessionConflict = "WORKOUT_SESSION_CONFLICT";
+    public const string WorkoutResourceConflict = "WORKOUT_RESOURCE_CONFLICT";
+    public const string WorkoutRepositoryConflict = "WORKOUT_REPOSITORY_CONFLICT";
+    public const string WorkoutValidationFailed = "WORKOUT_VALIDATION_FAILED";
+    public const string WorkoutReferenceInvalid = "WORKOUT_REFERENCE_INVALID";
+    public const string WorkoutWriteFailed = "WORKOUT_WRITE_FAILED";
+    public const string WorkoutWriteResultAmbiguous = "WORKOUT_WRITE_RESULT_AMBIGUOUS";
+    public const string WorkoutReflectionFailed = "WORKOUT_REFLECTION_FAILED";
     public const string HostingArtifactNotFound = "HOSTING_ARTIFACT_NOT_FOUND";
     public const string HostingStartFailed = "HOSTING_START_FAILED";
     public const string HttpPortUnavailable = "HTTP_PORT_UNAVAILABLE";

@@ -46,8 +46,7 @@ public sealed class RuntimeDataBuilder
 
         if (workoutFiles.Count == 0)
         {
-            errors.Add(new AfError(AfErrorCodes.RuntimeDataEmpty, "Workout resource is empty.", true));
-            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, true);
+            return new RuntimeBuildResult(Array.Empty<WorkoutSession>(), errors, warnings, false);
         }
 
         var sessions = new List<WorkoutSession>();

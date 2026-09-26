@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import type { PluginOption } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'node:path'
 import { workoutDataPlugin } from '../../../tools/dev-runtime/vite-workout-data-plugin.ts'
@@ -14,5 +15,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [workoutDataPlugin(), vue()],
+  plugins: [workoutDataPlugin() as PluginOption, vue()],
 })

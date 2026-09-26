@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.19.0",
   "workspaces": [
     "src/frontend/*",
     "src/shared/*"
   ],
   "scripts": {
-    "build": "npm run build:apps && npm run build:mpa",
-    "build:apps": "node src/frontend/portal/build.mjs && node src/frontend/errors/build.mjs && npm run build -w @workout-lab/workouts-vue && npm run build -w @workout-lab/dashboard-react && npm run build -w @workout-lab/machines-angular && npm run build -w @workout-lab/analytics-svelte && npm run build -w @workout-lab/settings-solid && npm run build -w @workout-lab/maintenance-vue",
+    "build": "node tools/build/build.mjs",
+    "build:apps": "node tools/build/build-apps.mjs",
     "build:debug": "node tools/build/build-debug.mjs",
     "build:mpa": "node tools/build/build-mpa.mjs",
     "check:analytics": "npm run check -w @workout-lab/analytics-svelte",
@@ -23,12 +24,14 @@
     "dev:settings": "npm run dev -w @workout-lab/settings-solid",
     "dev:maintenance": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/maintenance-vue",
     "dev:workouts": "node tools/dev-runtime/dev-with-workout-data.mjs npm run dev -w @workout-lab/workouts-vue",
+    "dev:workout-manager": "node tools/dev-runtime/dev-with-workout-data.mjs pnpm --filter @workout-lab/workout-manager-vue dev",
     "prod:analytics": "npm run prod -w @workout-lab/analytics-svelte",
     "prod:dashboard": "npm run prod -w @workout-lab/dashboard-react",
     "prod:machines": "npm run prod -w @workout-lab/machines-angular",
     "prod:settings": "npm run prod -w @workout-lab/settings-solid",
     "prod:maintenance": "npm run prod -w @workout-lab/maintenance-vue",
     "prod:workouts": "npm run prod -w @workout-lab/workouts-vue",
+    "prod:workout-manager": "pnpm --filter @workout-lab/workout-manager-vue prod",
     "preview:mpa": "node tools/dev-runtime/preview-mpa.mjs",
     "test": "vitest run",
     "version:check": "node tools/version/atlament-version.mjs check",
@@ -41,9 +44,10 @@
     "watch:settings": "npm run dev -w @workout-lab/settings-solid -- --host 127.0.0.1 --port 5179 --strictPort",
     "watch:maintenance": "npm run dev -w @workout-lab/maintenance-vue -- --host 127.0.0.1 --port 5181 --strictPort",
     "watch:workouts": "npm run dev -w @workout-lab/workouts-vue -- --host 127.0.0.1 --port 5176 --strictPort",
+    "watch:workout-manager": "pnpm --filter @workout-lab/workout-manager-vue dev --host 127.0.0.1 --port 5182 --strictPort",
     "build:windows": "node tools/build/build-windows.mjs",
-    "build:android": "npm run build && node tools/build/build-android.mjs",
-    "build:android:release": "npm run build && node tools/build/build-android-release.mjs"
+    "build:android": "node tools/build/build.mjs && node tools/build/build-android.mjs",
+    "build:android:release": "node tools/build/build.mjs && node tools/build/build-android-release.mjs"
   },
   "devDependencies": {
     "vitest": "^4.0.8"

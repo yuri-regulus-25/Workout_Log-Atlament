@@ -1,6 +1,6 @@
 export type ApplicationMetadata = {
-  id: 'portal' | 'dashboard' | 'workouts' | 'machines' | 'analytics' | 'settings' | 'maintenance'
-  route: '/' | '/dashboard/' | '/workouts/' | '/machines/' | '/analytics/' | '/settings/' | '/maintenance/'
+  id: 'portal' | 'dashboard' | 'workouts' | 'workout-manager' | 'machines' | 'analytics' | 'settings' | 'maintenance'
+  route: '/' | '/dashboard/' | '/workouts/' | '/workout-manager/' | '/machines/' | '/analytics/' | '/settings/' | '/maintenance/'
   displayName: string
   iconClass: string
   drawer: boolean

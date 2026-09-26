@@ -11,6 +11,20 @@ import {
 } from './index'
 
 describe('workout-data', () => {
+  it.each(['json', 'jsonl'])('既存SchemaのSet noteとSession notesを改行ごと保持する (%s)', extension => {
+    const content = JSON.stringify({
+      schema_version: 1, session_id: 'notes', date: '2026-08-22', status: 'complete',
+      gym_id: 'af-shioiri',
+      machines: [{ machine_id: 'abdominal', sets: [{ set: 1, weight_kg: 20, reps: 10, note: 'て\nすと' }] }],
+      notes: ['こんにちは', '次の行'],
+    })
+    const parse = extension === 'json' ? parseWorkoutJson : parseWorkoutJsonl
+    const result = parse(`workouts/2026/08/2026-08-22.${extension}`, content)
+    expect(result.issues).toEqual([])
+    expect(result.sessions[0].machines[0].sets[0].note).toBe('て\nすと')
+    expect(result.sessions[0].notes).toEqual(['こんにちは', '次の行'])
+  })
+
   it('loads sample JSON and JSONL into unified WorkoutSession array', () => {
     const sessions = loadSampleWorkoutSessions()
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using Atlament.Core.Write;
 
 namespace Atlament.Host;
 
@@ -84,6 +85,37 @@ public sealed class AfHttpHost : IAsyncDisposable
         {
             var response = _application.GetRuntimeWorkouts();
             return Results.Json(response, AfJson.Options, statusCode: response.Success ? 200 : 503);
+        });
+        app.MapGet($"{prefix}/workout-write/boundary", async (HttpContext context) =>
+        {
+            var result = await _application.GetWorkoutWriteBoundaryAsync(context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapGet($"{prefix}/workout-write/date/{{date}}", async (string date, HttpContext context) =>
+        {
+            var result = await _application.GetWorkoutWriteDateAsync(date, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPost($"{prefix}/workout-write/sessions", async (HttpContext context) =>
+        {
+            var request = await context.Request.ReadFromJsonAsync<CreateRequest>(AfJson.Options, context.RequestAborted)
+                ?? new CreateRequest(null, null);
+            var result = await _application.CreateWorkoutSessionAsync(request, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapPut($"{prefix}/workout-write/sessions/{{sessionId}}", async (string sessionId, HttpContext context) =>
+        {
+            var request = await context.Request.ReadFromJsonAsync<UpdateRequest>(AfJson.Options, context.RequestAborted)
+                ?? new UpdateRequest(null, null);
+            var result = await _application.UpdateWorkoutSessionAsync(sessionId, request, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
+        });
+        app.MapDelete($"{prefix}/workout-write/sessions/{{sessionId}}", async (string sessionId, HttpContext context) =>
+        {
+            var request = await context.Request.ReadFromJsonAsync<DeleteRequest>(AfJson.Options, context.RequestAborted)
+                ?? new DeleteRequest(null);
+            var result = await _application.DeleteWorkoutSessionAsync(sessionId, request, context.RequestAborted);
+            return Results.Json(result.Response, AfJson.Options, statusCode: result.StatusCode);
         });
         app.MapPost($"{prefix}/sync", async (HttpContext context) =>
         {

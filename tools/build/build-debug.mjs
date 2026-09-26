@@ -2,29 +2,20 @@ import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runPackageScript } from "../package-manager/package-manager.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const androidRoot = resolve(repoRoot, "src/application/android");
-const npmCli = resolve(process.execPath, "../node_modules/npm/bin/npm-cli.js");
 const androidWrapper = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
 const androidWrapperPath = resolve(androidRoot, androidWrapper);
 const androidCommand = existsSync(androidWrapperPath) ? androidWrapperPath : "gradle";
 const windowsProject = resolve(repoRoot, "src/application/windows/Atlament.csproj");
 const env = resolveBuildEnvironment();
 
-runNpm(["run", "build"]);
+runPackageScript("build", { cwd: repoRoot });
 run("dotnet", ["build", windowsProject, "--configuration", "Debug"], repoRoot);
 runNodeScript(resolve(repoRoot, "tools/build/copy-android-frontend.mjs"));
 runAndroidGradle([":app:assembleDebug"]);
-
-function runNpm(args) {
-  if (existsSync(npmCli)) {
-    run(process.execPath, [npmCli, ...args], repoRoot);
-    return;
-  }
-
-  run(process.platform === "win32" ? "npm.cmd" : "npm", args, repoRoot, { shell: process.platform === "win32" });
-}
 
 function runAndroidGradle(args) {
   if (process.platform === "win32" && androidCommand.endsWith(".bat")) {
