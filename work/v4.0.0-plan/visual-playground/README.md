@@ -8,39 +8,30 @@ Atlament v4.0 の Visual Language を決める前に、Glass、Plasma、Ambient 
 
 ## 起動方法
 
-Node.js 22 以上を用意する。グローバルな `pnpm` installation は不要である。
-
-Repository root で Corepack 経由の pnpm 11.19.0 を使用する。
+Node.js 22 以上を用意する。Repository root で npm workspace command を使用する。
 
 ```powershell
-corepack pnpm install
-corepack pnpm --filter @workout-lab/v4-visual-playground dev
+npm ci
+npm run dev -w @workout-lab/v4-visual-playground
 ```
 
 Production build:
 
 ```powershell
-corepack pnpm --filter @workout-lab/v4-visual-playground build
-```
-
-Corepack が利用できない環境では、npm に同梱される `npx` から固定 Version の pnpm を一時実行する。
-
-```powershell
-npx --yes pnpm@11.19.0 install
-npx --yes pnpm@11.19.0 --filter @workout-lab/v4-visual-playground dev
+npm run build -w @workout-lab/v4-visual-playground
 ```
 
 ## 構成と Version
 
 | 項目 | Version / 方式 |
 |---|---|
-| React | 19.3.0 |
-| React DOM | 19.3.0 |
+| React | 19.2.8 |
+| React DOM | 19.2.8 |
 | TypeScript | 6.0.3 |
-| Vite | 8.2.2 |
+| Vite | 8.2.1 |
 | `@cruxgarden/plasma-ui` | 0.7.0 |
 | Node.js requirement | Plasma UI の requirement により 22 以上 |
-| Package manager | pnpm 11.19.0 |
+| User-facing command | npm workspace command |
 
 ## Playground
 
