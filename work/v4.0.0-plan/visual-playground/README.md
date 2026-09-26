@@ -8,16 +8,26 @@ Atlament v4.0 の Visual Language を決める前に、Glass、Plasma、Ambient 
 
 ## 起動方法
 
-Repository root で以下を実行する。
+Node.js 22 以上を用意する。グローバルな `pnpm` installation は不要である。
+
+Repository root で Corepack 経由の pnpm 11.19.0 を使用する。
 
 ```powershell
-pnpm --filter @workout-lab/v4-visual-playground dev
+corepack pnpm install
+corepack pnpm --filter @workout-lab/v4-visual-playground dev
 ```
 
 Production build:
 
 ```powershell
-pnpm --filter @workout-lab/v4-visual-playground build
+corepack pnpm --filter @workout-lab/v4-visual-playground build
+```
+
+Corepack が利用できない環境では、npm に同梱される `npx` から固定 Version の pnpm を一時実行する。
+
+```powershell
+npx --yes pnpm@11.19.0 install
+npx --yes pnpm@11.19.0 --filter @workout-lab/v4-visual-playground dev
 ```
 
 ## 構成と Version
