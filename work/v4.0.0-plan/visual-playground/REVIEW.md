@@ -24,34 +24,34 @@
 - <!-- 記入 -->
 - <!-- 記入 -->
 
-## Selected Preset
+## Pre-Fix Preset
 
 ```json
 {
   "ambient": {
-    "backgroundBrightness": 18,
-    "greenIntensity": 64,
-    "ambientGlow": 52,
-    "density": 26,
-    "spawnRate": 50,
-    "riseSpeed": 28,
-    "drift": 34,
-    "particleSize": 5,
-    "particleGlow": 62,
-    "particleOpacity": 58,
-    "lifetime": 24,
-    "fadeTiming": 72
+    "backgroundBrightness": 0,
+    "greenIntensity": 0,
+    "ambientGlow": 33,
+    "density": 100,
+    "spawnRate": 100,
+    "riseSpeed": 29,
+    "drift": 120,
+    "particleSize": 1,
+    "particleGlow": 44,
+    "particleOpacity": 100,
+    "lifetime": 48,
+    "fadeTiming": 95
   },
   "glass": {
-    "opacity": 14,
-    "blur": 24,
-    "saturation": 138,
-    "borderOpacity": 24,
-    "borderBrightness": 82,
-    "radius": 28,
-    "reflection": 62,
-    "glow": 34,
-    "shadow": 64
+    "opacity": 20,
+    "blur": 2,
+    "saturation": 106,
+    "borderOpacity": 2,
+    "borderBrightness": 49,
+    "radius": 16,
+    "reflection": 65,
+    "glow": 39,
+    "shadow": 34
   },
   "plasma": {
     "size": 100,
@@ -75,3 +75,4 @@
 - 2026-09-27: 初回 Selected Preset を記録。
 - 2026-09-27: Selected Preset を初期値として採用し、Ambient Particle を tsParticles 4.4.0 の下端 emitter で再評価。
 - 2026-09-27: Particle の random lifetime と可視 opacity での破棄を廃止。Fade timing から lifetime 終端まで連続的に opacity 0 へ減衰するよう修正。
+- 2026-09-27: 再評価後の値を Pre-Fix Preset として固定。Background brightness / green intensity は最終差し替えにより 0 とした。

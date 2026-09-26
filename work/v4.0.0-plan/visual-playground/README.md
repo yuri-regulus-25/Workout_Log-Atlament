@@ -6,6 +6,13 @@ Atlament v4.0 の Visual Language を決める前に、Glass、Plasma、Ambient 
 
 実装は `src/frontend/v4-visual-playground/` に隔離しており、既存 MPA の route、build、Frontend Application には組み込んでいない。
 
+2026-09-27 時点の比較基準は Pre-Fix として固定している。
+
+- [デザイン共有ガイド](DESIGN-SHARING-GUIDE.md): 別の LLM や人間との壁打ちに使用する、単独で読める日本語資料
+- [Pre-Fix Specification](PRE-FIX-SPEC.md): 選択値、parameter semantics、scene specification、acceptance baseline
+- [Architecture](ARCHITECTURE.md): Component 責務、state flow、render layer、library boundary
+- [Review](REVIEW.md): 評価記録と Pre-Fix preset
+
 ## 起動方法
 
 Node.js 22 以上を用意する。Repository root で npm workspace command を使用する。
@@ -141,6 +148,8 @@ Provider では `blend`、`viscosity`、`stretch`、`flow`、`tint`、`opacity`�
 ## Preset
 
 Control Panel 下部で current parameter を JSON として表示する。
+
+`defaultParameters` と `Reset default` は [Pre-Fix Specification](PRE-FIX-SPEC.md) の preset を基準とする。
 
 - `Copy JSON`: Clipboard へコピーする。
 - `Restore JSON`: textarea の JSON を検証して復元する。
