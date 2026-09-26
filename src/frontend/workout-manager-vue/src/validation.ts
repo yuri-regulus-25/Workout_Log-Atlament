@@ -27,6 +27,7 @@ export function validateSession(
   session.machines.forEach((machine, machineIndex) => {
     const path = `machines[${machineIndex}]`
     const originalMachine = machine.sourceIndex == null ? null : original?.machines[machine.sourceIndex] ?? null
+    if (machine.notes !== undefined) validateNotes(`${path}.notes`, machine.notes, originalMachine?.notes, errors)
     validateReference(`${path}.machineId`, machine.machineId, originalMachine?.machineId, validMachines, errors)
     if (machine.machineId && selected.has(machine.machineId)) errors.push({ path: `${path}.machineId`, message: messages.duplicateMachine })
     if (machine.machineId) selected.add(machine.machineId)

@@ -15,6 +15,19 @@ function session(): WorkoutSessionInput {
 }
 
 describe('Workout Manager validation', () => {
+  it('Machine Notesは400文字まで、未変更のLegacy値のみ上限超過を保持できる', () => {
+    const input = session()
+    input.machines[0]!.notes = 'a'.repeat(400)
+    expect(validateSession(input, null, gyms, machines)).toEqual([])
+    input.machines[0]!.notes += 'a'
+    expect(validateSession(input, null, gyms, machines)).toContainEqual({ path: 'machines[0].notes', message: '400字以内に入力してください' })
+    const original = structuredClone(input)
+    expect(validateSession(input, original, gyms, machines)).toEqual([])
+    input.machines[0]!.notes = 'b'.repeat(401)
+    expect(validateSession(input, original, gyms, machines)).toContainEqual({ path: 'machines[0].notes', message: '400字以内に入力してください' })
+    input.machines[0]!.notes = null
+    expect(validateSession(input, original, gyms, machines)).toEqual([])
+  })
   it('accepts zero weight and rejects negative weight with the final message', () => {
     const valid = session()
     expect(validateSession(valid, valid, gyms, machines)).toEqual([])

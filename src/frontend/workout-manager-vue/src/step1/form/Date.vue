@@ -19,6 +19,8 @@
         :model-value="modelValue"
         :max="maximum"
         locale="ja-JP"
+        header-color="var(--wl-primary)"
+        hide-title
         show-adjacent-months
         @update:model-value="onUpdate"
       />

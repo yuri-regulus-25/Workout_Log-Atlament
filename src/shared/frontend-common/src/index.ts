@@ -546,6 +546,8 @@ export type WorkoutMachineInput = {
   sourceIndex: number | null
   machineId: string | null
   sets: WorkoutSetInput[]
+  /** 省略時は既存値を保持。null または空文字は削除。 */
+  notes?: string | null
 }
 
 export type WorkoutSessionInput = {

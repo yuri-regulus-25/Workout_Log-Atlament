@@ -39,6 +39,11 @@
               @add="emit('add-set', setIndex)"
               @delete="emit('delete-set', setIndex)"
             />
+            <NotesField
+              :model-value="machine.notes ?? null"
+              :errors="errorsFor('notes')"
+              @update:model-value="emit('update', { ...machine, notes: $event })"
+            />
           </div>
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -58,6 +63,7 @@
 import { computed } from 'vue'
 import type { WorkoutMachineInput, WorkoutMasterOption, WorkoutSetInput } from '@workout-lab/frontend-common'
 import MachineField from '../form/Machine.vue'
+import NotesField from '../form/Notes.vue'
 import SetCard from './SetCard.vue'
 const props = defineProps<{
   machine: WorkoutMachineInput

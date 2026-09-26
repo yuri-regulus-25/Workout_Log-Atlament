@@ -129,7 +129,7 @@
 }
 
 .date-field {
-  width: min(100%, 360px);
+  width: 100%;
   min-width: 0;
   padding-top: 10px;
 }

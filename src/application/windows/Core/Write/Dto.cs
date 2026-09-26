@@ -27,7 +27,21 @@ public sealed record SetInput(
 public sealed record MachineInput(
     [property: JsonPropertyName("sourceIndex")] int? SourceIndex,
     [property: JsonPropertyName("machineId")] string? MachineId,
-    [property: JsonPropertyName("sets")] IReadOnlyList<SetInput>? Sets);
+    [property: JsonPropertyName("sets")] IReadOnlyList<SetInput>? Sets)
+{
+    private string? _notes;
+
+    /// <summary>Machine Notes の編集値。旧クライアントの省略と明示的な削除を区別する。</summary>
+    [JsonPropertyName("notes")]
+    public string? Notes
+    {
+        get => _notes;
+        init { _notes = value; NotesSpecified = true; }
+    }
+
+    [JsonIgnore]
+    public bool NotesSpecified { get; private set; }
+}
 
 public sealed record SessionInput(
     [property: JsonPropertyName("date")] string? Date,

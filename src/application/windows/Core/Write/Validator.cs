@@ -53,6 +53,10 @@ internal static class Validator
             }
 
             ValidateReference($"{path}.machineId", machine.MachineId, sourceMachine?["machine_id"]?.GetValue<string>(), masters.Machines, create || sourceMachine is null, fields);
+            if (machine.NotesSpecified)
+            {
+                ValidateNotes($"{path}.notes", machine.Notes, Resource.ProjectSessionNotes(sourceMachine), fields);
+            }
             if (!string.IsNullOrWhiteSpace(machine.MachineId) && !selected.Add(machine.MachineId))
             {
                 fields.Add(new FieldError($"{path}.machineId", "同じマシンは選択できません"));

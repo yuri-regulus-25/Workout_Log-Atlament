@@ -109,6 +109,14 @@ class AndroidWorkoutWriteServiceContractTest {
         assertTrue(fetcher.contains("GITHUB_RESOURCE_NOT_FOUND") && fetcher.contains("emptyList()"))
     }
 
+    @Test
+    fun machineNotesUseExistingArraySchemaAndPreserveOmittedOrUnchangedValues() {
+        assertTrue(service.contains(".put(\"notes\", projectNotes(machine))"))
+        assertTrue(service.contains("if (machine.has(\"notes\")) validateNotes(\"\$path.notes\""))
+        assertTrue(service.contains("machineInput.has(\"notes\") && nullableString(machineInput, \"notes\").orEmpty() != projectNotes(machine)"))
+        assertTrue(service.contains("if (notes.isEmpty()) machine.remove(\"notes\") else machine.put(\"notes\", JSONArray(notes))"))
+    }
+
     private companion object {
         const val path = "workouts/2026/09/2026-09-13.json"
     }

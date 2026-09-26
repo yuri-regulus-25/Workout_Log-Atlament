@@ -2,6 +2,7 @@ using Atlament.Core;
 using Atlament.Core.Write;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Atlament.Tests;
@@ -258,13 +259,127 @@ public sealed class WorkoutWriteTests
     }
 
     [Fact]
+    public void MachineNotesLoadUpdateAndPreserveOriginalArray()
+    {
+        var source = JsonNode.Parse(Workout("a"))!.AsObject();
+        source["machines"]![0]!["notes"] = new JsonArray("一行目\n二行目", "", "三行目");
+        var input = Resource.Project(source);
+        Assert.Equal("一行目\n二行目\n\n三行目", input.Machines![0].Notes);
+        var unchanged = Resource.UpdateSession(source, input);
+        Assert.True(JsonNode.DeepEquals(source["machines"]![0]!["notes"], unchanged["machines"]![0]!["notes"]));
+
+        var edited = input with { Machines = new[] { input.Machines[0] with { Notes = "変更\r\n\n次の行" } } };
+        var updated = Resource.UpdateSession(source, edited);
+        Assert.Equal(new[] { "変更", "次の行" }, updated["machines"]![0]!["notes"]!.AsArray().Select(value => value!.GetValue<string>()));
+        Assert.Equal("変更\n次の行", Resource.Project(updated).Machines![0].Notes);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void MachineNotesClearAndOmittedRequestRemainDistinct(string? empty)
+    {
+        var source = JsonNode.Parse(Workout("a"))!.AsObject();
+        source["machines"]![0]!["notes"] = new JsonArray("既存値");
+        var input = Resource.Project(source);
+        var omitted = JsonSerializer.Deserialize<MachineInput>("""
+            {"sourceIndex":0,"machineId":"active-machine","sets":[{"sourceIndex":0,"reps":10,"weightKg":20,"notes":null}]}
+            """, AfJson.Options)!;
+        Assert.False(omitted.NotesSpecified);
+        var preserved = Resource.UpdateSession(source, input with { Machines = new[] { omitted } });
+        Assert.Equal("既存値", preserved["machines"]![0]!["notes"]![0]!.GetValue<string>());
+
+        var explicitEmpty = JsonSerializer.Deserialize<MachineInput>(JsonSerializer.Serialize(omitted with { Notes = empty }, AfJson.Options), AfJson.Options)!;
+        Assert.True(explicitEmpty.NotesSpecified);
+        var cleared = Resource.UpdateSession(source, input with { Machines = new[] { explicitEmpty } });
+        Assert.Null(cleared["machines"]![0]!["notes"]);
+        var created = Resource.CreateSession("new", ValidInput() with { Machines = new[] { explicitEmpty with { SourceIndex = null } } });
+        Assert.Null(created["machines"]![0]!["notes"]);
+    }
+
+    [Fact]
+    public void MachineNotesFollowSourceIdentityWhenMachinesAreReordered()
+    {
+        var source = JsonNode.Parse(Workout("a"))!.AsObject();
+        var machines = source["machines"]!.AsArray();
+        machines[0]!["notes"] = new JsonArray("先頭");
+        var second = machines[0]!.DeepClone();
+        second["machine_id"] = "deleted-machine";
+        second["notes"] = new JsonArray("二番目", "次の行");
+        machines.Add(second);
+        var input = Resource.Project(source);
+        var updated = Resource.UpdateSession(source, input with { Machines = new[] { input.Machines![1], input.Machines[0] with { Notes = "変更" } } });
+        var projected = Resource.Project(updated);
+        Assert.Equal("二番目\n次の行", projected.Machines![0].Notes);
+        Assert.Equal("変更", projected.Machines[1].Notes);
+    }
+
+    [Fact]
+    public void MachineNotesValidate400CharactersAndGrandfatherUnchangedLegacyValues()
+    {
+        var input = ValidInput();
+        var machine = input.Machines![0];
+        Assert.True(Validator.Validate(input with { Machines = new[] { machine with { Notes = new string('a', 400) } } }, null, Masters(), true).IsValid);
+        var invalid = Validator.Validate(input with { Machines = new[] { machine with { Notes = new string('a', 401) } } }, null, Masters(), true);
+        Assert.Contains(invalid.FieldErrors, error => error.Path == "machines[0].notes" && error.Message == "400字以内に入力してください");
+        var source = JsonNode.Parse(Workout("a"))!.AsObject();
+        source["machines"]![0]!["notes"] = new JsonArray(new string('a', 401));
+        var legacy = Resource.Project(source);
+        Assert.True(Validator.Validate(legacy, source, Masters(), false).IsValid);
+        Assert.False(Validator.Validate(legacy with { Machines = new[] { legacy.Machines![0] with { Notes = new string('b', 401) } } }, source, Masters(), false).IsValid);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreatePreservesSetNotesThroughRequestResourceAndRuntime(bool sameDate)
+    {
+        var repository = new FakeRepository();
+        var service = ServiceFor(Workout("a"), repository, new FakeReflection(true));
+        var date = sameDate ? "2026-09-13" : "2026-09-12";
+        var snapshot = await service.GetDateAsync(Configuration(), "token", date, CancellationToken.None);
+        var input = ValidInput() with
+        {
+            Date = date,
+            Machines = new[] { new MachineInput(null, "active-machine", new[] { new SetInput(null, 10, 20m, "て\nすと") }) { Notes = "マシン\r\n\nメモ" } },
+            Notes = "こんにちは\n次の行"
+        };
+        var requestJson = JsonSerializer.Serialize(new CreateRequest(input, snapshot.Response.Data!.ExpectedContext), AfJson.Options);
+        var request = JsonSerializer.Deserialize<CreateRequest>(requestJson, AfJson.Options)!;
+
+        var result = await service.CreateAsync(Configuration(), "token", request, CancellationToken.None);
+
+        Assert.True(result.Response.Success);
+        Assert.Equal(1, repository.CommitCount);
+        var change = Assert.Single(repository.Changes, item => item.Content is not null);
+        Assert.EndsWith(sameDate ? ".jsonl" : ".json", change.Path);
+        var file = new RuntimeSourceFile(change.Path, change.Content!);
+        var resource = Assert.Single(Resource.Parse(new[] { file }).Resources);
+        var created = resource.Sessions.Last();
+        var set = created["machines"]![0]!["sets"]![0]!.AsObject();
+        Assert.Equal("て\nすと", set["note"]!.GetValue<string>());
+        Assert.False(set.ContainsKey("notes"));
+        Assert.Equal(new[] { "マシン", "メモ" }, created["machines"]![0]!["notes"]!.AsArray().Select(value => value!.GetValue<string>()));
+        Assert.Equal("こんにちは", created["notes"]![0]!.GetValue<string>());
+        Assert.Equal("次の行", created["notes"]![1]!.GetValue<string>());
+
+        var runtime = new RuntimeDataBuilder().Build(new[] { file }, MachineMaster, GymMaster);
+        Assert.Empty(runtime.Errors);
+        var session = Assert.Single(runtime.Sessions, item => item.SessionId == created["session_id"]!.GetValue<string>());
+        Assert.Equal("て\nすと", Assert.Single(Assert.Single(session.Machines).Sets).Note);
+        Assert.Equal(new[] { "マシン", "メモ" }, Assert.Single(session.Machines).Notes);
+        Assert.Equal(new[] { "こんにちは", "次の行" }, session.Notes);
+    }
+
+    [Fact]
     public async Task UpdateKeepsOtherSessionAndDeleteRemovesFinalResource()
     {
         var jsonl = Workout("a") + "\n" + Workout("b") + "\n";
         var updateRepository = new FakeRepository();
         var updateService = ServiceFor(jsonl, updateRepository, new FakeReflection(true), jsonl: true);
         var updateSnapshot = await updateService.GetDateAsync(Configuration(), "token", "2026-09-13", CancellationToken.None);
-        var updateInput = updateSnapshot.Response.Data!.Sessions[0].Session with { Notes = "updated" };
+        var updateSession = updateSnapshot.Response.Data!.Sessions[0].Session;
+        var updateInput = updateSession with { Notes = "updated", Machines = new[] { updateSession.Machines![0] with { Notes = "変更\nマシン" } } };
 
         var update = await updateService.UpdateAsync(Configuration(), "token", "a", new UpdateRequest(updateInput, updateSnapshot.Response.Data.ExpectedContext), CancellationToken.None);
 
@@ -272,6 +387,8 @@ public sealed class WorkoutWriteTests
         var updatedResource = Assert.Single(updateRepository.Changes);
         var parsed = Resource.Parse(new[] { new RuntimeSourceFile(updatedResource.Path, updatedResource.Content!) });
         Assert.Equal(new[] { "a", "b" }, parsed.Resources[0].Sessions.Select(session => session["session_id"]!.GetValue<string>()));
+        Assert.Equal("変更\nマシン", Resource.Project(parsed.Resources[0].Sessions[0]).Machines![0].Notes);
+        Assert.Null(parsed.Resources[0].Sessions[1]["machines"]![0]!["notes"]);
 
         var deleteRepository = new FakeRepository();
         var deleteService = ServiceFor(Workout("a"), deleteRepository, new FakeReflection(true));

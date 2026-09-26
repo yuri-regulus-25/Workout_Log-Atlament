@@ -48,7 +48,7 @@
       <template #next="{ props: actionProps }">
         <v-tooltip :disabled="!showValidationTooltip" text="入力された値に問題が1件以上あります。確認し、修正してください。">
           <template #activator="{ props: tooltipProps }">
-            <v-btn v-bind="{ ...tooltipProps, ...actionProps }" color="var(--wl-primary)" variant="flat" density="compact" />
+            <v-btn v-bind="{ ...tooltipProps, ...actionProps }" color="var(--wl-primary)" variant="flat" density="compact" class="text-white" />
           </template>
         </v-tooltip>
         <v-btn v-if="selectedKey !== newKey" class="ml-2" color="error" variant="outlined" density="compact" @click="confirmDelete">削除</v-btn>
@@ -70,7 +70,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { WorkoutDateSnapshot, WorkoutFieldMessage, WorkoutMachineInput, WorkoutSessionInput } from '@workout-lab/frontend-common'
-import { cloneSession, emptyMachine, emptySession, emptySet, type Mode } from '../model'
+import { cloneSession, emptyMachine, emptySession, emptySet, sessionLabel, type Mode } from '../model'
 import { validateSession } from '../validation'
 import DialogFrame from '../common/DialogFrame.vue'
 import GymField from './form/Gym.vue'
@@ -94,8 +94,8 @@ const switchDialog = ref(false)
 const validated = ref(false)
 
 const sessionItems = computed(() => [
-  ...props.snapshot.sessions.map((session, index) => ({ title: `セッション${index + 1}`, value: session.sessionId })),
-  { title: 'セッションを追加する', value: newKey },
+  ...props.snapshot.sessions.map((session, index) => ({ title: sessionLabel(index), value: session.sessionId })),
+  { title: sessionLabel(null), value: newKey },
 ])
 const selectedSession = computed(() => props.snapshot.sessions.find(session => session.sessionId === selectedKey.value) ?? null)
 const dirty = computed(() => JSON.stringify(working.value) !== JSON.stringify(original.value))

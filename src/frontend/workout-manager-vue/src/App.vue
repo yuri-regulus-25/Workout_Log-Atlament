@@ -42,6 +42,7 @@
                   v-if="snapshot && pendingSession && pendingMode"
                   :mode="pendingMode"
                   :session="pendingSession"
+                  :session-label="pendingSessionLabel"
                   :gyms="snapshot.gyms"
                   :machines="snapshot.machines"
                   :busy="loading"
@@ -78,7 +79,7 @@ import { pageTransitionClassName } from '@workout-lab/frontend-common/page-trans
 import { getCurrentTheme } from '@workout-lab/frontend-common/theme'
 import LoadingOverlay from './common/LoadingOverlay.vue'
 import Snackbar, { type SnackbarMessage } from './common/Snackbar.vue'
-import type { Mode } from './model'
+import { sessionLabel, type Mode } from './model'
 import StepOne from './step1/Step.vue'
 import StepTwo from './step2/Step.vue'
 import StepThree from './step3/Step.vue'
@@ -100,6 +101,9 @@ const snapshot = ref<WorkoutDateSnapshot | null>(null)
 const pendingMode = ref<Mode | null>(null)
 const pendingSessionId = ref<string | null>(null)
 const pendingSession = ref<WorkoutSessionInput | null>(null)
+const pendingSessionLabel = computed(() => sessionLabel(pendingSessionId.value === null
+  ? null
+  : snapshot.value!.sessions.findIndex(session => session.sessionId === pendingSessionId.value)))
 const serverErrors = ref<WorkoutFieldMessage[]>([])
 const loading = ref(false)
 const loadingLabel = ref('読み込んでいます')

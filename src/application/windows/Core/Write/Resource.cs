@@ -66,7 +66,10 @@ internal static class Resource
                             set?["weight_kg"]?.GetValue<decimal>(),
                             set?["note"]?.GetValue<string>());
                     }).ToArray();
-                return new MachineInput(machineIndex, machine?["machine_id"]?.GetValue<string>(), sets);
+                return new MachineInput(machineIndex, machine?["machine_id"]?.GetValue<string>(), sets)
+                {
+                    Notes = ProjectSessionNotes(machine)
+                };
             }).ToArray();
         return new SessionInput(
             source["date"]?.GetValue<string>(),
@@ -143,6 +146,11 @@ internal static class Resource
                 machine = new JsonObject();
             }
             machine["machine_id"] = input.MachineId;
+            // 未編集なら元の配列を保持し、空行や要素内の改行も失わない。
+            if (input.NotesSpecified && (input.Notes ?? "") != ProjectSessionNotes(machine))
+            {
+                ApplySessionNotes(machine, input.Notes);
+            }
             machine["sets"] = BuildSets(input.Sets ?? Array.Empty<SetInput>(), machine["sets"] as JsonArray);
             result.Add(machine);
         }

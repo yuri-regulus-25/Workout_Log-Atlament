@@ -206,7 +206,7 @@ internal class AndroidWorkoutWriteService(
                     .put("weightKg", set.opt("weight_kg"))
                     .put("notes", set.optString("note").takeIf(String::isNotEmpty) ?: JSONObject.NULL))
             }
-            machines.put(JSONObject().put("sourceIndex", machineIndex).put("machineId", machine.optString("machine_id")).put("sets", sets))
+            machines.put(JSONObject().put("sourceIndex", machineIndex).put("machineId", machine.optString("machine_id")).put("sets", sets).put("notes", projectNotes(machine)))
         }
         return JSONObject()
             .put("sessionId", source.optString("session_id"))
@@ -241,6 +241,7 @@ internal class AndroidWorkoutWriteService(
             val sourceMachine = sourceMachines?.optJSONObject(sourceIndex)
             val machineId = machine.optString("machineId")
             validateReference("$path.machineId", machineId, sourceMachine?.optString("machine_id"), catalog.machines, create || sourceMachine == null, fields)
+            if (machine.has("notes")) validateNotes("$path.notes", nullableString(machine, "notes"), sourceMachine?.let(::projectNotes), fields)
             if (machineId.isNotBlank() && !selected.add(machineId)) fields.put(field("$path.machineId", "同じマシンは選択できません"))
             val sets = machine.optJSONArray("sets") ?: JSONArray()
             if (sets.length() !in 1..10) fields.put(field("$path.sets", "セットは1件以上10件以下にしてください"))
@@ -343,6 +344,11 @@ internal class AndroidWorkoutWriteService(
             val original = sourceMachines?.optJSONObject(machineInput.optInt("sourceIndex", -1))
             val machine = original?.let { JSONObject(it.toString()) } ?: JSONObject()
             machine.put("machine_id", machineInput.getString("machineId"))
+            // 未編集なら元の配列を保持し、旧クライアントの項目省略も許容する。
+            if (machineInput.has("notes") && nullableString(machineInput, "notes").orEmpty() != projectNotes(machine)) {
+                val notes = nullableString(machineInput, "notes").orEmpty().split("\r\n", "\n").filter(String::isNotEmpty)
+                if (notes.isEmpty()) machine.remove("notes") else machine.put("notes", JSONArray(notes))
+            }
             val originalSets = original?.optJSONArray("sets")
             val sets = JSONArray()
             val setInputs = machineInput.getJSONArray("sets")

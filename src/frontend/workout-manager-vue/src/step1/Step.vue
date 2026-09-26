@@ -16,6 +16,7 @@
       <template #next="{ props: actionProps }">
         <v-btn
           v-bind="actionProps"
+          class="text-white"
           color="var(--wl-primary)"
           variant="flat"
           density="compact"

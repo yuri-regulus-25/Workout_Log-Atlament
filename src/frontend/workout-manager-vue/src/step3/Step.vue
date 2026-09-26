@@ -11,6 +11,7 @@
       <template v-else>編集内容を確認し、{{ actionLabel }}を押してください</template>
     </v-alert>
     <div v-if="mode !== 'delete'" class="confirmation-content">
+      <Row label="編集するセッション" :value="sessionLabel" />
       <Row label="ジム" :value="gymName" />
       <MachinePanel
         v-for="(machine, index) in session.machines"
@@ -33,6 +34,7 @@
       <template #next="{ props: actionProps }">
         <v-btn
           v-bind="actionProps"
+          class="text-white"
           :color="mode === 'delete' ? 'error' : 'var(--wl-primary)'"
           variant="flat"
           density="compact"
@@ -48,7 +50,7 @@ import type { WorkoutMasterOption, WorkoutSessionInput } from '@workout-lab/fron
 import type { Mode } from '../model'
 import MachinePanel from './view/MachinePanel.vue'
 import Row from './view/Row.vue'
-const props = defineProps<{ mode: Mode; session: WorkoutSessionInput; gyms: WorkoutMasterOption[]; machines: WorkoutMasterOption[]; busy: boolean }>()
+const props = defineProps<{ mode: Mode; session: WorkoutSessionInput; sessionLabel: string; gyms: WorkoutMasterOption[]; machines: WorkoutMasterOption[]; busy: boolean }>()
 const emit = defineEmits<{ submit: []; back: [] }>()
 const actionLabel = computed(() => props.mode === 'create' ? '登録する' : props.mode === 'update' ? '更新する' : '削除する')
 const gymName = computed(() => props.gyms.find(item => item.id === props.session.gymId)?.name ?? props.session.gymId ?? '')

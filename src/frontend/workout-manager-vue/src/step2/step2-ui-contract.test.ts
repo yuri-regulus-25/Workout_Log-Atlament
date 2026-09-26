@@ -9,6 +9,7 @@ import notesSource from './form/Notes.vue?raw'
 import repsSource from './form/Reps.vue?raw'
 import sessionSource from './form/Session.vue?raw'
 import weightSource from './form/Weight.vue?raw'
+import confirmationMachineSource from '../step3/view/MachinePanel.vue?raw'
 
 describe('Workout Manager Step 2 UI contract', () => {
   it('すべての入力Componentをcompactかつoutlinedで表示する', () => {
@@ -32,8 +33,21 @@ describe('Workout Manager Step 2 UI contract', () => {
     expect(emptyMachine()).toEqual({
       sourceIndex: null,
       machineId: null,
+      notes: null,
       sets: [{ sourceIndex: null, reps: null, weightKg: null, notes: null }],
     })
+  })
+
+  it('Machine内のSet一覧の下に共通Notes入力を置き、Step3でも同じMachine配下に表示する', () => {
+    expect(machinePanelSource.indexOf('<NotesField')).toBeGreaterThan(machinePanelSource.indexOf('<SetCard'))
+    expect(machinePanelSource.indexOf('<NotesField')).toBeLessThan(machinePanelSource.indexOf('</v-expansion-panel-text>'))
+    expect(machinePanelSource).toContain(':model-value="machine.notes ?? null"')
+    expect(machinePanelSource).toContain(':errors="errorsFor(\'notes\')"')
+    expect(machinePanelSource).toContain("emit('update', { ...machine, notes: $event })")
+    expect(notesSource).toContain('rows="2"')
+    expect(notesSource).toContain('counter="400"')
+    expect(notesSource).not.toContain('placeholder')
+    expect(confirmationMachineSource).toContain('<Row v-if="machine.notes" label="Notes" :value="machine.notes" />')
   })
 
   it('MachineをExpansion Panelとして構成しValidation状態をHeaderへ表示する', () => {
