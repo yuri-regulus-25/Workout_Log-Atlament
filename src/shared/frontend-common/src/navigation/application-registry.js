@@ -43,6 +43,21 @@ export const applications = [
     frameworkIconHref: '/machines/favicon.svg',
   },
   {
+    id: 'workout-manager',
+    route: '/workout-manager/',
+    displayName: 'Workout Manager',
+    iconClass: 'mdi-square-edit-outline',
+    drawer: true,
+    portalCategory: 'History',
+    portalPointer: '管理 - 履歴',
+    portalDescription: 'ワークアウト記録を操作します',
+    frameworkName: 'Vue.js + Vuetify',
+    frameworkIcons: [
+      { name: 'Vue.js', href: '/workouts/favicon.svg' },
+      { name: 'Vuetify', href: '/maintenance/favicon.svg' },
+    ],
+  },
+  {
     id: 'analytics',
     route: '/analytics/',
     displayName: 'Analytics',

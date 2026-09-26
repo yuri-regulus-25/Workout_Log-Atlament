@@ -413,6 +413,11 @@
   color: var(--wl-chart-axis);
 }
 
+.set-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .session-notes {
   margin-top: 18px;
 }

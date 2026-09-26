@@ -33,8 +33,7 @@ internal class AndroidRuntimeDataBuilder {
         val warnings = JSONArray()
         val machines = parseMachineMaster(RuntimeSourceFile(machineMaster.path, machineMaster.content), errors)
         val gyms = parseGymMaster(RuntimeSourceFile(gymMaster.path, gymMaster.content), errors)
-        if (workoutFiles.isEmpty()) errors.put(errorJson("RUNTIME_DATA_EMPTY", "Workout resource is empty."))
-        if (machines.structuralInvalid || gyms.structuralInvalid || workoutFiles.isEmpty()) return RuntimeBuildResult(null, errors, warnings)
+        if (machines.structuralInvalid || gyms.structuralInvalid) return RuntimeBuildResult(null, errors, warnings)
 
         val sessions = JSONArray()
         workoutFiles.sortedBy { it.path }.forEach { file ->

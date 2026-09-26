@@ -205,6 +205,7 @@ function machineNames(machines: Array<{ machineName: string }>): string {
                   <th>Weight</th>
                   <th>Reps</th>
                   <th v-if="getMachinePresentation(machine).hasRir" class="supporting-cell">RIR</th>
+                  <th v-if="machine.sets.some(set => set.note)">Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -216,6 +217,7 @@ function machineNames(machines: Array<{ machineName: string }>): string {
                     <span v-if="set.rir !== undefined && set.rir !== null">{{ set.rir }}</span>
                     <span v-else>—</span>
                   </td>
+                  <td v-if="machine.sets.some(set => set.note)" class="set-note">{{ set.note }}</td>
                 </tr>
               </tbody>
             </table>

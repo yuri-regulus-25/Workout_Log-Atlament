@@ -18,6 +18,7 @@ public sealed class HostingStatusService
         ["portal"] = "portal",
         ["dashboard"] = "dashboard",
         ["workouts"] = "workouts",
+        ["workout-manager"] = "workout-manager",
         ["machines"] = "machines",
         ["analytics"] = "analytics",
         ["settings"] = "settings",
@@ -38,6 +39,7 @@ public sealed class HostingStatusService
         Status("portal"),
         Status("dashboard"),
         Status("workouts"),
+        Status("workout-manager"),
         Status("machines"),
         Status("analytics"),
         Status("settings"),
@@ -48,7 +50,7 @@ public sealed class HostingStatusService
         artifactUnavailable = false;
         var normalized = requestPath.Trim('/');
         var app = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "portal";
-        if (app is "dashboard" or "workouts" or "machines" or "analytics" or "settings" or "maintenance")
+        if (app is "dashboard" or "workouts" or "workout-manager" or "machines" or "analytics" or "settings" or "maintenance")
         {
             var relative = normalized.Length == app.Length ? "index.html" : normalized[(app.Length + 1)..];
             return Resolve(app, relative, out artifactUnavailable);

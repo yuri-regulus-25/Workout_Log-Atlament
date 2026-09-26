@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { applicationRoutes, applications, drawerApplications, portalCardApplications } from './navigation/application-registry.js'
 
 const repoRoot = process.cwd()
-const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
+const hostedApplicationIds = ['dashboard', 'workouts', 'machines', 'workout-manager', 'analytics', 'maintenance', 'settings'] as const
 const excludedApplicationIds = ['training-map', 'compare', 'report', 'data-explorer', 'about', 'developer-mode'] as const
 
 function readSource(relativePath: string): string {
@@ -17,7 +17,7 @@ describe('Phase 9 existing application integration', () => {
     expect(portalCardApplications.map((application) => application.id)).toEqual([...hostedApplicationIds])
     expect(drawerApplications.map((application) => application.id)).toEqual(['portal', ...hostedApplicationIds])
     expect(portalCardApplications[2]?.id).toBe('machines')
-    expect(portalCardApplications[4]?.id).toBe('maintenance')
+    expect(portalCardApplications[5]?.id).toBe('maintenance')
 
     for (const application of applications) {
       expect(application.route).toBe(applicationRoutes[application.id])
@@ -55,7 +55,7 @@ describe('Phase 9 existing application integration', () => {
 
     for (const id of hostedApplicationIds) {
       expect(windows, `windows ${id}`).toContain(`"${id}"`)
-      expect(android, `android ${id}`).toContain(`"${id}"`)
+      expect(android, `android ${id}`).toContain(id === 'workout-manager' ? '"workoutManager"' : `"${id}"`)
       expect(buildRegistry, `mpa ${id}`).toContain(`smokePath: '/${id}`)
     }
 
@@ -113,7 +113,7 @@ describe('Phase 9 existing application integration', () => {
     const maintenanceHtml = readSource('src/frontend/maintenance-vue/index.html')
     const maintenanceFavicon = readSource('src/frontend/maintenance-vue/public/favicon.svg')
 
-    for (const id of hostedApplicationIds.filter((id) => id !== 'maintenance')) {
+    for (const id of hostedApplicationIds.filter((id) => id !== 'maintenance' && id !== 'workout-manager')) {
       expect(registry).toContain(`frameworkIconHref: '/${id}/favicon.svg'`)
     }
     expect(portalHtml).toContain('Portal - 利用する機能を選択します')
@@ -143,7 +143,7 @@ describe('Phase 9 existing application integration', () => {
   it('keeps Portal medium-width cards in a balanced two-column grid', () => {
     const portalCss = readSource('src/frontend/portal/src/style.css')
 
-    expect(portalCardApplications).toHaveLength(6)
+    expect(portalCardApplications).toHaveLength(7)
     expect(portalCss).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(portalCss).not.toContain('.app-card:last-child {\n    grid-column: 1 / -1;')
   })

@@ -20,9 +20,12 @@ internal class AndroidConfiguredResourceFetcher(
         for (index in 0 until resources.length()) {
             val resource = resources.getJSONObject(index)
             if (resource.optString("type") != "WORKOUT") continue
-            val fetched = fetchResource(repository, resource, owner, repo, ref, timeoutSec)
-            if (fetched.isEmpty() && !resource.optBoolean("emptyAllowed", false)) {
-                if (resource.optBoolean("required", true)) throw IllegalStateException("${resource.optString("path")} is empty.")
+            val fetched = try {
+                fetchResource(repository, resource, owner, repo, ref, timeoutSec)
+            } catch (ex: AfException) {
+                if (resource.optString("resourceKind") == "directory" && ex.code == "GITHUB_RESOURCE_NOT_FOUND") emptyList() else throw ex
+            }
+            if (fetched.isEmpty()) {
                 continue
             }
             workoutFiles.addAll(fetched.filter { isJsonRuntimePath(it.path) })
@@ -46,7 +49,14 @@ internal class AndroidConfiguredResourceFetcher(
         for (index in 0 until resources.length()) {
             val resource = resources.getJSONObject(index)
             val type = resource.optString("type")
-            val fetched = fetchResource(repository, resource, owner, repo, ref, timeoutSec)
+            val fetched = try {
+                fetchResource(repository, resource, owner, repo, ref, timeoutSec)
+            } catch (ex: AfException) {
+                if (type == "WORKOUT" && resource.optString("resourceKind") == "directory" && ex.code == "GITHUB_RESOURCE_NOT_FOUND") emptyList() else throw ex
+            }
+            if (type == "WORKOUT" && fetched.isEmpty()) {
+                continue
+            }
             if (fetched.isEmpty() && !resource.optBoolean("emptyAllowed", false)) {
                 if (resource.optBoolean("required", true)) throw IllegalStateException("${resource.optString("path")} is empty.")
                 continue

@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { BodyPart, WorkoutSession } from '@workout-lab/workout-types'
 import { formatCountLabel, getMachinePresentation, getMachineReps, getWorkoutDaySummary } from './workout-detail-presentation'
+import detailSource from './views/WorkoutDetailView.vue?raw'
 
 describe('workout detail presentation helpers', () => {
+  it('Set Notesは既存のnoteを表示し、NotesのないMachineには列を追加しない', () => {
+    expect(detailSource).toContain('<th v-if="machine.sets.some(set => set.note)">Notes</th>')
+    expect(detailSource).toContain('<td v-if="machine.sets.some(set => set.note)" class="set-note">{{ set.note }}</td>')
+  })
+
   it('summarizes multiple sessions and gyms with total reps', () => {
     const result = getWorkoutDaySummary([
       session('s1', 'North Gym', [

@@ -9,10 +9,10 @@ function readSource(relativePath: string): string {
   return readFileSync(join(repoRoot, relativePath), 'utf8')
 }
 
-const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'analytics', 'maintenance', 'settings'] as const
+const currentHostedApplicationIds = ['dashboard', 'workouts', 'machines', 'workout-manager', 'analytics', 'maintenance', 'settings'] as const
 
 describe('application registry and hosting integration', () => {
-  it('keeps the shared application registry limited to current v2.0.0 applications', () => {
+  it('keeps the shared application registry limited to current applications', () => {
     expect(applications.map((application) => application.id)).toEqual([
       'portal',
       ...currentHostedApplicationIds,
@@ -46,7 +46,7 @@ describe('application registry and hosting integration', () => {
 
     for (const id of currentHostedApplicationIds) {
       expect(windows, id).toContain(`"${id}"`)
-      expect(android, id).toContain(`"${id}"`)
+      expect(android, id).toContain(id === 'workout-manager' ? '"workoutManager"' : `"${id}"`)
     }
   })
 })

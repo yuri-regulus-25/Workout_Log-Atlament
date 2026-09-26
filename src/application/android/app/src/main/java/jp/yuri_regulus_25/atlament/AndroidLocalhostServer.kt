@@ -77,6 +77,23 @@ class AndroidLocalhostServer(
             recoveryDraftStore = recoveryDraftStore
         )
     }
+    private val workoutWriteService by lazy {
+        AndroidWorkoutWriteService(
+            configurationStatus = ::configurationStatus,
+            loadConfigurationJson = ::loadConfigurationJson,
+            credentialState = { credentialStore.state() },
+            githubClient = githubClient,
+            resourceFetcher = configuredResourceFetcher,
+            runtimeBuilder = runtimeDataBuilder,
+            runtimeStore = runtimeDataStore,
+            fallbackActive = { (latestRemoteRetrieval == "failed" || latestValidation == "failed") && runtimeDataStore.exists() },
+            markReflectionSucceeded = {
+                githubComponentStatus = "available"
+                latestRemoteRetrieval = "succeeded"
+                latestValidation = "succeeded"
+            }
+        )
+    }
     @Volatile private var githubComponentStatus = "unknown"
     @Volatile private var latestRemoteRetrieval = "unknown"
     @Volatile private var latestValidation = "unknown"
@@ -193,6 +210,11 @@ class AndroidLocalhostServer(
             method == "GET" && route == "/configuration" -> sendJson(output, 200, okJson(loadConfigurationJson()))
             method == "GET" && route == "/credential/status" -> sendJson(output, 200, okJson(credentialStore.statusJson()))
             method == "GET" && route == "/master-write/boundary" -> sendJson(output, 200, okJson(masterWriteBoundaryJson()))
+            method == "GET" && route == "/workout-write/boundary" -> sendWorkoutWriteResponse(output, workoutWriteService.boundaryResponse())
+            method == "GET" && route.startsWith("/workout-write/date/") -> sendWorkoutWriteResponse(output, workoutWriteService.dateResponse(route.substringAfterLast('/')))
+            method == "POST" && route == "/workout-write/sessions" -> sendWorkoutWriteResponse(output, workoutWriteService.createResponse(body))
+            method == "PUT" && route.startsWith("/workout-write/sessions/") -> sendWorkoutWriteResponse(output, workoutWriteService.updateResponse(route.substringAfterLast('/'), body))
+            method == "DELETE" && route.startsWith("/workout-write/sessions/") -> sendWorkoutWriteResponse(output, workoutWriteService.deleteResponse(route.substringAfterLast('/'), body))
             method == "GET" && route == "/master-write/unresolved" -> sendUnresolvedMasterReferences(output)
             method == "GET" && route.startsWith("/master-write/documents/") -> sendMasterDocument(output, route.substringAfterLast('/'))
             method == "GET" && route == "/recovery/resources" -> sendRecoveryResources(output)
@@ -225,6 +247,10 @@ class AndroidLocalhostServer(
             }
         }
         return "/" + normalized.joinToString("/")
+    }
+
+    private fun sendWorkoutWriteResponse(output: OutputStream, response: SyncResponse) {
+        sendJson(output, response.status, response.body)
     }
 
     /**
@@ -305,6 +331,7 @@ class AndroidLocalhostServer(
           "portal": "${assetStatus("frontend/index.html")}",
           "dashboard": "${assetStatus("frontend/dashboard/index.html")}",
           "workouts": "${assetStatus("frontend/workouts/index.html")}",
+          "workoutManager": "${assetStatus("frontend/workout-manager/index.html")}",
           "machines": "${assetStatus("frontend/machines/index.html")}",
           "analytics": "${assetStatus("frontend/analytics/index.html")}",
           "settings": "${assetStatus("frontend/settings/index.html")}",
