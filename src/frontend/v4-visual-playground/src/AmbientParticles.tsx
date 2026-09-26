@@ -28,10 +28,14 @@ export function AmbientParticles({ parameters }: AmbientParticlesProps) {
 
   const options = useMemo<ISourceOptions>(() => {
     const opacity = parameters.particleOpacity / 100
-    const speed = Math.max(0.2, parameters.riseSpeed / 24)
+    const speed = Math.max(0.2, parameters.riseSpeed / 72)
     const driftAngle = Math.min(35, parameters.drift / 3.4)
     const emissionDelay = Math.max(0.08, 1.15 - parameters.spawnRate / 100)
     const emissionQuantity = Math.max(1, Math.round(parameters.density / 22))
+    const fadeStart = parameters.lifetime * (parameters.fadeTiming / 100)
+    const fadeDuration = Math.max(0.5, parameters.lifetime - fadeStart)
+    // tsParticles の opacity speed は 60fps 時に 1 frame あたり speed / 100 進む。
+    const fadeSpeed = (opacity / fadeDuration) * (100 / 60)
 
     return {
       autoPlay: !reducedMotion,
@@ -43,10 +47,6 @@ export function AmbientParticles({ parameters }: AmbientParticlesProps) {
       pauseOnOutsideViewport: true,
       particles: {
         color: { value: ['#67f5b3', '#2ddb8a', '#b7ffdb'] },
-        life: {
-          count: 1,
-          duration: { value: parameters.lifetime, sync: false },
-        },
         move: {
           angle: { offset: driftAngle, value: 90 },
           direction: 'top',
@@ -58,17 +58,16 @@ export function AmbientParticles({ parameters }: AmbientParticlesProps) {
         },
         number: { value: 0 },
         opacity: {
-          value: { min: opacity * 0.35, max: opacity },
+          value: { min: 0, max: opacity },
           animation: {
             count: 1,
+            delay: fadeStart,
             destroy: 'min',
             enable: true,
-            speed: Math.max(
-              0.01,
-              opacity / Math.max(2, parameters.lifetime * (parameters.fadeTiming / 100)),
-            ),
+            mode: 'decrease',
+            speed: fadeSpeed,
             startValue: 'max',
-            sync: false,
+            sync: true,
           },
         },
         shadow: {

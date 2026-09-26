@@ -74,3 +74,4 @@
 
 - 2026-09-27: 初回 Selected Preset を記録。
 - 2026-09-27: Selected Preset を初期値として採用し、Ambient Particle を tsParticles 4.4.0 の下端 emitter で再評価。
+- 2026-09-27: Particle の random lifetime と可視 opacity での破棄を廃止。Fade timing から lifetime 終端まで連続的に opacity 0 へ減衰するよう修正。

@@ -89,7 +89,7 @@ Provider では `blend`、`viscosity`、`stretch`、`flow`、`tint`、`opacity`�
 
 - React wrapper の `ParticlesProvider` で Full engine を一度初期化する。
 - `density` は emitter 起動時の個数、`spawnRate` は emission 間隔へ反映する。
-- rise speed、drift、size、opacity、glow、lifetime、fade timing は `ISourceOptions` へ変換する。
+- rise speed、drift、size、opacity、glow、lifetime、fade timing は `ISourceOptions` へ変換する。`fade timing` は lifetime に対して fade out を開始する位置を表し、残り時間で opacity を 0 まで連続的に下げる。
 - Full bundle を選んだ理由は、下端から発生させる emitter plugin を含むためである。
 
 `prefers-reduced-motion` 時は emitter の再生と移動を停止する。Particle layer は Glass の背後に配置し、Plasma UI の WebGL canvas とは独立して lifecycle を管理する。
@@ -165,6 +165,7 @@ Control Panel 下部で current parameter を JSON として表示する。
 - `pnpm --filter @workout-lab/v4-visual-playground build`: PASS
 - Chromium 系 browser で Glass / Plasma / Composition の表示: PASS
 - tsParticles の下端 emitter、上昇、fade out、slider 即時反映: PASS
+- 8 秒の短寿命設定で fade 開始から opacity 0 まで段階的に減衰し、中途で寿命破棄されないこと: PASS
 - Composition で tsParticles Canvas と Plasma WebGL Canvas の同時生成: PASS
 - WebGL canvas 生成: PASS
 - Plasma の drag → merge → detach と `onJoinChange`: PASS
