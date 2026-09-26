@@ -73,3 +73,4 @@
 ## Notes
 
 - 2026-09-27: 初回 Selected Preset を記録。
+- 2026-09-27: Selected Preset を初期値として採用し、Ambient Particle を tsParticles 4.4.0 の下端 emitter で再評価。

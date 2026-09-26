@@ -79,13 +79,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .scene::before { content: ''; position: absolute; inset: 0; z-index: 0; opacity: .45; background-image: linear-gradient(rgba(151, 255, 202, .022) 1px, transparent 1px), linear-gradient(90deg, rgba(151, 255, 202, .018) 1px, transparent 1px); background-size: 80px 80px; mask-image: linear-gradient(to bottom, black, transparent 78%); }
 .ambient-field { position: absolute; z-index: 0; width: 70%; height: 55%; left: 15%; bottom: -28%; border-radius: 50%; background: rgba(12, 191, 103, calc(var(--ambient-glow) * .34)); filter: blur(110px); }
 .ambient-particles { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
-.ambient-particle { position: absolute; left: var(--particle-left); bottom: var(--particle-bottom); width: var(--particle-size); height: var(--particle-size); border-radius: 50%; background: rgba(80, 255, 174, var(--particle-opacity)); box-shadow: 0 0 var(--particle-glow) rgba(40, 235, 139, calc(var(--particle-opacity) * .9)); animation: particle-rise var(--particle-duration) linear var(--particle-delay) infinite; }
-@keyframes particle-rise {
-  0% { transform: translate3d(0, 12vh, 0) scale(.55); opacity: 0; }
-  12% { opacity: var(--particle-opacity); }
-  70% { opacity: var(--particle-mid-opacity); }
-  100% { transform: translate3d(var(--particle-drift), -76vh, 0) scale(.1); opacity: 0; }
-}
+.ambient-particles > canvas { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
 .scene-caption { position: absolute; z-index: 8; inset: auto 26px 22px auto; color: #4d6759; font: 400 9px/1 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 .sample-eyebrow { color: #54dda0; font: 400 9px/1.4 'DM Mono', monospace; letter-spacing: .14em; }
 
@@ -202,5 +196,5 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-  .ambient-particle { opacity: calc(var(--particle-opacity) * .4); transform: translateY(-22vh); }
+  .ambient-particles { opacity: .45; }
 }

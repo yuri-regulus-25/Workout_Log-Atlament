@@ -30,6 +30,9 @@ npm run build -w @workout-lab/v4-visual-playground
 | TypeScript | 6.0.3 |
 | Vite | 8.2.1 |
 | `@cruxgarden/plasma-ui` | 0.7.0 |
+| `@tsparticles/react` | 4.4.0 |
+| `@tsparticles/engine` | 4.4.0 |
+| `tsparticles` | 4.4.0 Full bundle |
 | Node.js requirement | Plasma UI の requirement により 22 以上 |
 | User-facing command | npm workspace command |
 
@@ -74,7 +77,7 @@ Provider では `blend`、`viscosity`、`stretch`、`flow`、`tint`、`opacity`�
 
 ### Known constraints
 
-- Plasma renderer は DOM を読み取れないため、DOM Particle や Glass Card を Plasma の refraction source として直接 sampling できない。Plasma 自体の背景は `background` property へ渡した色を屈折する。
+- Plasma renderer は別 Canvas や Glass Card を refraction source として直接 sampling できない。Plasma 自体の背景は `background` property へ渡した色を屈折する。
 - `PlasmaCanvas` は container 内へ描画を限定する API ではなく、常に viewport 全体を描画する。この Playground では canvas を viewport origin に固定し、header と control panel を上位 layer で覆う。
 - 同一 canvas 内で surface を重ねる layer 機能と resize は roadmap 段階である。
 - Drag handle は未実装である。button、link、input、`data-plasma-nodrag` 内の操作は drag 対象外になる。
@@ -82,14 +85,14 @@ Provider では `blend`、`viscosity`、`stretch`、`flow`、`tint`、`opacity`�
 
 ## Ambient Particle
 
-`tsParticles` 4.4.0 も候補として確認したが、今回は採用していない。評価に必要な Particle は最大 72 個の単純な上昇光点であり、DOM element と CSS animation の方が以下の点で適するためである。
+`@tsparticles/react` と `tsparticles` 4.4.0 Full bundle を採用した。画面下端を幅 100% の emitter とし、上昇、横 drift、fade out、particle glow を Canvas へ描画する。
 
-- Glass の背後へ通常の stacking context で確実に配置できる。
-- Plasma UI の WebGL canvas と renderer lifecycle が競合しない。
-- density、speed、drift、size、opacity、glow、lifetime を React state から直接変更できる。
-- library 初期化や preset serialization の変換 layer が不要である。
+- React wrapper の `ParticlesProvider` で Full engine を一度初期化する。
+- `density` は emitter 起動時の個数、`spawnRate` は emission 間隔へ反映する。
+- rise speed、drift、size、opacity、glow、lifetime、fade timing は `ISourceOptions` へ変換する。
+- Full bundle を選んだ理由は、下端から発生させる emitter plugin を含むためである。
 
-Particle は deterministic な初期配置を使い、preset 復元時も同じ分布を比較できる。画面下部から上昇し、横 drift と fade out を行う。`prefers-reduced-motion` 時は animation を停止する。
+`prefers-reduced-motion` 時は emitter の再生と移動を停止する。Particle layer は Glass の背後に配置し、Plasma UI の WebGL canvas とは独立して lifecycle を管理する。
 
 ## Parameter
 
@@ -150,16 +153,19 @@ Control Panel 下部で current parameter を JSON として表示する。
 
 - Glass は `backdrop-filter` 対応 browser を前提とする。非対応時も半透明 surface と border は残るが、背後の Particle blur は確認できない。
 - Plasma UI の CSS fallback では WebGL refraction、liquid shading、merge の視覚表現を評価できない。
-- Particle の `Spawn rate` は Prototype 上の分布間隔として扱い、物理的な emitter event 数ではない。
+- tsParticles Full bundle の追加により、DOM / CSS の単純実装より JavaScript bundle と初期化 cost は増える。
+- Particle と Plasma は別 Canvas で描画するため、Particle を Plasma surface 内へ直接屈折させる評価はできない。
 - Glass A/B の同時比較は第一段階では実装していない。Preset JSON を切り替えて比較する。
 - Product route、Production Design Token、native Application への統合は対象外である。
 
 ## 検証
 
-2026-09-26 に以下を確認した。
+2026-09-27 に以下を確認した。
 
 - `pnpm --filter @workout-lab/v4-visual-playground build`: PASS
 - Chromium 系 browser で Glass / Plasma / Composition の表示: PASS
+- tsParticles の下端 emitter、上昇、fade out、slider 即時反映: PASS
+- Composition で tsParticles Canvas と Plasma WebGL Canvas の同時生成: PASS
 - WebGL canvas 生成: PASS
 - Plasma の drag → merge → detach と `onJoinChange`: PASS
 - Control slider の即時反映: PASS
