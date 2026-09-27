@@ -1,7 +1,7 @@
 # Vesria — Initial Implementation Brief
 
 > Status: implementation baseline
-> Target branch: `work/vesria-full-redesign`
+> Target branch: `feature-vesria-full-redesign`
 > Source baseline: `develop`
 > Design reference: `Chat_GPT_Context`
 
@@ -38,6 +38,9 @@ Do not use Plasma merely as a visually elaborate button.
 ## Motion contract
 
 - Ambient motion remains slow and subordinate.
+- Vesria targets Android as well as desktop. Motion and visual effects must remain practical on Android-class devices; do not build the experience around continuously heavy rendering, excessive blur, large particle counts, or gratuitous GPU-intensive effects.
+- Prefer lightweight transforms/opacity and scoped effects where they achieve the intended experience. Expensive graphics should be isolated and degrade gracefully when appropriate.
+- The goal is expressive, pleasant motion — not maximum animation density.
 - Top-level Workspace transition: current Route Presentation exits to the left, the destination starts at its initial scroll position, then new Glass/uncontained content forms with restrained fade/cut-in/offset motion.
 - Browser Back/Forward uses the same leftward transition language.
 - Application Root, Ambient Visual Layer, and Global Navigation persist through normal route transitions.
@@ -111,6 +114,17 @@ Rules:
 
 Known useful existing capabilities include Status/readiness, Runtime Workout data, Configuration/Credential, Master write, and Workout write contracts. The exact legacy API inventory remains defined by the current AF contract on `develop`.
 
+## Technology / library policy
+
+- **Icons:** Material Design Icons (`@mdi`) is the standard icon vocabulary.
+- **Charts:** ApexCharts is the established chart library.
+- Additional well-maintained libraries may be installed when they materially improve visualization, graphics, motion, interaction, spatial presentation, accessibility, or UX.
+- Motion, particles, SVG, Canvas, WebGL, D3-family visualization, gesture, and floating-positioning libraries are valid options when they have a clear responsibility.
+- Do not optimize for minimum dependency count at the expense of the Vesria experience.
+- Conversely, do not add a dependency merely because it is visually interesting. Every dependency must have an identifiable responsibility.
+- Do not collapse Vesria into a conventional CRUD dashboard merely to avoid richer frontend techniques.
+- Richness must remain compatible with the Android performance constraint in the Motion contract.
+
 ## Existing source reuse
 
 Reuse validated shared domain/data packages where their semantics remain valid:
@@ -122,6 +136,16 @@ Reuse validated shared domain/data packages where their semantics remain valid:
 Existing `frontend-common`, design tokens, shared styles, MPA navigation, and per-framework presentation are not automatically authoritative for Vesria. Reuse only when compatible with the new SPA architecture and visual language.
 
 The current frontend is an MPA/framework mix. Vesria should not preserve those screen/application boundaries merely to minimize migration work.
+
+Existing presentation code is reference material, not a migration target. Do not copy a legacy screen and merely apply Glass styling. Reuse code only when its responsibility and semantics genuinely fit Vesria.
+
+## Real data, fixtures, and mocks
+
+- Use validated real domain/data contracts wherever the existing runtime supports them.
+- Fixtures/mocks are allowed when required to make the complete first-pass UI and interaction reviewable before every runtime path is available.
+- Mock/fixture data must be clearly isolated behind replaceable data boundaries and must not masquerade as authoritative persisted data.
+- Do not leave a Workspace visually unimplemented merely because one backend path is unavailable.
+- Do not invent unsupported analytics semantics in mock data; the same domain rules apply.
 
 ## Vesria identity asset
 
@@ -174,6 +198,36 @@ Implementation has discretion over:
 - Liquid interaction details
 - detailed motion choreography
 - exact Workspace presentation
+
+## First-pass definition of done
+
+The first pass is complete when:
+
+- every planned Workspace is reachable and has a meaningful Vesria presentation;
+- Wide/Medium and Narrow navigation/presentation are both usable without capability loss;
+- representative interaction is implemented for each Workspace rather than static placeholder pages;
+- Loading, legitimate Empty, Data Error, local Error, Route Not Found, and fatal-state presentation can be reviewed;
+- the Vesria motion/material language can be experienced in normal navigation and interaction;
+- Explore provides enough spatial/Plasma interaction to evaluate its interaction direction;
+- production build/type checking succeeds using the repository's chosen frontend workflow;
+- the implementation is ready for human visual/UX review.
+
+Pixel-perfect polish is explicitly **not** required for this first pass.
+
+## Accessibility and performance guardrails
+
+- Keyboard navigation, visible focus, semantic HTML, and accessible names are required for actionable controls.
+- Icon-only MDI controls must expose an accessible name.
+- Glass/transparency must not reduce text/control contrast below practical readability.
+- Primary functionality must not become pointer-only merely because Plasma/Canvas/spatial presentation is used.
+- Reduced Motion must preserve functionality while simplifying/removing nonessential movement.
+- Persistent ambient effects must not continuously force expensive application-wide rendering.
+- Expensive visual effects must be scoped and should degrade gracefully on constrained devices.
+- Android usability is a first-class constraint: visual richness is welcome, sustained heavy rendering is not.
+
+## Visual composition guardrail
+
+Vesria is one visual system, not one repeated layout. Workspaces should express their different responsibilities through appropriate composition and information hierarchy. Do not reduce every Workspace to the same title + uniform card-grid template.
 
 ## First-pass review criteria
 
