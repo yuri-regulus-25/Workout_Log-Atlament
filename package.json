@@ -9,6 +9,11 @@
     "src/shared/*"
   ],
   "scripts": {
+    "dev:vesria": "npm run dev -w @workout-lab/vesria",
+    "build:vesria": "npm run build -w @workout-lab/vesria",
+    "preview:vesria": "npm run preview -w @workout-lab/vesria",
+    "review:vesria": "npm run build:vesria && npm run preview:vesria",
+    "check:vesria": "npm run check -w @workout-lab/vesria",
     "build": "node tools/build/build.mjs",
     "build:apps": "node tools/build/build-apps.mjs",
     "build:debug": "node tools/build/build-debug.mjs",
@@ -50,6 +55,7 @@
     "build:android:release": "node tools/build/build.mjs && node tools/build/build-android-release.mjs"
   },
   "devDependencies": {
+    "jsdom": "^28.1.0",
     "vitest": "^4.0.8"
   },
   "dependencies": {
@@ -57,4 +63,3 @@
     "@mdi/js": "^7.4.47"
   }
 }
-

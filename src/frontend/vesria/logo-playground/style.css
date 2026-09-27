@@ -1,0 +1,76 @@
+/* 比較画面の装飾をApplication全体へ漏らさない。 */
+@scope (.logo-playground) {
+* { box-sizing: border-box; }
+
+.logo-playground { max-width: 1100px; padding: 32px 24px; margin: auto; }
+h1 { font-size: 25px; font-weight: 500; margin: 8px 0 16px; }
+h2 { font-size: 18px; font-weight: 500; margin: 0 0 10px; }
+p,footer { font-size: 12px; line-height: 1.8; color: #98adb6; }
+.eyebrow { font-size: 10px; letter-spacing: .15em; }
+label { display: flex; flex-direction:row; gap: 8px; align-items: center; font-size: 12px; }
+header { margin-bottom: 30px; }
+.size-head,.pattern-row { display: grid; grid-template-columns: 220px repeat(4,minmax(145px,1fr)); gap: 12px; }
+.size-head { font-size: 11px; color: #98adb6; text-align: center; padding-bottom: 12px; }
+.pattern-row { align-items: center; border-top: 1px solid #b0edff18; padding: 18px 0; }
+.pattern-label small { font-size: 10px; color: #7299a8; }
+.sample { min-height: 177px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.sample-status { font-size: 10px; color: #809ba7; min-height: 16px; }
+.logo-trigger { display: grid; place-items: center; width: max(44px,var(--logo-size)); height: max(44px,var(--logo-size)); padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 9px; flex-shrink: 0; }
+.logo-trigger:focus-visible { outline: 1px solid #acf0ff; outline-offset: 6px; }
+.logo-trigger[aria-disabled=true] { cursor: default; }
+:scope .logo-trigger:hover,:scope .logo-trigger:active,:scope .logo-trigger:focus { background:transparent; box-shadow:none; transform:none; border:0; }
+:scope input[type=checkbox] { width:18px; height:18px; min-width:18px; min-height:0; flex:0 0 18px; padding:0; margin:0; accent-color:#bceef3; }
+.symbol,.symbol svg { display: block; width: var(--logo-size); height: var(--logo-size); overflow: visible; }
+.symbol svg g { transform-box: view-box; transform-origin: 256px 256px; }
+.symbol svg circle { transform-box: fill-box; transform-origin: center; }
+footer { margin-top: 20px; }
+@media(max-width:900px) { .size-head { display:none; } .pattern-row { grid-template-columns: repeat(4,1fr); } .pattern-label { grid-column: 1/-1; } }
+@media(max-width:620px) { .logo-playground { padding: 24px 16px; } .pattern-row { grid-template-columns: repeat(2,1fr); } }
+
+/* 終了時にclassを除去し、SVGの元のopacity・dash・transformへ完全に復帰する。 */
+.running.elegant [data-part=orbit-primary] { animation: elegant-orbit 2.1s ease-in-out; }
+.running.elegant [data-part=edges-primary] { animation: elegant-connect 2.1s ease-in-out; }
+.running.elegant [data-part=nodes-primary] { animation: illuminate 2.1s ease-in-out; }
+.running.elegant [data-part=flare] { animation: glint 2.1s ease-in-out; }
+@keyframes elegant-orbit { 0%,100% { transform:none; } 25% { opacity:.25; transform:rotate(-12deg) scale(.96); } 75% { opacity:1; transform:rotate(1deg); } }
+@keyframes elegant-connect { 0%,100% { stroke-dasharray:600; stroke-dashoffset:0; } 22% { stroke-dasharray:600; stroke-dashoffset:600; } 78% { stroke-dasharray:600; stroke-dashoffset:0; } }
+@keyframes illuminate { 0%,100% { opacity:1; } 25% { opacity:.3; } 68% { opacity:1; } }
+@keyframes glint { 0%,100% { transform:none; } 35% { transform:scale(.92); opacity:.35; } 73% { transform:scale(1.07); opacity:1; } }
+
+.running.mechanical [data-part=orbit-primary] { animation: gear-one 2.3s linear; }
+.running.mechanical [data-part=orbit-secondary] { animation: gear-two 2.3s linear; }
+.running.mechanical [data-part=edges-primary] { animation: latch 2.3s steps(1,end); }
+.running.mechanical [data-part=nodes-primary] circle { animation: engage 2.3s linear; }
+.running.mechanical [data-part=node-focus] { animation-delay: 80ms; animation-duration:2.22s; }
+.running.mechanical [data-part=node-terminal] { animation-delay:160ms; animation-duration:2.14s; }
+@keyframes gear-one { 0%,8% { transform:none; } 12%,27% { transform:rotate(-18deg); } 58%,70% { transform:rotate(20deg); } 78%,90% { transform:rotate(-3deg); } 95%,100% { transform:none; } }
+@keyframes gear-two { 0%,18% { transform:none; } 24%,45% { transform:rotate(25deg); } 67%,82% { transform:rotate(-12deg); } 90%,100% { transform:none; } }
+@keyframes latch { 0%,100% { opacity:.78; } 10% { opacity:.1; } 40% { opacity:.3; } 63% { opacity:.5; } 80% { opacity:.78; } }
+@keyframes engage { 0%,30%,100% { transform:none; } 35%,57% { transform:scale(.65); } 62%,75% { transform:scale(1.12); } 80%,100% { transform:none; } }
+
+.running.weird [data-part=nodes-primary] circle { animation: escape-node 2.4s ease-in-out; }
+.running.weird [data-part=node-focus] { animation-name: contrary-node; }
+.running.weird [data-part=orbit-primary] { animation: look-around 2.4s ease-in-out; }
+.running.weird [data-part=particles] { animation: suspicious-particles 2.4s ease-in-out; }
+.running.weird [data-part=edges-primary] { animation: confused-edges 2.4s ease-in-out; }
+@keyframes escape-node { 0%,100% { transform:none; } 18%,36% { transform:translate(55px,-65px); } 49%,64% { transform:translate(70px,10px); } 79% { transform:translate(-8px,0); } }
+@keyframes contrary-node { 0%,100% { transform:none; } 18%,45% { transform:translate(-50px,38px) scale(1.2); } 62% { transform:translate(0,50px) scale(.8); } 83% { transform:translate(0,-10px); } }
+@keyframes look-around { 0%,100% { transform:none; } 26%,43% { transform:rotate(14deg); } 53%,70% { transform:rotate(-18deg); } 84% { transform:rotate(3deg); } }
+@keyframes suspicious-particles { 0%,100% { transform:none; } 30%,62% { transform:rotate(150deg) scale(.7); } 80% { transform:rotate(8deg); } }
+@keyframes confused-edges { 0%,100% { opacity:.78; } 18%,68% { opacity:.18; } }
+
+.running.bubble [data-part=orbit-primary],.running.bubble [data-part=orbit-secondary] { animation: jelly-shell 1.25s ease-in-out; }
+.running.bubble [data-part=nodes-primary],.running.bubble [data-part=nodes-secondary] { animation: jelly-nodes 1.25s ease-in-out; }
+.running.bubble [data-part=edges-primary],.running.bubble [data-part=edges-secondary] { animation: jelly-shell 1.25s ease-in-out; }
+@keyframes jelly-shell { 0%,100% { transform:none; } 16% { transform:scale(1.12,.86); } 35% { transform:scale(.94,1.07); } 54% { transform:scale(1.035,.97); } 73% { transform:scale(.99,1.01); } }
+@keyframes jelly-nodes { 0%,100% { transform:none; } 23% { transform:translateY(9px) scale(1.06,.92); } 42% { transform:translateY(-6px) scale(.97,1.04); } 65% { transform:translateY(2px); } }
+/* delay中は消灯。完成後のFlashはLogo内だけで一度発生する。 */
+.running.sparkle svg path,.running.sparkle svg circle { animation: sparkle-reveal 360ms ease-out var(--reveal-delay) backwards; }
+.running.sparkle svg { animation: sparkle-complete 4.1s linear; }
+@keyframes sparkle-reveal { 0% { opacity:0; filter:brightness(1); } 45% { opacity:1; filter:brightness(2.8) drop-shadow(0 0 3px #ddffff); } 100% { filter:brightness(1); } }
+@keyframes sparkle-complete { 0%,88%,100% { filter:brightness(1); } 92% { filter:brightness(2.6) drop-shadow(0 0 2px #cfffff); } }
+.running.reduced svg { animation: reduced-response 180ms ease-out; }
+.running.reduced svg * { animation: none !important; }
+@keyframes reduced-response { 0%,100% { opacity:1; } 35% { opacity:.65; } }
+@media(prefers-reduced-motion:reduce) { .running svg * { animation:none !important; } .running svg { animation:reduced-response 180ms ease-out; } }
+}
