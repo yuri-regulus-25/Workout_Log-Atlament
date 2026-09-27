@@ -18,7 +18,7 @@ Version numbering for Vesria is a separate decision and is not fixed by this doc
 
 ## 1. Core direction
 
-Vesria is treated as one SPA runtime composed of clearly separated workspaces/domains.
+Vesria is treated as one responsive SPA runtime composed of clearly separated workspaces/domains.
 
 v3 screen boundaries are not preserved merely because they already exist. Screen boundaries are reconsidered from:
 
@@ -348,7 +348,7 @@ System State
 - **Feature failure:** local Error Boundary / Error Surface where possible
 - **Data failure:** missing/invalid required data must not be silently represented as valid empty data
 - **Mutation failure:** handled within the relevant mutation workflow
-- **Fatal failure:** dedicated fallback only when Shell/application cannot remain functional
+- **Fatal failure:** dedicated fallback only when the Application Root cannot remain functional
 
 ```text
 Missing Machine Master
@@ -402,7 +402,7 @@ Static 404 / 500 / 503 pages
 ## 14. IA snapshot
 
 ```text
-Atlament v4 SPA
+Vesria SPA
 │
 ├─ Entry
 │  └─ System Entry Experience
@@ -430,7 +430,101 @@ Shared / non-application concerns
 
 ---
 
-## 15. Deliberately unresolved
+## 15. Application Structure
+
+Vesria is a **responsive SPA**. Responsive behavior is an application-wide architectural premise, not a later desktop-layout adaptation.
+
+```text
+Vesria Application Root
+│
+├─ Global Runtime                         [persistent]
+│  ├─ Runtime Configuration
+│  ├─ Data Access / Repository
+│  ├─ Routing
+│  └─ Global Error Handling
+│
+├─ Persistent Presentation
+│  ├─ Ambient Visual Layer
+│  ├─ Global Navigation responsibility
+│  └─ Global UI Hosts
+│     ├─ Dialog
+│     ├─ Snackbar
+│     └─ Error / System State
+│
+└─ Route Presentation
+   ├─ Entry Experience
+   └─ Main Application Workspaces
+```
+
+The old Atlament Shell is **not** the architectural starting point. Persistent/global concerns are identified independently first. A future layout component may use a Shell pattern if useful, but Vesria architecture does not require a monolithic `<Shell>` abstraction.
+
+Runtime Configuration is application state consumed by data access and other global concerns. Settings is the UI used to configure it; Settings does not own the runtime state itself.
+
+The Ambient Visual Layer is persistent across normal route transitions so that the Vesria visual space does not reset with each workspace. Route-specific semantic/interactive visual layers may be added without redefining the global ambient layer.
+
+Global Navigation is a responsibility, not a fixed visual component. Its presentation may change by viewport/context; Sidebar, Rail, Topbar, Bottom Navigation, Drawer, or other compositions remain navigation-design decisions.
+
+### Responsive principles — FIX
+
+- Vesria is responsive across the application.
+- Application structure must not assume one desktop resolution.
+- Workspace responsibility/data capability must not disappear merely because the viewport becomes narrow.
+- Composition, layout, density, and interaction presentation may change responsively.
+- Responsive design adapts **presentation**, not the underlying domain capability.
+
+---
+
+## 16. Entry in the Application Structure
+
+Entry is an application boundary/experience, not a business-data Workspace.
+
+The Vesria Application Root already exists while Entry is presented. Entry does not bootstrap a separate application runtime.
+
+```text
+Direct /
+Application Root
+└─ Entry Experience
+   └─ Handoff → /overview
+
+Direct /overview
+Application Root
+└─ Overview
+```
+
+Consequences:
+
+- Direct application routes do not require replaying Entry.
+- Global Runtime persists through Entry → Main Application handoff.
+- Ambient Visual Layer may already exist during Entry and remain continuous after handoff.
+- Global UI hosts may exist structurally during Entry even when not actively presented.
+- Global Navigation capability exists, but its presentation is hidden during Entry and presented responsively in the Main Application.
+- Exact Entry exit trigger, animation sequence, timing, reduced-motion behavior, and transition choreography are deferred to UX/motion design.
+
+Entry → Overview should be treated as a continuous SPA presentation-state transition rather than destruction and recreation of the Vesria visual environment.
+
+---
+
+## 17. System Symbol / Identity Asset
+
+**Vesria Full Symbol — FIX.**
+
+The selected symbol direction is a constellation/node abstraction derived primarily from the higher-information-density orbital concept, with Node/Edge relationships incorporated into the star-map composition.
+
+Identity principles:
+
+- abstract constellation / orbital composition
+- Node / Edge / Particle coexistence
+- asymmetric visual balance
+- sufficiently rich information density rather than an extremely minimal corporate mark
+- no direct fitness/dumbbell/muscle motif
+- SVG is the canonical vector asset format
+- symbol must remain usable without glow/filter effects and support external color control
+
+The Full Symbol is the canonical rich form. Compact and Micro variants are deferred as LOD reductions for smaller contexts such as navigation, app icons, and favicon usage. Motion treatment is deferred until Entry design.
+
+---
+
+## 18. Deliberately unresolved
 
 The following are intentionally **not fixed by this document**:
 
@@ -444,7 +538,7 @@ The following are intentionally **not fixed by this document**:
 - Recovery implementation
 - Credential persistence mechanism
 - Resource delete/lifecycle behavior
-- Application-root / navigation composition (the legacy Shell is not assumed to survive)
+- Detailed implementation shape of the Application Root / layout components; the legacy Shell is retired and a new Shell abstraction is not assumed
 - Animation/motion details
 - Exact Glass/Plasma usage per component
 - Explore node/edge / data-constellation presentation concept
