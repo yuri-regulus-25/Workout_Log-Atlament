@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vesria — Full Symbol Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #07111d;
+      color: #e9f7ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 68% 22%, rgba(50, 154, 199, .13), transparent 30rem),
+        radial-gradient(circle at 18% 78%, rgba(102, 207, 242, .07), transparent 24rem),
+        #07111d;
+    }
+    main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 64px 0 72px; }
+    header { display: flex; gap: 24px; align-items: end; justify-content: space-between; margin-bottom: 34px; }
+    h1 { margin: 0; font-size: clamp(24px, 4vw, 42px); font-weight: 420; letter-spacing: .12em; }
+    header p { margin: 10px 0 0; color: #8ca7b6; letter-spacing: .04em; }
+    .palette { color: #8ca7b6; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+    .hero, .card {
+      border: 1px solid rgba(158, 222, 246, .13);
+      background: rgba(9, 24, 38, .72);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .24);
+    }
+    .hero {
+      min-height: 590px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      border-radius: 30px;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--preview-color, #8fdfff) 10%, transparent);
+      filter: blur(90px);
+    }
+    .hero img { width: min(72vw, 490px); height: auto; color: var(--preview-color); position: relative; }
+    .label { position: absolute; left: 28px; top: 24px; color: #7f9aab; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; }
+    .scales { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
+    .card { min-height: 230px; border-radius: 22px; display: grid; place-items: center; position: relative; }
+    .card img { width: var(--size); height: var(--size); }
+    .card small { position: absolute; left: 18px; bottom: 16px; color: #718c9d; letter-spacing: .12em; }
+    .light { background: #eef8fb; }
+    .light img { filter: brightness(0) saturate(100%) invert(18%) sepia(14%) saturate(2054%) hue-rotate(163deg) brightness(90%); }
+    @media (max-width: 760px) {
+      main { width: min(100% - 24px, 1180px); padding-top: 30px; }
+      header { align-items: start; flex-direction: column; }
+      .hero { min-height: 470px; }
+      .scales { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main id="preview">
+    <header>
+      <div>
+        <h1>VESRIA</h1>
+        <p>Full Symbol · Constellation System</p>
+      </div>
+      <span class="palette">currentColor ready · filter free</span>
+    </header>
+
+    <section class="hero">
+      <span class="label">Primary preview · transparent SVG</span>
+      <img src="vesria-full-symbol.svg" alt="Vesria full symbol">
+    </section>
+
+    <section class="scales" aria-label="Scale checks">
+      <article class="card"><img style="--size: 160px" src="vesria-full-symbol.svg" alt="160 pixel preview"><small>160 PX · DARK</small></article>
+      <article class="card light"><img style="--size: 96px" src="vesria-full-symbol.svg" alt="96 pixel monochrome preview"><small>96 PX · MONOCHROME</small></article>
+      <article class="card"><img style="--size: 48px" src="vesria-full-symbol.svg" alt="48 pixel reduction preview"><small>48 PX · REDUCTION CHECK</small></article>
+    </section>
+  </main>
+</body>
+</html>
