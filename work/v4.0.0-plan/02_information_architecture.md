@@ -462,7 +462,24 @@ Runtime Configuration is application state consumed by data access and other glo
 
 The Ambient Visual Layer is persistent across normal route transitions so that the Vesria visual space does not reset with each workspace. Route-specific semantic/interactive visual layers may be added without redefining the global ambient layer.
 
-Global Navigation is a responsibility, not a fixed visual component. Its presentation may change by viewport/context; Sidebar, Rail, Topbar, Bottom Navigation, Drawer, or other compositions remain navigation-design decisions.
+Global Navigation is a responsibility with a responsive presentation model.
+
+### Global Navigation Architecture — FIX
+
+Global Navigation identifies the current top-level Workspace and navigates between top-level Workspaces.
+
+- Identity: Vesria Symbol
+- Primary: Overview, Workout, Machine-oriented View, Analysis, Explore
+- Management: Resources, Settings
+- Wide / Medium: persistent lightweight Rail.
+- Narrow: upper-left Floating Glass Symbol Trigger opens an on-demand Floating Navigation Overlay.
+- Bottom Navigation/Menu is not used.
+- Entry and System Information are not Global Navigation destinations.
+- Workspace-local selection, filters, internal views, and actions remain Workspace Navigation.
+- Data-driven cross-workspace transitions are Contextual Navigation.
+- Active state follows the owning top-level Workspace, not the exact child route.
+- The Rail identity symbol may host a non-functional local sparkle delight interaction. The Narrow symbol is a navigation control and does not use that interaction.
+- Icon-only navigation must retain accessible labels and semantics.
 
 ### Responsive principles — FIX
 
@@ -504,7 +521,73 @@ Entry → Overview should be treated as a continuous SPA presentation-state tran
 
 ---
 
-## 17. System Symbol / Identity Asset
+## 17. Route Architecture — FIX
+
+Routes identify the current Workspace and, where useful, an addressable Domain Entity. Filters, dialogs, visual modes, and other presentation state are not promoted into path segments by default.
+
+```text
+/
+├─ /overview
+├─ /workouts
+│  └─ /workouts/:sessionId
+├─ /machines                  [segment name TBD]
+│  └─ /machines/:machineId
+├─ /analysis
+├─ /explore
+├─ /resources
+├─ /settings
+└─ * → Route Not Found
+```
+
+Principles:
+
+- Root is Entry and is not a normal Global Navigation destination.
+- Workout session routes remain owned by the Workout Workspace.
+- The Machine-oriented route structure is fixed, while its final segment/name remains deferred.
+- Analysis and Explore internal state remains Workspace State unless a later deep-link/share requirement justifies serialization.
+- Workout Create/Edit routes and Resource entity child routes are added only if detailed interaction design requires addressability.
+- System Information, dialogs, and local/fatal error presentation are not normal product routes.
+- Route = Workspace/addressable Domain Entity; Workspace State = filter/selection/view; Presentation State = dialog/animation/expanded visual state.
+
+---
+
+## 18. Motion / Interaction Language — FIX
+
+Vesria intentionally uses motion as part of its UX identity: pleasant, playful, and responsive without allowing animation to obscure state, delay operation, or become visually noisy.
+
+### Material model
+
+- **Glass:** stable / formed / informational.
+- **Liquid:** transition / expansion / collapse / material transformation.
+- **Plasma:** interactive / dynamic / expressive.
+- **Particle / Constellation:** persistent spatial / ambient language.
+
+Governing model: **Glass is stable; Liquid is transitioning; Plasma is interactive.**
+
+### Motion families
+
+- **Ambient Motion:** slow persistent particle/constellation motion, visually subordinate to content.
+- **Material Motion:** Glass/Liquid expansion, collapse, formation, and related transformations.
+- **Content Formation:** Glass surfaces and important uncontained content such as Workspace titles, section headings, and supporting text may enter with restrained fade/cut-in/offset motion. Plasma is not mechanically subject to this entrance rule.
+- **Interaction Feedback:** restrained local response to taps, selection changes, Snackbar formation, active indicators, and similar actions.
+- **Route Transition:** when navigating between top-level Workspaces, the current Route Presentation exits toward the left, the new Workspace starts from its initial scroll position, and its content forms into the persistent Vesria visual environment.
+- Browser history navigation, including Back/Forward, uses the same restrained leftward Route Presentation transition rather than bypassing the motion language.
+
+The persistent Application Root, Ambient Visual Layer, and Global Navigation are not destroyed with each Route Presentation transition. The intended perception is that the Workspace changes inside the same Vesria space.
+
+Dialogs and other transient surfaces should use restrained formation/dismissal animation where practical. Exact Dialog visual design and choreography remain subject to later iterative review.
+
+### Motion guardrails
+
+- Motion communicates state change and pleasant interaction; it must not become a prerequisite for understanding or completing an action.
+- Avoid meaningless continuous movement of normal Glass content, excessive full-screen choreography, text motion without purpose, and animation that interferes with scrolling or input.
+- Repeated viewport entrance behavior must not become distracting; exact replay/stagger policy is deferred.
+- Reduced-motion support is required. Large movement, morphing, stagger, and ambient motion must be reducible or replaceable with simpler transitions.
+- Exact durations, easing curves, Motion Tokens/Primitives, and per-component choreography are deferred to detailed Motion Design.
+
+---
+
+## 19. System Symbol / Identity Asset
 
 **Vesria Full Symbol — FIX.**
 
@@ -524,11 +607,10 @@ The Full Symbol is the canonical rich form. Compact and Micro variants are defer
 
 ---
 
-## 18. Deliberately unresolved
+## 20. Deliberately unresolved
 
 The following are intentionally **not fixed by this document**:
 
-- Final route map
 - Final navigation labels
 - Final name for the Machine-oriented view
 - Detailed Overview contents
@@ -539,8 +621,8 @@ The following are intentionally **not fixed by this document**:
 - Credential persistence mechanism
 - Resource delete/lifecycle behavior
 - Detailed implementation shape of the Application Root / layout components; the legacy Shell is retired and a new Shell abstraction is not assumed
-- Animation/motion details
-- Exact Glass/Plasma usage per component
+- Exact motion timing/easing, replay/stagger policy, and per-component choreography
+- Exact Glass/Liquid/Plasma usage per component
 - Explore node/edge / data-constellation presentation concept
 - Final color direction (including the newly considered colder cyan/ice-blue direction)
 - Exact System Information trigger/location
