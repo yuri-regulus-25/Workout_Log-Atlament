@@ -1,12 +1,24 @@
-# Atlament v4.0.0 — Information Architecture Draft
+# Vesria — Information Architecture Draft
 
 > Status: IA first-pass snapshot  
-> Scope: v4 major screen/domain restructuring  
+> Scope: successor architecture / major screen-domain restructuring  
 > Detailed UI, charts, filters, animations, and mutation implementation are intentionally deferred.
+
+## 0. System identity
+
+**System name: Vesria（ヴェスリア） — FIX**
+
+Vesria is the successor system to Atlament. It is not treated as an Atlament v4 product identity.
+
+Atlament remains the predecessor/current completed system. Vesria may inherit validated Data / Domain Contracts and mature design decisions, but its presentation architecture, UI/UX, application composition, and system identity are reconstructed.
+
+Version numbering for Vesria is a separate decision and is not fixed by this document.
+
+> Naming note: use **Vesria** in new design context. Do not use `Atlament v4` or `New System` as the product name.
 
 ## 1. Core direction
 
-Atlament v4 is treated as one SPA runtime composed of clearly separated workspaces/domains.
+Vesria is treated as one SPA runtime composed of clearly separated workspaces/domains.
 
 v3 screen boundaries are not preserved merely because they already exist. Screen boundaries are reconsidered from:
 
@@ -21,7 +33,7 @@ If Data / Scope / Presentation are substantially the same, views are strong merg
 ## 2. Current top-level IA
 
 ```text
-Atlament v4 SPA
+Vesria SPA
 │
 ├─ Entry
 ├─ Overview
@@ -269,9 +281,9 @@ Detailed logical-delete/reference-integrity behavior is deferred.
 
 ## 10. Settings
 
-**Responsibility:** Application **Runtime / Connection Configuration** required to operate Atlament.
+**Responsibility:** Application **Runtime / Connection Configuration** required to operate Vesria.
 
-Settings survives because Atlament has genuine operational configuration, not merely cosmetic preferences.
+Settings survives because Vesria has genuine operational configuration, not merely cosmetic preferences.
 
 Examples:
 
@@ -370,7 +382,7 @@ Training Map
 → Analysis Body Map view
 
 Analytics / Analytics Rework
-→ v4 Analysis Workspace
+→ Vesria Analysis Workspace
 
 Resources Maintenance
 → Resources
@@ -432,9 +444,11 @@ The following are intentionally **not fixed by this document**:
 - Recovery implementation
 - Credential persistence mechanism
 - Resource delete/lifecycle behavior
-- Navigation/Shell layout
+- Application-root / navigation composition (the legacy Shell is not assumed to survive)
 - Animation/motion details
 - Exact Glass/Plasma usage per component
+- Explore node/edge / data-constellation presentation concept
+- Final color direction (including the newly considered colder cyan/ice-blue direction)
 - Exact System Information trigger/location
 - Production visual tuning controls (VeryVeryVeryLOW priority)
 
