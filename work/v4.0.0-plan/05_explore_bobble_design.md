@@ -209,7 +209,7 @@ Desired qualities include:
 - Cyan/Ice emission or rim
 - restrained internal glow
 - moving surface highlight where appropriate
-- slight deformation / `ぷるんぷるん`
+- slight deformation / restrained `ﾌﾟﾙﾝ`; motion is event-driven rather than continuously noisy
 - playful generation motion such as a small `ﾎﾟﾖﾝｯ`
 - focus/hover response
 - continuity between Candidate Bobble and Graph Bobble
@@ -253,17 +253,145 @@ Potential spike directions discussed, but **not approved dependencies**:
 
 If a package is heavier or less reliable than the value it provides, use a simpler CSS/SVG implementation instead.
 
-## 10. Intentionally unresolved
+## 10. Reactive Result
+
+Explore has no explicit Search / Apply / Result button.
+
+Selecting or removing a Bobble immediately updates the matching Session result.
+
+- same-Type conditions remain OR
+- different-Type groups remain AND
+- changing the selected conditions resets Result pagination to Page 1
+- matching Sessions are unique even when Period conditions overlap
+
+### Initial state
+
+When no Bobble is selected, do **not** display all Sessions.
+
+Show a lightweight initial state such as:
+
+> Bobbleを選んでみてね  
+> 気になるデータを組み合わせると、Sessionがここに現れます。
+
+### Result state
+
+Matching Sessions appear as **Session Glass** near the Bobble interaction area.
+
+- Glass represents the stable Workout Record produced by the current Bobble mixture
+- maximum **20 Sessions per page**
+- ordinary pagination is used; pagination itself does not become Bobble UI
+- the Result updates reactively when selected conditions change
+- Session Glass formation/removal may use restrained Vesria transition language
+
+This creates the material flow:
+
+```text
+Bobble = selectable data fragment
+  ↓ selection / condition change
+Liquid = change / transition
+  ↓
+Glass = stable matching Session
+```
+
+### Empty state
+
+When the current combination matches zero Sessions, show a normal Empty State.
+
+Example:
+
+> 一致するSessionがありません  
+> Bobbleの組み合わせを変えてみてください。
+
+Do not automatically relax conditions or introduce recommendation logic.
+
+### Session Glass interaction
+
+Clicking a Session Glass opens a **read-oriented Session Detail Dialog** inside Explore.
+
+Do not navigate to Workout merely because the user wants to inspect a Session.
+
+The Dialog may show the recorded Session facts needed to understand the record, including date/time, Gym, memo, Machines, Sets, Reps, and Weight as appropriate.
+
+A deliberate `Workoutで開く` handoff may be considered later if editing or deeper Workout interaction is needed, but it is not required for the basic Explore flow.
+
+The core interaction remains:
+
+```text
+Bobble Pick
+  ↓ reactive
+Session Glass
+  ↓ click
+Session Detail Dialog
+  ↓ close
+return to the same Explore context
+```
+
+## 11. Selected Graph layout
+
+The Graph uses a **randomized radial / “ウニ” layout**.
+
+A small empty Bobble acts as the visual Core. The Core does not carry text, counts, or application semantics; it simply binds the selected Bobbles visually.
+
+Selected Bobbles radiate outward from the Core.
+
+Layout qualities:
+
+- radial rather than hierarchical
+- angle and radius may vary slightly to avoid a rigid clock-like appearance
+- Bobbles must not overlap
+- thin Cyan/Ice connections extend from Core to each selected Bobble
+- layout should feel organic but remain legible
+- the same selected-condition state should remain visually stable where practical rather than reshuffling on every Dialog open
+
+First implementation Spike:
+
+> **SVG + d3-force**
+
+The intended use is constrained: radial positioning, collision avoidance, restrained settling, then stop.
+
+The graph must not run a perpetual force simulation merely for visual activity.
+
+Graph Dialog lifecycle and condition changes are the natural times to perform layout work.
+
+### Android performance gate
+
+SVG + d3-force is a **Spike direction, not an unconditional dependency decision**.
+
+Evaluate it on an actual Android device.
+
+If the experience is visibly heavy, optimize or replace in roughly this order:
+
+1. reduce Bobble visual/effect cost
+2. reduce/stop unnecessary simulation and animation
+3. use a simpler static radial/collision layout
+4. replace the implementation/package if necessary
+
+Do not pre-emptively remove the visual character before measuring the real implementation.
+
+## 12. Bobble Motion
+
+Bobble motion is intentionally restrained.
+
+- appearance: small one-shot `ﾎﾟﾖﾝｯ`
+- Pick: short `ﾌﾟﾙﾝ`
+- focus/tap: subtle response
+- idle: essentially still; slow highlight or extremely subtle shell motion is acceptable
+- Graph: only the interacted/changed Bobble needs noticeable response
+- text/content: stable
+
+Bobble should feel alive without making a collection of Bobbles visually noisy.
+
+## 13. Intentionally unresolved
 
 The following remain open for later design:
 
-- exact Result presentation after conditions are combined
-- exact Graph layout and topology
 - exact relative-period boundary semantics
 - exact number of visible candidate Bobbles
 - exact Condition Detail copy per Type
-- graph rendering library
+- final graph rendering implementation after Android Spike
 - Bobble effect implementation/library
+- exact Session Glass information density
+- whether Session Detail exposes an explicit `Workoutで開く` handoff
 - detailed motion timing and physics
 - responsive Graph Dialog composition
 
