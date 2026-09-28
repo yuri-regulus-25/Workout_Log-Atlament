@@ -19,6 +19,16 @@ pnpm run build:vesria
 pnpm run test src/frontend/vesria/src
 ```
 
+Theme Designの比較Spikeは本番SPAと独立して起動します。Plasma / Abyss / Night、Theme遷移、Glass / Liquid、Reduced Motion、Animation Pause、Wide / Medium / Narrowを同じ情報UIで比較できます。
+
+```powershell
+pnpm --filter @workout-lab/vesria dev:theme
+pnpm --filter @workout-lab/vesria check:theme
+pnpm --filter @workout-lab/vesria build:theme
+```
+
+`http://127.0.0.1:5189/` を開きます。実装とHuman Review項目は [Theme Playground実装記録](../../../work/v4.0.0-plan/12_theme_playground.md) を参照してください。本番Theme System、Settings、Navigationには接続していません。
+
 起動時は **Review data** です。常に画面右上に「未保存の架空データ」と表示します。Workout・Resourcesの操作を試しても外部には保存しません。再読み込み、またはモードの切り替えで初期化します。
 
 ## 実データへの接続
