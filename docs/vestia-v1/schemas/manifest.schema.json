@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vestia.local/schemas/data-v1/manifest.schema.json",
+  "title": "Vestia Data Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "data_schema_id"
+  ],
+  "properties": {
+    "data_schema_id": {
+      "const": "vestia-data-v1"
+    }
+  }
+}

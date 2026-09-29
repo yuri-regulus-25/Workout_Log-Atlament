@@ -1,0 +1,44 @@
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "date": "2026-09-06",
+  "gym_id": "af_Shioiri",
+  "session_note": "Vestia v1 example.",
+  "machine_entries": [
+    {
+      "machine_id": "pectoral_Fly",
+      "machine_note": "25kgは負荷として適正寄り。",
+      "sets": [
+        {
+          "weight_kg": 20,
+          "reps": 10,
+          "set_note": "胸の収縮感は微弱。"
+        },
+        {
+          "weight_kg": 22.5,
+          "reps": 10
+        },
+        {
+          "weight_kg": 25,
+          "reps": 5
+        }
+      ]
+    },
+    {
+      "machine_id": "shoulder_Press",
+      "sets": [
+        {
+          "weight_kg": 15,
+          "reps": 10
+        },
+        {
+          "weight_kg": 12.5,
+          "reps": 11
+        },
+        {
+          "weight_kg": 17.5,
+          "reps": 10
+        }
+      ]
+    }
+  ]
+}

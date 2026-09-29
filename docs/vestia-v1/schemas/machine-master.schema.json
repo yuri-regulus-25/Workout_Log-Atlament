@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vestia.local/schemas/data-v1/machine-master.schema.json",
+  "title": "Vestia Machine Master",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "machines"
+  ],
+  "properties": {
+    "machines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/machine"
+      }
+    }
+  },
+  "$defs": {
+    "nonBlankString": {
+      "type": "string",
+      "pattern": ".*\\S.*"
+    },
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_id",
+        "name",
+        "active"
+      ],
+      "properties": {
+        "machine_id": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "body_part": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

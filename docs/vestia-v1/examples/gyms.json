@@ -1,0 +1,15 @@
+{
+  "gyms": [
+    {
+      "gym_id": "unknown_Gym",
+      "name": "Unknown Gym",
+      "active": true
+    },
+    {
+      "gym_id": "af_Shioiri",
+      "name": "エニタイムフィットネス 横須賀汐入店",
+      "short_name": "AF横須賀汐入",
+      "active": true
+    }
+  ]
+}
