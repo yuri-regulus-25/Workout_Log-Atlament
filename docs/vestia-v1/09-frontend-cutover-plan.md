@@ -144,7 +144,13 @@ Must include at least:
 - unknown property rejected
 - invalid UUID version rejected
 - missing Master reference rejected
-- future date rejected by application rule
+- future date rejected against the operating client's local calendar date
+- invalid real calendar date rejected even when a schema engine does not assert `format`
+- lowercase canonical UUID accepted; uppercase UUID rejected
+- Unicode whitespace-only strings rejected consistently
+- BOM rejected
+- duplicate JSON object key rejected
+- `failure: true` with `rir > 0` remains valid
 
 ### Workspace tests
 
@@ -160,6 +166,9 @@ Workout:
 Resources:
 - create/update/activate/deactivate/delete
 - referenced-delete rejection
+- delete blocked when quarantine makes reference analysis incomplete
+- retain existing inactive reference on edit; reject newly introduced inactive reference
+- ordinary unknown_Gym assignment rejected; existing unknown_Gym reference may be retained
 - System Reserved protection
 - free-text body_part
 - optional short_name

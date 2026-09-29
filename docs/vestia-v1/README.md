@@ -17,7 +17,11 @@ The v1 implementation shall be driven by these documents:
 5. [05-migration-plan.md](./05-migration-plan.md)
 6. [06-manufacturing-plan.md](./06-manufacturing-plan.md)
 7. [07-llm-review-brief.md](./07-llm-review-brief.md)
-8. [schemas/](./schemas/)
+8. [08-screen-application-binding.md](./08-screen-application-binding.md)
+9. [09-frontend-cutover-plan.md](./09-frontend-cutover-plan.md)
+10. [10-claude-review-request.md](./10-claude-review-request.md)
+11. [schemas/](./schemas/)
+12. [examples/](./examples/)
 
 ## Frozen v1 principles
 
@@ -31,13 +35,14 @@ The v1 implementation shall be driven by these documents:
 - Master references use `gym_id` / `machine_id`.
 - Master IDs are not schema-pattern-restricted. UI convention is first token lowercase, subsequent tokens joined by `_` and starting uppercase, e.g. `unknown_Gym`, `pectoral_Fly`.
 - `unknown_Gym` / `Unknown Gym` is a system-reserved Gym and is hidden from ordinary maintenance/select UI.
-- New Workout writes require active Master references. Historical references remain readable when a Master becomes inactive.
+- New Workout writes require active Master references. Existing inactive references may be retained during an edit, but an edit must not introduce a new inactive reference.
+- `unknown_Gym` cannot be assigned by normal Create/Update. An existing `unknown_Gym` reference may be retained during an edit.
 - Git writes use optimistic concurrency. No force push, blind retry, automatic merge, or last-write-wins.
 - Broken individual Workout resources are quarantined explicitly; valid resources remain usable.
 - Windows, Android, development runtime, and ChatGPT tooling obey the same domain contract.
 
 ## Relationship to Atlament
 
-Atlament master was inspected as the migration source. Its current repository contains JSON/JSONL workout resources, Machine/Gym Master files, Windows/Android Application Framework contracts, recovery behavior, and a multi-framework frontend. Vestia does not blindly copy those contracts. The migration plan explicitly maps old concepts to the v1 contract.
+Atlament master was inspected as the migration source. Its current repository contains JSON/JSONL workout resources, Machine/Gym Master files, Windows/Android Application Framework contracts, recovery behavior, and a multi-framework frontend. Vestia does not blindly copy those contracts. The one-time cutover note records how old concepts may be converted to the v1 contract; it is not a Vestia runtime/manufacturing feature.
 
 Human design decisions are considered closed unless an implementation discovery contradicts a frozen principle or changes product semantics.

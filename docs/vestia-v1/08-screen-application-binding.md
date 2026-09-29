@@ -87,7 +87,7 @@ type SetDraft = {
 
 The editor may internally hold incomplete form fields while the user types. That form state is not the persistence/domain object and may use empty UI values. Conversion to `WorkoutSessionDraft` occurs before application validation.
 
-No persisted v1 object contains `null`.
+No persisted v1 object contains `null`. Future-date validation compares the candidate `date` with the operating client's current local calendar date at validation time.
 
 ## 5. Workspace binding
 
@@ -164,7 +164,7 @@ Read-only derived view. All values are computed from valid WorkoutSession data a
 
 No analytical result is persisted back into Workout JSON.
 
-Filtering must not infer missing optional values. In particular, omitted `body_part`, `rir`, `failure`, and `warmup` mean unknown/unrecorded, not false/default.
+Filtering must not infer missing optional values. Master `body_part` values are compared as recorded; no implicit case/Unicode normalization is applied. In particular, omitted `body_part`, `rir`, `failure`, and `warmup` mean unknown/unrecorded, not false/default.
 
 ### 5.5 Explore
 
@@ -210,6 +210,7 @@ Master ID creation UI displays the non-blocking convention hint:
 
 Physical deletion:
 - referenced Master: forbidden
+- if quarantined/unparseable Workout data prevents complete reference analysis: all Master physical deletion is forbidden
 - unreferenced Master: allowed after explicit confirmation
 - normal removal from future Workout selection uses `active: false`
 
@@ -217,6 +218,7 @@ Physical deletion:
 - System Reserved
 - hidden from ordinary Master maintenance and normal Gym selection
 - backend mutation/deletion protection is mandatory
+- ordinary Create/Update cannot newly assign it; an existing reference may be retained
 
 ### 5.7 Settings
 
@@ -244,20 +246,20 @@ Minimum conceptual surface:
 ```ts
 loadRuntime(): Promise<RuntimeSnapshot>
 getWorkout(sessionId: string): Promise<WorkoutEditSnapshot>
-createWorkout(draft: WorkoutSessionDraft): Promise<MutationReceipt>
+createWorkout(revision: string, draft: WorkoutSessionDraft): Promise<MutationReceipt>
 updateWorkout(sessionId: string, revision: string, draft: WorkoutSessionDraft): Promise<MutationReceipt>
 deleteWorkout(sessionId: string, revision: string): Promise<MutationReceipt>
 
 getMachines(): Promise<MachineMasterSnapshot>
 getGyms(): Promise<GymMasterSnapshot>
-createMachine(...)
-updateMachine(...)
-setMachineActive(...)
-deleteMachine(...)
-createGym(...)
-updateGym(...)
-setGymActive(...)
-deleteGym(...)
+createMachine(revision, ...)
+updateMachine(revision, ...)
+setMachineActive(revision, ...)
+deleteMachine(revision, ...)
+createGym(revision, ...)
+updateGym(revision, ...)
+setGymActive(revision, ...)
+deleteGym(revision, ...)
 
 getStatus()
 sync()
@@ -291,11 +293,13 @@ Failure branches:
 - ambiguous result -> verification-required; Save remains disabled until repository state is inspected
 - commit succeeded / push failed -> sync-pending; do not create a second logical mutation
 
+`MutationReceipt` distinguishes result classification, intended/confirmed revision when known, local-commit existence, and remote confirmation so every platform makes the same retry/recovery decision.
+
 The UI must distinguish “not saved” from “saved but not reflected/synced”.
 
 ## 8. Error binding
 
-Application error codes are mapped to user-facing behavior centrally.
+Application error codes are defined by the shared machine-readable v1 Error Code Registry and mapped to user-facing behavior centrally. Frontends do not invent platform-local codes.
 
 | Code | UI behavior |
 |---|---|

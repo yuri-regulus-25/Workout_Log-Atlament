@@ -10,13 +10,13 @@ Two repositories are used.
 
 ### Vestia Source
 
-Contains application source, canonical JSON Schemas, fixtures, migration tooling, tests, build definitions, and design documents.
+Contains application source, canonical JSON Schemas, fixtures, tests, build definitions, machine-readable shared contracts, and design documents.
 
 ```text
 Vestia/
 ├─ schemas/data-v1/
 ├─ fixtures/data-v1/
-├─ tools/migration/
+├─ contracts/
 ├─ src/
 ├─ tests/
 └─ docs/
@@ -24,7 +24,7 @@ Vestia/
 
 ### Vestia Data
 
-Contains only persisted user/domain data and repository-level manifest.
+The governed data roots contain persisted user/domain data and the repository-level manifest. Repository-operational files such as CI configuration or `.gitattributes` may exist outside those governed roots.
 
 ```text
 Vestia-Data/
@@ -66,7 +66,7 @@ Windows and Android may use different native implementations but shall expose eq
 
 Validation is layered:
 
-1. JSON parse.
+1. JSON parse using the Vestia JSON profile: UTF-8 without BOM; duplicate object keys are rejected.
 2. JSON Schema validation.
 3. Repository integrity validation: uniqueness, path/date, filename/session UUID, Master references, manifest support.
 4. Operation validation: active reference requirements, optimistic revision check, delete constraints.
@@ -80,6 +80,7 @@ A schema-valid document can still be repository-invalid.
 - Invalid/unsupported manifest: repository contract cannot be trusted; write is blocked.
 - Invalid Master document or duplicate Master identity: Master-dependent safe writes are blocked. Existing accepted local snapshot may remain available as degraded read state.
 - Missing Master reference in a raw Workout is a repository integrity error for Vestia v1. It is not silently resolved, guessed, or deleted.
+- If any quarantined/unparseable Workout prevents complete reference analysis, Master physical deletion is blocked globally until reference completeness is restored.
 
 ## 5. Version model
 
@@ -106,6 +107,9 @@ The following are contract-level behavior and must not drift between Windows, An
 - commit/push recovery;
 - quarantine behavior;
 - error codes;
+- common valid/invalid fixture outcomes;
 - no blind retry.
+
+Every writer, including ChatGPT tooling, is governed by the same writer rules and validation gate; an LLM-generated candidate is not exempt from validation.
 
 Implementation language and local persistence technology may differ.

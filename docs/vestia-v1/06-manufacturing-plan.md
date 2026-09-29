@@ -8,7 +8,7 @@ Create:
 - Vestia Source repository.
 - Vestia Data repository.
 
-Seed Source with this blueprint, schemas, fixtures, validator, and migration tooling. Seed Data only through migration after validator is available.
+Seed Source with this blueprint, schemas, fixtures, validator, shared machine-readable contracts, tests, and application source. Creation of the initial Vestia-Data contents from Atlament is a separate cutover activity outside this manufacturing plan.
 
 ## Phase 1 — Contract package
 
@@ -17,28 +17,24 @@ Implement first:
 2. Type/domain models generated from or tested against the same contract.
 3. valid/invalid fixtures.
 4. repository validator.
-5. error code model.
+5. machine-readable closed error-code registry and generated/tested platform bindings.
 
 Acceptance:
 - schemas compile;
 - fixtures produce expected pass/fail;
-- real migrated candidate can be validated offline;
+- a complete candidate Data repository can be validated offline;
 - unknown fields fail;
 - no-null rule holds.
 
-## Phase 2 — Migration tool
+## Phase 2 — Shared writer contract and repository fixtures
 
-Implement deterministic Atlament reader and mapping/report generator.
+Define the writer rules used by every mutation client, including ChatGPT tooling, and expand shared fixtures for JSON profile, Unicode whitespace, UUID canonical form, inactive/reserved references, quarantine/delete gates, concurrency, and numeric boundary behavior.
 
 Acceptance:
-- JSON and JSONL both read;
-- IDs mapped consistently;
-- UUID mapping stable across reruns;
-- note arrays preserve order;
-- collision aborts;
-- migration output passes repository validator;
-- source/output counts reconcile;
-- Error=0 required for release candidate.
+- all supported writers produce the same pass/fail outcomes for shared fixtures;
+- duplicate JSON keys and BOM are rejected;
+- calendar dates are validated independently of JSON Schema `format` assertion settings;
+- no writer bypasses repository/application validation.
 
 ## Phase 3 — Repository adapter
 
@@ -53,6 +49,9 @@ Required operations:
 
 Acceptance:
 - create/edit/date-move/delete each result in one logical commit;
+- every mutation carries an expected revision;
+- commit parent/base tree are the expected revision;
+- final branch update is non-force and rejects concurrent advancement;
 - stale revision cannot overwrite;
 - ambiguous transport result is classified by inspection, not blind retry;
 - force update is absent from production path.
@@ -71,7 +70,7 @@ Port only useful Atlament concepts:
 Replace Atlament data parser/write assumptions with Vestia contract.
 
 Acceptance:
-- Windows/Android contract tests run against shared fixtures;
+- Windows/Android/development/tooling contract outcomes are tested against shared fixtures;
 - same error codes and semantics;
 - valid data remains available when one Workout is quarantined;
 - invalid manifest/Master prevents unsafe writes.
@@ -85,7 +84,8 @@ Acceptance:
 - edit preserves UUID;
 - date move atomic;
 - delete physical;
-- active Master requirement;
+- active Master requirement for new references and retention rules for existing inactive references;
+- normal Create/Update cannot newly assign `unknown_Gym`;
 - duplicate machine entries allowed;
 - omitted booleans remain omitted;
 - dirty guard and duplicate-submit guard in UI;
@@ -99,6 +99,7 @@ Acceptance:
 - naming hint displayed but not regex-enforced;
 - existing IDs immutable in normal edit;
 - referenced records cannot be physically deleted;
+- Master physical deletion is globally blocked when quarantine prevents complete reference analysis;
 - inactive records unavailable for new Workout;
 - `unknown_Gym` hidden and backend-protected;
 - default Gym stored as app preference, not Master.
@@ -114,8 +115,8 @@ Source CI:
 - schema compile;
 - fixture tests;
 - repository validator tests;
-- migration tests;
-- Windows/Android contract tests.
+- writer/repository contract tests;
+- cross-platform shared-fixture contract tests.
 
 Data CI:
 - manifest/schema validation;
@@ -129,6 +130,6 @@ Manufacture may proceed without human clarification when a question can be answe
 2. machine-readable schemas;
 3. repository/Git contract;
 4. application contract;
-5. migration plan.
+5. screen/application binding and shared machine-readable contracts.
 
 Escalate only when a discovered requirement would change persisted semantics, destroy information, weaken concurrency/integrity guarantees, or contradict a frozen principle.

@@ -6,13 +6,13 @@ After migration cutover, the Vestia Data repository is the sole persistent Worko
 
 ## 2. Revision model
 
-Every read snapshot records the remote repository revision (commit SHA). A write operation is based on that revision.
+Every read snapshot records one resolved remote repository revision (commit SHA). All content used to build a mutation is read from that resolved revision, and the write operation is based on the same revision.
 
 Before mutation, the writer obtains current remote HEAD:
 - if HEAD == expected revision: continue;
 - if HEAD != expected revision: return conflict/sync-required; do not write.
 
-A writer must not silently overwrite a newer remote state.
+A writer must not silently overwrite a newer remote state. The pre-write HEAD check is advisory/early conflict detection; it is not the final concurrency guard.
 
 ## 3. Logical write transaction
 
@@ -23,17 +23,20 @@ candidate
 → schema validation
 → repository/application validation
 → expected revision check
-→ construct tree/change
-→ create commit
-→ advance branch/ref
+→ construct tree/change from the expected revision tree
+→ create commit whose parent is the expected revision
+→ advance branch/ref using a non-force fast-forward update
 → verify result
 ```
 
-GitHub Contents API may be used where it preserves the same semantics. Multi-path operations should use Git tree/commit/ref primitives so they remain one commit.
+The final ref update is the authoritative optimistic-concurrency guard. If another writer advances the branch after the earlier HEAD check, the non-force update must be rejected and must never be treated as success. Re-read HEAD and classify the result as conflict or ambiguous as appropriate.
+
+An API may be used only if it can preserve these exact guarded-write semantics. Git tree/commit/ref primitives are the reference implementation for remote writes; no production path may force-update a ref.
 
 ## 4. Create
 
-- Generate UUID v4 exactly once.
+- Create is based on an expected repository revision just like every other mutation.
+- Generate lowercase canonical UUID v4 exactly once.
 - Derive target path from date: `workouts/YYYY/MM/<uuid>.json`.
 - Validate candidate and references.
 - Commit.
@@ -50,7 +53,7 @@ GitHub Contents API may be used where it preserves the same semantics. Multi-pat
 
 Workout delete physically removes its JSON file and commits that removal. There is no Workout `deleted` flag.
 
-Master physical deletion is allowed only if no Workout references the ID and the record is not system-reserved.
+Master physical deletion is allowed only if complete repository analysis proves that no Workout references the ID and the record is not system-reserved. If a quarantined/unparseable Workout makes reference completeness uncertain, Master physical deletion is blocked globally.
 
 ## 7. Push/write result states
 
@@ -59,9 +62,11 @@ Required result classification:
 - `SAVED`: remote branch/ref confirmed at intended commit.
 - `CONFLICT`: expected revision stale; no mutation attempted.
 - `VALIDATION_FAILED`: candidate rejected before mutation.
-- `REMOTE_WRITE_FAILED`: no evidence intended commit became branch state.
+- `REMOTE_WRITE_FAILED`: inspection confirms that the intended mutation did not become branch state and there is no local commit requiring synchronization.
 - `RESULT_AMBIGUOUS`: transport/result is uncertain and branch state cannot yet be classified.
-- `SYNC_PENDING`: applicable only for a local-Git implementation where local commit exists but remote push is not confirmed.
+- `SYNC_PENDING`: a local-Git implementation has the intended local commit, but that commit is not confirmed on the remote branch.
+
+A mutation receipt must preserve enough state to drive recovery consistently: result classification, intended/confirmed revision when known, whether an intended local commit exists, and whether the remote branch is confirmed at that commit. The API/UI mapping must not collapse these states into a generic save failure.
 
 On ambiguous result, **never blind retry the mutation**. Re-read HEAD/commit ancestry and intended paths/content:
 - intended commit/content confirmed → classify saved;
@@ -86,4 +91,4 @@ Recommended stable forms:
 
 ## 10. ChatGPT tooling
 
-ChatGPT write tooling is another client of this contract. Conversation memory is never the SoT. For a new Workout it must construct a candidate, show it for human approval when the workflow requires approval, then write using the same validation/revision contract. Existing Workout edits first fetch current repository data and preserve `session_id`.
+ChatGPT write tooling is another client of this contract. Conversation memory is never the SoT. For a new Workout it must construct a candidate, show it for human approval when the workflow requires approval, then write using the same validation/revision contract. Existing Workout edits first fetch current repository data and preserve `session_id`. ChatGPT/tooling writers must follow the shared writer rules and the same valid/invalid fixture outcomes as native clients; prompt compliance alone is not the integrity boundary.
