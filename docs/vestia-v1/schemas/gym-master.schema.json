@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vestia.local/schemas/data-v1/gym-master.schema.json",
+  "title": "Vestia Gym Master",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gyms"
+  ],
+  "properties": {
+    "gyms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gym"
+      }
+    }
+  },
+  "$defs": {
+    "nonBlankString": {
+      "type": "string",
+      "pattern": ".*\\S.*"
+    },
+    "gym": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gym_id",
+        "name",
+        "active"
+      ],
+      "properties": {
+        "gym_id": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "short_name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

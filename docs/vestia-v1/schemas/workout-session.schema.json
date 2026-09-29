@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vestia.local/schemas/data-v1/workout-session.schema.json",
+  "title": "Vestia WorkoutSession",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "date",
+    "gym_id",
+    "machine_entries"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "gym_id": {
+      "$ref": "#/$defs/nonBlankString"
+    },
+    "session_note": {
+      "$ref": "#/$defs/nonBlankString"
+    },
+    "machine_entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/machineEntry"
+      }
+    }
+  },
+  "$defs": {
+    "nonBlankString": {
+      "type": "string",
+      "pattern": ".*\\S.*"
+    },
+    "machineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_id",
+        "sets"
+      ],
+      "properties": {
+        "machine_id": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "machine_note": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "sets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/set"
+          }
+        }
+      }
+    },
+    "set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "weight_kg",
+        "reps"
+      ],
+      "properties": {
+        "weight_kg": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rir": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure": {
+          "type": "boolean"
+        },
+        "warmup": {
+          "type": "boolean"
+        },
+        "set_note": {
+          "$ref": "#/$defs/nonBlankString"
+        }
+      }
+    }
+  }
+}

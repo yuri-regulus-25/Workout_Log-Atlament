@@ -1,0 +1,16 @@
+{
+  "machines": [
+    {
+      "machine_id": "pectoral_Fly",
+      "name": "ペクトラルフライ",
+      "body_part": "chest",
+      "active": true
+    },
+    {
+      "machine_id": "shoulder_Press",
+      "name": "ショルダープレス",
+      "body_part": "shoulders",
+      "active": true
+    }
+  ]
+}
